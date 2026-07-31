@@ -1,4 +1,4 @@
-local Players = game:GetService("Players") -- ASSET NAV TAB SHOVEL workspace:FindFirstChild("cutePH14")
+local Players = game:GetService("Players") -- ASSET NAV TAB
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
@@ -5444,3 +5444,186 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
         end
     end
 end)
+-- ==========================================================
+-- INSTANT AUTO SPIN & AUTO REWARDS (PREMIUM VERSION)
+-- ==========================================================
+
+local AutoSpinRewardsPremium = {}
+
+-- Configuration
+AutoSpinRewardsPremium.config = {
+    enabled = true,
+    spinEnabled = true,
+    claimEnabled = true,
+    debugMode = true,
+    loopDelay = 0.1, -- Delay between cycles in seconds
+    rewardTiers = {10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120},
+    maxRetries = 3,
+    retryDelay = 0.5
+}
+
+-- Statistics tracking
+AutoSpinRewardsPremium.stats = {
+    totalSpins = 0,
+    failedSpins = 0,
+    totalRewardsClaimed = 0,
+    failedClaims = 0,
+    startTime = tick()
+}
+
+-- Logging function
+local function log(logType, message)
+    local timestamp = os.date("%H:%M:%S")
+    local prefix = "[" .. timestamp .. "] [" .. logType .. "]"
+    
+    if logType == "INFO" then
+        print(prefix .. " " .. message)
+    elseif logType == "WARN" then
+        warn(prefix .. " " .. message)
+    elseif logType == "ERROR" then
+        error(prefix .. " " .. message, 2)
+    elseif logType == "DEBUG" and AutoSpinRewardsPremium.config.debugMode then
+        print(prefix .. " [DEBUG] " .. message)
+    end
+end
+
+-- Service getter with caching
+local function getRemoteService(path)
+    local current = game:GetService("ReplicatedStorage")
+    
+    for _, pathComponent in ipairs(path) do
+        current = current:FindFirstChild(pathComponent)
+        if not current then
+            return nil
+        end
+    end
+    
+    return current
+end
+
+-- Retry logic wrapper
+local function executeWithRetry(callback, maxRetries)
+    maxRetries = maxRetries or AutoSpinRewardsPremium.config.maxRetries
+    
+    for attempt = 1, maxRetries do
+        local success, result = pcall(callback)
+        
+        if success then
+            return true, result
+        end
+        
+        if attempt < maxRetries then
+            wait(AutoSpinRewardsPremium.config.retryDelay)
+            log("DEBUG", "Retry attempt " .. attempt .. "/" .. maxRetries)
+        end
+    end
+    
+    return false, "Max retries exceeded"
+end
+
+-- Auto spin function
+local function executeAutoSpin()
+    if not AutoSpinRewardsPremium.config.spinEnabled then return end
+    
+    local success, result = executeWithRetry(function()
+        local spinRemote = getRemoteService({"Remotes", "SpinningWheel", "RequestSpinningWheelSpin"})
+        
+        if not spinRemote then
+            error("Spin remote not found")
+        end
+        
+        spinRemote:InvokeServer()
+    end)
+    
+    if success then
+        AutoSpinRewardsPremium.stats.totalSpins = AutoSpinRewardsPremium.stats.totalSpins + 1
+    else
+        AutoSpinRewardsPremium.stats.failedSpins = AutoSpinRewardsPremium.stats.failedSpins + 1
+    end
+end
+
+-- Auto claim function
+local function executeAutoClaim()
+    if not AutoSpinRewardsPremium.config.claimEnabled then return end
+    
+    local success, result = executeWithRetry(function()
+        local claimRemote = getRemoteService({"Remotes", "DailyRewards", "ClaimPlaytimeReward"})
+        
+        if not claimRemote then
+            error("Claim remote not found")
+        end
+        
+        return claimRemote
+    end)
+    
+    if not success then
+        return
+    end
+    
+    local claimRemote = result
+    
+    for _, mins in ipairs(AutoSpinRewardsPremium.config.rewardTiers) do
+        local rewardId = "Playtime" .. tostring(mins) .. "Minutes"
+        
+        local claimSuccess, claimResult = executeWithRetry(function()
+            claimRemote:InvokeServer(rewardId)
+        end, 1)
+        
+        if claimSuccess then
+            AutoSpinRewardsPremium.stats.totalRewardsClaimed = AutoSpinRewardsPremium.stats.totalRewardsClaimed + 1
+        else
+            AutoSpinRewardsPremium.stats.failedClaims = AutoSpinRewardsPremium.stats.failedClaims + 1
+        end
+    end
+end
+
+-- Get statistics
+function AutoSpinRewardsPremium:getStats()
+    local uptime = tick() - self.stats.startTime
+    
+    return {
+        uptime = uptime,
+        totalSpins = self.stats.totalSpins,
+        failedSpins = self.stats.failedSpins,
+        totalRewardsClaimed = self.stats.totalRewardsClaimed,
+        failedClaims = self.stats.failedClaims,
+        successRate = self.stats.totalSpins > 0 and 
+            ((self.stats.totalSpins - self.stats.failedSpins) / self.stats.totalSpins * 100) or 0
+    }
+end
+
+-- Print statistics
+function AutoSpinRewardsPremium:printStats()
+    local stats = self:getStats()
+    
+    print("\n=== AUTO SPIN & REWARDS STATISTICS ===")
+    print("Uptime: " .. string.format("%.2f", stats.uptime) .. " seconds")
+    print("Total Spins: " .. stats.totalSpins .. " (Failed: " .. stats.failedSpins .. ")")
+    print("Success Rate: " .. string.format("%.1f", stats.successRate) .. "%")
+    print("Rewards Claimed: " .. stats.totalRewardsClaimed .. " (Failed: " .. stats.failedClaims .. ")")
+    print("=====================================\n")
+end
+
+-- Toggle service
+function AutoSpinRewardsPremium:toggle(enabled)
+    self.config.enabled = enabled
+    log("INFO", "Service " .. (enabled and "enabled" or "disabled"))
+end
+
+-- Main loop
+local function mainLoop()
+    print("Ready Auto Claim Spin And Playtime!")
+    
+    while AutoSpinRewardsPremium.config.enabled do
+        executeAutoSpin()
+        executeAutoClaim()
+        
+        wait(AutoSpinRewardsPremium.config.loopDelay)
+    end
+end
+
+-- Start service
+task.spawn(mainLoop)
+
+-- Return module
+return AutoSpinRewardsPremium
