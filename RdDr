@@ -1,4 +1,4 @@
-local Players = game:GetService("Players") -- FISH_RARITY
+local Players = game:GetService("Players") -- ASSET NAV TAB SHOVEL workspace:FindFirstChild("cutePH14")
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
@@ -1240,7 +1240,6 @@ Pet Shop|MainPetShop|BasicIncubator,CowEgg,FoxEgg,FastIncubator,SmallPetTreat,Me
 			selectedItems[s.id] = {}
 			for _, item in ipairs(s.items) do selectedItems[s.id][item] = false end
 		end
-		local sellCropsAmt, sellFishAmt, tradeFishAmt, sellPetsAmt, sellBugsAmt = 1, 1, 1, 1, 1
 		local autoSellFishActive, autoTradeFishActive, autoSellPetsActive = false, false, false
 		local isAutoBuying = false
 		onlyFishingMode = false
@@ -1348,7 +1347,7 @@ Pet Shop|MainPetShop|BasicIncubator,CowEgg,FoxEgg,FastIncubator,SmallPetTreat,Me
 
 			local box = Instance.new("TextBox")
 			box.Size = UDim2.new(0, 50, 0, 36)
-			box.Position = pos + UDim2.new(0, 265, 0, 0)
+			box.Position = pos + UDim2.new(0, 211165, 0, 0)
 			box.PlaceholderText = "Amt"
 			box.Text = tostring(defaultAmt)
 			box.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
@@ -1912,7 +1911,7 @@ Pet Shop|MainPetShop|BasicIncubator,CowEgg,FoxEgg,FastIncubator,SmallPetTreat,Me
 			local char = Player.Character
 			if char and char:FindFirstChild("Humanoid") then char.Humanoid.WalkSpeed = v end
 		end)
-		local setJumpInput, jumpLabel = makeSlider("JumpPower Matrix", 16, 50000, 16, UDim2.new(0, 10, 0, 65), function(v)
+		local setJumpInput, jumpLabel = makeSlider("JumpPower Matrix", 50, 50000, 50, UDim2.new(0, 10, 0, 65), function(v)
 			jumpVal = v
 			local char = Player.Character
 			if char and char:FindFirstChild("Humanoid") then
@@ -2219,7 +2218,6 @@ Pet Shop|MainPetShop|BasicIncubator,CowEgg,FoxEgg,FastIncubator,SmallPetTreat,Me
 			syncAutoDigSites(Value)
 			syncAutoMagicOrbs(Value)
 		end)
-
 		local y9 = AddSectionHeader(Page10, "Main Island Water Features", 10)
 		y9 = AddNavInstructionText(Page10, "Teleport to prime fluid areas to cast lines easily.", y9)
 		y9 = createTeleportButton(Page10, "Main Fishing Area - Basic", CFrame.new(780.05, 36.91, 229.12), y9)
