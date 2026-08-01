@@ -1393,12 +1393,12 @@ yFarm = AddNavInstructionText(PageFarming, "NOTE: The Farming Panel window is dr
 LeftScrollNav.CanvasSize = UDim2.new(0, 0, 0, 550)
 
 -- ==========================================
--- KEYBOARD SHORTCUT: M KEY TO TOGGLE GUI
+-- KEYBOARD SHORTCUT: B KEY TO TOGGLE GUI
 -- ==========================================
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     
-    if input.KeyCode == Enum.KeyCode.M then
+    if input.KeyCode == Enum.KeyCode.B then
         if AutoFarmMainFrame then
             AutoFarmMainFrame.Visible = not AutoFarmMainFrame.Visible
             addUiLog("GUI Toggled: " .. (AutoFarmMainFrame.Visible and "VISIBLE" or "HIDDEN"))
