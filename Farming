@@ -1360,33 +1360,57 @@ end)
 -- ==========================================
 -- RdDr UI: FARMING PANEL INTEGRATION & GUIDES
 -- ==========================================
+-- ==========================================
+-- RdDr UI: FARMING PANEL INTEGRATION & GUIDES
+-- ==========================================
 if typeof(AddSectionHeader) == "function" and PageFarming then
     yFarm = AddSectionHeader(PageFarming, "Farming Panel Display", yFarm)
 end
--- TOGGLE BUTTON TO REVEAL AUTOMATIC.LUA UI
-local ToggleFarmingBtn = createActionButton("TOGGLE FARMING PANEL and TOGGLE again IF YOU WANT TO remove the ⚡ Farming Pamel ⚡", UDim2.new(0, 10, 0, yFarm), UDim2.new(0, 240, 0, 36), PageFarming, function()
-    if AutoFarmMainFrame then
-        AutoFarmMainFrame.Visible = not AutoFarmMainFrame.Visible
-    end
-end)
+
+-- TOGGLE BUTTON TO REVEAL AUTOMATIC.LUA UI (Safely checked)
+if typeof(createActionButton) == "function" and PageFarming then
+    local ToggleFarmingBtn = createActionButton("TOGGLE FARMING PANEL and TOGGLE again IF YOU WANT TO remove the ⚡ Farming Pamel ⚡", UDim2.new(0, 10, 0, yFarm), UDim2.new(0, 240, 0, 36), PageFarming, function()
+        if AutoFarmMainFrame then
+            AutoFarmMainFrame.Visible = not AutoFarmMainFrame.Visible
+        end
+    end)
+end
 yFarm = yFarm + 50
 
 -- COMPREHENSIVE GUIDES 
-yFarm = AddSectionHeader(PageFarming, "Farming UI Comprehensive Guide", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "1. Click the 'TOGGLE FARMING PANEL' button above to reveal the original Extreme Auto-Farm UI.", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "2. TARGET MODES: Select 'CUSTOM TARGET' to focus on a specific plant (e.g., Apple), or select", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "   'ALL PLANTS' to execute loops across your entire garden plot.", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "3. ACTIVE TOOL SETTINGS: Choose Scythe for harvesting, Shovel for destroying crops, or Retriever.", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "4. SETTING DELAYS: Change Delay Speed to 0 for maximum server execution speed.", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "   Leave Action Limit at 0 to run the background loops infinitely.", yFarm)
-yFarm = AddSectionHeader(PageFarming, "Automation & Harvesting Features", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "5. SUPER FAST HARVEST: This mode completely skips the tool animations and directly fires", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "   the remote events to gather fruit in milliseconds. Filter it by specific names or mutations.", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "6. AVOID MUTATIONS: Toggle the shield button to prevent any mutated plants from being harvested.", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "   You can also specify exact mutation names to avoid (like 'Galaxy').", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "7. HIGHLIGHT & REPORTS: Use the Highlight section to spawn glowing indicators over your fruits.", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "   This also outputs detailed information to the live logs regarding mutation statistics.", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "8. AUTO SEED PACK: Automatically opens your held Seed Pack repeatedly while skipping Gacha rolls.", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "9. AUTO PLANT: Fires the plant remote continuously at your character's exact location.", yFarm)
-yFarm = AddNavInstructionText(PageFarming, "NOTE: The Farming Panel window is draggable and can be placed anywhere on your screen.", yFarm)
-LeftScrollNav.CanvasSize = UDim2.new(0, 0, 0, 550)
+if typeof(AddSectionHeader) == "function" and PageFarming then
+    yFarm = AddSectionHeader(PageFarming, "Farming UI Comprehensive Guide", yFarm)
+end
+
+local function safeAddInstruction(text)
+    if typeof(AddNavInstructionText) == "function" and PageFarming then
+        yFarm = AddNavInstructionText(PageFarming, text, yFarm)
+    else
+        yFarm = yFarm + 20
+    end
+end
+
+safeAddInstruction("1. Click the 'TOGGLE FARMING PANEL' button above to reveal the original Extreme Auto-Farm UI.")
+safeAddInstruction("2. TARGET MODES: Select 'CUSTOM TARGET' to focus on a specific plant (e.g., Apple), or select")
+safeAddInstruction("   'ALL PLANTS' to execute loops across your entire garden plot.")
+safeAddInstruction("3. ACTIVE TOOL SETTINGS: Choose Scythe for harvesting, Shovel for destroying crops, or Retriever.")
+safeAddInstruction("4. SETTING DELAYS: Change Delay Speed to 0 for maximum server execution speed.")
+safeAddInstruction("   Leave Action Limit at 0 to run the background loops infinitely.")
+
+if typeof(AddSectionHeader) == "function" and PageFarming then
+    yFarm = AddSectionHeader(PageFarming, "Automation & Harvesting Features", yFarm)
+end
+
+safeAddInstruction("5. SUPER FAST HARVEST: This mode completely skips the tool animations and directly fires")
+safeAddInstruction("   the remote events to gather fruit in milliseconds. Filter it by specific names or mutations.")
+safeAddInstruction("6. AVOID MUTATIONS: Toggle the shield button to prevent any mutated plants from being harvested.")
+safeAddInstruction("   You can also specify exact mutation names to avoid (like 'Galaxy').")
+safeAddInstruction("7. HIGHLIGHT & REPORTS: Use the Highlight section to spawn glowing indicators over your fruits.")
+safeAddInstruction("   This also outputs detailed information to the live logs regarding mutation statistics.")
+safeAddInstruction("8. AUTO SEED PACK: Automatically opens your held Seed Pack repeatedly while skipping Gacha rolls.")
+safeAddInstruction("9. AUTO PLANT: Fires the plant remote continuously at your character's exact location.")
+safeAddInstruction("NOTE: The Farming Panel window is draggable and can be placed anywhere on your screen.")
+
+if LeftScrollNav then
+    LeftScrollNav.CanvasSize = UDim2.new(0, 0, 0, 550)
+end
