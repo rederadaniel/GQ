@@ -1,11 +1,13 @@
 -- ==========================================
 -- AUTOMATIC.LUA INTEGRATION (UNTOUCHED LOGIC & UI)
 -- ==========================================
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
+local playerGui = LocalPlayer and LocalPlayer:WaitForChild("PlayerGui")
 local AutoFarmParentGui = (CoreGui:FindFirstChild("RobloxGui") or playerGui)
 
 if AutoFarmParentGui:FindFirstChild("AutoFarmV23Gui") then
