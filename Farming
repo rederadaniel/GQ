@@ -4,7 +4,6 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local CoreGui = game:GetService("CoreGui")
-local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 local AutoFarmParentGui = (CoreGui:FindFirstChild("RobloxGui") or playerGui)
@@ -1391,17 +1390,3 @@ yFarm = AddNavInstructionText(PageFarming, "8. AUTO SEED PACK: Automatically ope
 yFarm = AddNavInstructionText(PageFarming, "9. AUTO PLANT: Fires the plant remote continuously at your character's exact location.", yFarm)
 yFarm = AddNavInstructionText(PageFarming, "NOTE: The Farming Panel window is draggable and can be placed anywhere on your screen.", yFarm)
 LeftScrollNav.CanvasSize = UDim2.new(0, 0, 0, 550)
-
--- ==========================================
--- KEYBOARD SHORTCUT: V KEY TO TOGGLE GUI
--- ==========================================
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    
-    if input.KeyCode == Enum.KeyCode.V then
-        if AutoFarmMainFrame then
-            AutoFarmMainFrame.Visible = not AutoFarmMainFrame.Visible
-            addUiLog("GUI Toggled: " .. (AutoFarmMainFrame.Visible and "VISIBLE" or "HIDDEN"))
-        end
-    end
-end)
