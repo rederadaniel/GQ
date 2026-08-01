@@ -1360,8 +1360,9 @@ end)
 -- ==========================================
 -- RdDr UI: FARMING PANEL INTEGRATION & GUIDES
 -- ==========================================
-yFarm = AddSectionHeader(PageFarming, "Farming Panel Display", yFarm)
-
+if typeof(AddSectionHeader) == "function" and PageFarming then
+    yFarm = AddSectionHeader(PageFarming, "Farming Panel Display", yFarm)
+end
 -- TOGGLE BUTTON TO REVEAL AUTOMATIC.LUA UI
 local ToggleFarmingBtn = createActionButton("TOGGLE FARMING PANEL and TOGGLE again IF YOU WANT TO remove the ⚡ Farming Pamel ⚡", UDim2.new(0, 10, 0, yFarm), UDim2.new(0, 240, 0, 36), PageFarming, function()
     if AutoFarmMainFrame then
