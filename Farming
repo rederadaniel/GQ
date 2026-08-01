@@ -1,0 +1,1389 @@
+-- ==========================================
+-- AUTOMATIC.LUA INTEGRATION (UNTOUCHED LOGIC & UI)
+-- ==========================================
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local CoreGui = game:GetService("CoreGui")
+
+local LocalPlayer = Players.LocalPlayer
+local AutoFarmParentGui = (CoreGui:FindFirstChild("RobloxGui") or playerGui)
+
+if AutoFarmParentGui:FindFirstChild("AutoFarmV23Gui") then
+    AutoFarmParentGui.AutoFarmV23Gui:Destroy()
+end
+
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local UseEquippedTool = Remotes:WaitForChild("Tools"):WaitForChild("UseEquippedTool")
+local HarvestCropRemote = Remotes:WaitForChild("Farming"):WaitForChild("HarvestCrop")
+
+getgenv().FarmScriptRunning = false
+getgenv().AutoHarvestRunning = false
+
+local selectedMode = "Scythe"
+local targetMode = "CUSTOM"
+local customTargetName = "Tomato"
+local rawSpeedInput = 0.01 
+local harvestSpeedInput = 0.2 
+local actionLimit = 0 
+local autoOpenSeedPack = false
+local OPEN_DELAY = 0
+local autoPlantActive = false
+local plantMethod = "Seed" 
+local harvestMode = "HARVEST ALL FRUITS"
+local harvestTargetName = ""
+local harvestTargetMutName = ""
+local avoidAllMutations = false
+local avoidSpecificMutationsText = "" 
+local activeLogsEnabled = true
+local highlightMode = "OFF"
+local hlSpecificFruitName = ""   
+local hlMutationValueText = ""   
+local hlMutFruitNameText = ""    
+
+local HighlightedCache = {}
+local RecentlyProcessedTool = {}
+local RecentlyProcessedHarvest = {}
+local lastLogMessage = ""
+local lastLogLabel = nil
+local lastLogCount = 1
+
+local stopToolLoop
+local stopHarvestLoop
+
+local function getDelayInSeconds()
+    local val = tonumber(rawSpeedInput)
+    if not val then return 0.01 end
+    return math.max(val, 0)
+end
+
+local function getHarvestDelayInSeconds()
+    local val = tonumber(harvestSpeedInput)
+    if not val then return 0.2 end
+    return math.max(val, 0.01)
+end
+
+local function getActiveTargetName()
+    return (targetMode == "ALL PLANTS") and "ALL" or customTargetName
+end
+
+local addUiLog = function(msg) end
+
+task.spawn(function()
+    while task.wait() do
+        if autoOpenSeedPack then
+            local gachaGui = playerGui:FindFirstChild("GachaRollerGui")
+            if gachaGui then
+                local container = gachaGui:FindFirstChild("Container")
+                if container then
+                    local skipButton = container:FindFirstChild("SkipButton")
+                    if skipButton and getconnections then
+                        for _, connection in ipairs(getconnections(skipButton.MouseButton1Click)) do
+                            pcall(function() connection:Fire() end)
+                        end
+                        for _, connection in ipairs(getconnections(skipButton.Activated)) do
+                            pcall(function() connection:Fire() end)
+                        end
+                    end
+                end
+            end
+        end
+    end
+end)
+
+local function ensureSeedPackEquipped()
+    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local backpack = LocalPlayer:WaitForChild("Backpack")
+    local equippedTool = character:FindFirstChildOfClass("Tool")
+    if equippedTool and string.find(equippedTool.Name, "SeedPack") then return true end
+    for _, tool in ipairs(backpack:GetChildren()) do
+        if tool:IsA("Tool") and string.find(tool.Name, "SeedPack") then
+            tool.Parent = character
+            task.wait(0.1) 
+            return true
+        end
+    end
+    return false
+end
+
+task.spawn(function()
+    while task.wait() do 
+        if autoOpenSeedPack then
+            if ensureSeedPackEquipped() then
+                local randomClientTime = os.clock() + math.random() * 100
+                local args = {
+                    [1] = {
+                        ["ToolType"] = "SeedPack",
+                        ["Action"] = "OpenSeedPack",
+                        ["ClientTime"] = randomClientTime
+                    }
+                }
+                Remotes.Tools.UseEquippedTool:FireServer(unpack(args))
+            end
+        end
+    end
+end)
+
+task.spawn(function()
+    local Event = nil
+    local FallbackTarget = nil
+    pcall(function() Event = ReplicatedStorage:WaitForChild("Remotes", 5):WaitForChild("Farming", 5):WaitForChild("PlantSeed", 5) end)
+    pcall(function() FallbackTarget = Workspace:WaitForChild("Map", 5):WaitForChild("MainIsland", 5):WaitForChild("PlayerGardens", 5):WaitForChild("Plots", 5):WaitForChild("Plot1", 5):WaitForChild("InvisibleFloor", 5) end)
+    
+    while true do
+        if autoPlantActive then
+            local character = LocalPlayer.Character
+            if character and character:FindFirstChild("HumanoidRootPart") and Event then
+                local playerPos = character.HumanoidRootPart.Position
+                task.spawn(function()
+                    pcall(function() Event:FireServer({TargetPart = FallbackTarget, WorldPosition = playerPos, MethodType = plantMethod}) end)
+                end)
+            end
+            task.wait() 
+        else
+            task.wait(0.5) 
+        end
+    end
+end)
+
+local function clearAllHighlights()
+    HighlightedCache = {}
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj.Name == "FruitAutoHighlight" or obj.Name == "FruitNameTag" or obj.Name == "ActionHighlight" then
+            obj:Destroy()
+        end
+    end
+end
+
+local function applyActionHighlight(instance, textMsg, color)
+    if not instance then return end
+    local hl = Instance.new("Highlight")
+    hl.Name = "ActionHighlight"
+    hl.FillColor = color or Color3.fromRGB(255, 50, 50)
+    hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+    hl.FillTransparency = 0.3
+    hl.OutlineTransparency = 0
+    hl.Parent = instance
+
+    local bb = Instance.new("BillboardGui")
+    bb.Name = "FruitNameTag"
+    bb.Size = UDim2.new(0, 150, 0, 30)
+    bb.StudsOffset = Vector3.new(0, 3, 0)
+    bb.AlwaysOnTop = true
+
+    local txt = Instance.new("TextLabel")
+    txt.Size = UDim2.new(1, 0, 1, 0)
+    txt.BackgroundTransparency = 1
+    txt.Text = textMsg
+    txt.TextColor3 = color or Color3.fromRGB(255, 50, 50)
+    txt.TextStrokeTransparency = 0
+    txt.TextSize = 12
+    txt.Font = Enum.Font.SourceSansBold
+    txt.Parent = bb
+    bb.Parent = instance
+
+    task.delay(1.5, function()
+        if hl then hl:Destroy() end
+        if bb then bb:Destroy() end
+    end)
+end
+
+local function getMutationValuesFromFolder(mutationsTarget)
+    local foundValues = {}
+    if not mutationsTarget then return foundValues end
+
+    if mutationsTarget:IsA("ValueBase") then
+        if mutationsTarget.Value and tostring(mutationsTarget.Value) ~= "" then table.insert(foundValues, tostring(mutationsTarget.Value)) end
+    end
+    for attrName, attrVal in pairs(mutationsTarget:GetAttributes()) do table.insert(foundValues, tostring(attrVal)) end
+
+    for _, mutItem in ipairs(mutationsTarget:GetDescendants()) do
+        if mutItem:IsA("ValueBase") and mutItem.Value ~= nil and tostring(mutItem.Value) ~= "" then
+            table.insert(foundValues, tostring(mutItem.Value))
+        end
+        local itemNameLower = mutItem.Name:lower()
+        if itemNameLower ~= "mutations" and itemNameLower ~= "value" and itemNameLower ~= "getdate" then
+            table.insert(foundValues, tostring(mutItem.Name))
+        end
+        local dateChild = mutItem:FindFirstChild("getDate") or mutItem:FindFirstChild("Date") or mutItem:FindFirstChild("Value")
+        if dateChild and dateChild:IsA("ValueBase") and dateChild.Value ~= nil then table.insert(foundValues, tostring(dateChild.Value)) end
+        for _, attrVal in pairs(mutItem:GetAttributes()) do table.insert(foundValues, tostring(attrVal)) end
+    end
+    return foundValues
+end
+
+local function checkMutationMatch(mutationsTarget, queryText)
+    local values = getMutationValuesFromFolder(mutationsTarget)
+    if #values == 0 then return false, "", {} end
+    local query = (queryText or ""):lower():gsub("%s+", "")
+    local matchedList = {}
+    for _, val in ipairs(values) do
+        local valClean = tostring(val):lower():gsub("%s+", "")
+        if query == "" then
+            if valClean ~= "mutations" and valClean ~= "value" and valClean ~= "getdate" then table.insert(matchedList, tostring(val)) end
+        elseif string.find(valClean, query) then
+            table.insert(matchedList, tostring(val))
+        end
+    end
+    if #matchedList > 0 then return true, matchedList[1], matchedList end
+    if query == "" and #values > 0 then return true, tostring(values[1]), values end
+    return false, "", {}
+end
+
+local function isMutationAvoided(allFruitMutations)
+    if avoidAllMutations and #allFruitMutations > 0 then return true end
+    if avoidSpecificMutationsText ~= "" and #allFruitMutations > 0 then
+        local blacklist = string.split(avoidSpecificMutationsText, ",")
+        for _, rawAvoid in ipairs(blacklist) do
+            local avoidQuery = rawAvoid:lower():gsub("%s+", "")
+            if avoidQuery ~= "" then
+                for _, mutVal in ipairs(allFruitMutations) do
+                    if string.find(tostring(mutVal):lower():gsub("%s+", ""), avoidQuery) then return true end
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function plantHasMutations(plantInst)
+    if not plantInst then return false end
+    local serverConfig = plantInst:FindFirstChild("ServerConfiguration")
+    if not serverConfig then serverConfig = plantInst.Parent and plantInst.Parent:FindFirstChild("ServerConfiguration") end
+    
+    local mutationsFolder = serverConfig and serverConfig:FindFirstChild("Mutations")
+    local fruitsConfig = serverConfig and serverConfig:FindFirstChild("Fruits")
+    local _, _, seedMuts = checkMutationMatch(mutationsFolder, "")
+    if #seedMuts > 0 then return true end
+
+    if fruitsConfig then
+        for _, fruitCfg in ipairs(fruitsConfig:GetChildren()) do
+            local fruitMutFolder = fruitCfg:FindFirstChild("Mutations")
+            local _, _, fruitMuts = checkMutationMatch(fruitMutFolder, "")
+            if #fruitMuts > 0 then return true end
+        end
+    end
+    return false
+end
+
+local function ensureToolEquipped(toolName)
+    if not getgenv().FarmScriptRunning then return false end
+    local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    local backpack = LocalPlayer:WaitForChild("Backpack")
+    local currentTool = character:FindFirstChildOfClass("Tool")
+    if currentTool and string.find(currentTool.Name:lower(), toolName:lower()) then return true end
+    for _, tool in ipairs(backpack:GetChildren()) do
+        if tool:IsA("Tool") and string.find(tool.Name:lower(), toolName:lower()) then
+            tool.Parent = character
+            task.wait(0.02)
+            return true
+        end
+    end
+    return false
+end
+
+local function getTargetPlants()
+    local matchedPlants = {}
+    local query = getActiveTargetName():lower()
+    local plots = Workspace:FindFirstChild("Map")
+    if plots then plots = plots:FindFirstChild("MainIsland") end
+    if plots then plots = plots:FindFirstChild("PlayerGardens") end
+    if plots then plots = plots:FindFirstChild("Plots") end
+    if not plots then return matchedPlants end
+
+    for _, plot in ipairs(plots:GetChildren()) do
+        local plantedSeeds = plot:FindFirstChild("PlantedSeeds")
+        if plantedSeeds then
+            for _, seed in ipairs(plantedSeeds:GetChildren()) do
+                if not getgenv().FarmScriptRunning then break end
+                if not RecentlyProcessedTool[seed] then
+                    local plantKey = seed:GetAttribute("PlantKey") or seed.Name
+                    if query == "all" or query == "" or string.find(plantKey:lower(), query) then
+                        local skipDueToMutation = false
+                        if avoidAllMutations and plantHasMutations(seed) then skipDueToMutation = true end
+                        if not skipDueToMutation then table.insert(matchedPlants, {Instance = seed, PlantKey = plantKey}) end
+                    end
+                end
+            end
+        end
+    end
+    return matchedPlants
+end
+
+local function getHarvestableFruits(targetNameFilter, modeFilter)
+    local results = {}
+    local query = (targetNameFilter or ""):lower()
+    local plots = Workspace:FindFirstChild("Map")
+    if plots then plots = plots:FindFirstChild("MainIsland") end
+    if plots then plots = plots:FindFirstChild("PlayerGardens") end
+    if plots then plots = plots:FindFirstChild("Plots") end
+    if not plots then return results end
+
+    local gardenMutationCounts, specificFruitMutationCounts = {}, {}
+    local noMutationCount, hasMutationCount = 0, 0
+
+    for _, plot in ipairs(plots:GetChildren()) do
+        local plantedSeeds = plot:FindFirstChild("PlantedSeeds")
+        if plantedSeeds then
+            for _, seed in ipairs(plantedSeeds:GetChildren()) do
+                local plantKey = seed:GetAttribute("PlantKey") or seed.Name
+                local serverConfig = seed:FindFirstChild("ServerConfiguration")
+                local seedMutationsFolder = serverConfig and serverConfig:FindFirstChild("Mutations")
+                local fruitsConfig = serverConfig and serverConfig:FindFirstChild("Fruits")
+                local seedHasMutFilter, seedMutText, seedMutList = checkMutationMatch(seedMutationsFolder, hlMutationValueText)
+                local anySeedMutFound, anySeedMutText, allSeedMuts = checkMutationMatch(seedMutationsFolder, "")
+
+                if fruitsConfig then
+                    for _, fruitCfg in ipairs(fruitsConfig:GetChildren()) do
+                        local favorited = fruitCfg:FindFirstChild("Favorited")
+                        local permLocked = fruitCfg:FindFirstChild("PermanentLocked")
+                        local isFavorited = favorited and favorited.Value == true
+                        local isPermLocked = permLocked and permLocked.Value == true
+
+                        local fruitMutationsFolder = fruitCfg:FindFirstChild("Mutations")
+                        local fruitHasMutFilter, fruitMutText, fruitMutList = checkMutationMatch(fruitMutationsFolder, hlMutationValueText)
+                        local anyFruitMutFound, anyFruitMutText, allFruitMuts = checkMutationMatch(fruitMutationsFolder, "")
+
+                        local combinedMuts = {}
+                        for _, m in ipairs(allSeedMuts) do table.insert(combinedMuts, m) end
+                        for _, m in ipairs(allFruitMuts) do table.insert(combinedMuts, m) end
+
+                        local anyMutFound = anySeedMutFound or anyFruitMutFound
+                        if anyMutFound or #combinedMuts > 0 then hasMutationCount = hasMutationCount + 1 else noMutationCount = noMutationCount + 1 end
+
+                        for _, mutName in ipairs(combinedMuts) do
+                            gardenMutationCounts[mutName] = (gardenMutationCounts[mutName] or 0) + 1
+                            local targetFruitCheck = ""
+                            if modeFilter == "SPECIFIC" then
+                                targetFruitCheck = hlMutFruitNameText
+                            elseif modeFilter == "SPECIFIC NAME" or modeFilter == "SPECIFIC MUT" then
+                                targetFruitCheck = query 
+                                if modeFilter == "SPECIFIC NAME" and hlSpecificFruitName ~= "" then targetFruitCheck = hlSpecificFruitName end
+                            end
+
+                            if targetFruitCheck ~= "" and string.find(plantKey:lower(), targetFruitCheck:lower()) ~= nil then
+                                local targetMutCheck = hlMutationValueText:lower():gsub("%s+", "")
+                                local mutClean = mutName:lower():gsub("%s+", "")
+                                if targetMutCheck == "" or string.find(mutClean, targetMutCheck) then specificFruitMutationCounts[mutName] = (specificFruitMutationCounts[mutName] or 0) + 1 end
+                            end
+                        end
+
+                        local foundMutationLabel = (fruitMutText ~= "" and fruitMutText) or (seedMutText ~= "" and seedMutText) or anyFruitMutText or anySeedMutText
+                        local isMatch = false
+
+                        if modeFilter == "HARVEST ALL FRUITS" or modeFilter == "ALL FRUITS" then isMatch = true
+                        elseif modeFilter == "SPECIFIC NAME" then
+                            local specFilter = (hlSpecificFruitName ~= "" and hlSpecificFruitName) or query
+                            if specFilter ~= "" then isMatch = string.find(plantKey:lower(), specFilter:lower()) ~= nil end
+                        elseif modeFilter == "SPECIFIC MUT" then
+                            local mutFilter = harvestTargetMutName or ""
+                            local hasTargetMut, _, _ = checkMutationMatch(seedMutationsFolder, mutFilter)
+                            local fruitHasTargetMut, _, _ = checkMutationMatch(fruitMutationsFolder, mutFilter)
+                            isMatch = hasTargetMut or fruitHasTargetMut
+                        elseif modeFilter == "ALL MUT" then
+                            isMatch = seedHasMutFilter or fruitHasMutFilter or (hlMutationValueText == "" and anyMutFound)
+                        elseif modeFilter == "SPECIFIC" then
+                            local fruitNameMatch = (hlMutFruitNameText == "" or string.find(plantKey:lower(), hlMutFruitNameText:lower()) ~= nil)
+                            local mutMatch = (hlMutationValueText == "" and anyMutFound) or (seedHasMutFilter or fruitHasMutFilter)
+                            isMatch = fruitNameMatch and mutMatch
+                        end
+
+                        local isAvoided = isMutationAvoided(combinedMuts)
+                        local physicalFruit = nil
+                        local fruitsFolder = seed:FindFirstChild("Fruits")
+                        if fruitsFolder then
+                            local fruitFolder = fruitsFolder:FindFirstChild(fruitCfg.Name)
+                            if fruitFolder then physicalFruit = fruitFolder:FindFirstChild("Fruit") or fruitFolder end
+                        end
+
+                        local uniqueTargetKey = tostring(seed) .. "_" .. tostring(fruitCfg.Name)
+                        local isRecentlyProcessed = RecentlyProcessedHarvest[uniqueTargetKey]
+
+                        if isMatch and not isFavorited and not isPermLocked and not isAvoided and not isRecentlyProcessed then
+                            table.insert(results, {UniqueKey = uniqueTargetKey, PlantKey = plantKey, PlantName = seed.Name, FruitNumber = fruitCfg.Name, PhysicalInstance = physicalFruit, SeedInstance = seed, HasMutation = anyMutFound or (foundMutationLabel ~= ""), MutationNameText = foundMutationLabel, AllMutations = combinedMuts})
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    results.GardenMutationCounts = gardenMutationCounts
+    results.SpecificFruitMutationCounts = specificFruitMutationCounts
+    results.NoMutationCount = noMutationCount
+    results.HasMutationCount = hasMutationCount
+    return results
+end
+
+local function applyFruitHighlights()
+    if highlightMode == "OFF" then 
+        clearAllHighlights()
+        return 
+    end
+
+    local targetFruits = getHarvestableFruits(harvestTargetName, highlightMode)
+    local allMutCounts = targetFruits.GardenMutationCounts or {}
+    local specificMutCounts = targetFruits.SpecificFruitMutationCounts or {}
+
+    for _, fruitData in ipairs(targetFruits) do
+        local targetObj = fruitData.PhysicalInstance or fruitData.SeedInstance
+        if targetObj and not HighlightedCache[targetObj] then
+            HighlightedCache[targetObj] = true
+            local hl = Instance.new("Highlight")
+            hl.Name = "FruitAutoHighlight"
+            hl.FillColor = fruitData.HasMutation and Color3.fromRGB(255, 140, 0) or Color3.fromRGB(0, 255, 127)
+            hl.OutlineColor = Color3.fromRGB(255, 255, 255)
+            hl.FillTransparency = 0.35
+            hl.OutlineTransparency = 0
+            hl.Parent = targetObj
+
+            local bb = Instance.new("BillboardGui")
+            bb.Name = "FruitNameTag"
+            bb.Size = UDim2.new(0, 160, 0, 30)
+            bb.StudsOffset = Vector3.new(0, 2, 0)
+            bb.AlwaysOnTop = true
+
+            local txt = Instance.new("TextLabel")
+            txt.Size = UDim2.new(1, 0, 1, 0)
+            txt.BackgroundTransparency = 1
+            local mutTag = (fruitData.MutationNameText ~= "") and ("✨[" .. fruitData.MutationNameText .. "] ") or ""
+            txt.Text = mutTag .. fruitData.PlantName .. " #" .. fruitData.FruitNumber
+            txt.TextColor3 = fruitData.HasMutation and Color3.fromRGB(255, 140, 0) or Color3.fromRGB(255, 255, 0)
+            txt.TextStrokeTransparency = 0
+            txt.TextSize = 11
+            txt.Font = Enum.Font.SourceSansBold
+            txt.Parent = bb
+            bb.Parent = targetObj
+        end
+    end
+
+    if highlightMode == "ALL FRUITS" then
+        local noMut = targetFruits.NoMutationCount or 0
+        local hasMut = targetFruits.HasMutationCount or 0
+        addUiLog(string.format("No Mutation Fruit -> %d", noMut))
+        addUiLog(string.format("+ With Mutation Fruit -> %d", hasMut))
+        addUiLog(string.format("= -> %d", noMut + hasMut))
+    elseif highlightMode == "ALL MUT" then
+        if next(allMutCounts) ~= nil then
+            for mutName, count in pairs(allMutCounts) do addUiLog(string.format("%s %dx", mutName, count)) end
+        else
+            addUiLog("❌ No mutation found for '" .. (hlMutationValueText ~= "" and hlMutationValueText or "Any") .. "'")
+        end
+    elseif highlightMode == "SPECIFIC" then
+        if next(specificMutCounts) ~= nil then
+            for mutName, count in pairs(specificMutCounts) do addUiLog(string.format("%s %dx", mutName, count)) end
+        else
+            addUiLog("❌ No mutation found for specific name -> " .. (hlMutFruitNameText ~= "" and hlMutFruitNameText or "Unknown") .. ".")
+        end
+    elseif highlightMode == "SPECIFIC NAME" then
+        if next(specificMutCounts) ~= nil then
+            for mutName, count in pairs(specificMutCounts) do addUiLog(string.format("%s %dx", mutName, count)) end
+        end
+    end
+end
+
+local function teleportToInstance(targetInst)
+    if not targetInst then return end
+    local character = LocalPlayer.Character
+    if not character then return end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+    if targetInst:IsA("Model") then
+        local cf, _ = targetInst:GetBoundingBox()
+        hrp.CFrame = cf + Vector3.new(0, 3, 0)
+    elseif targetInst:IsA("BasePart") then
+        hrp.CFrame = targetInst.CFrame + Vector3.new(0, 3, 0)
+    end
+end
+
+local function showNameMutationFruits()
+    local plots = Workspace:FindFirstChild("Map")
+    if plots then plots = plots:FindFirstChild("MainIsland") end
+    if plots then plots = plots:FindFirstChild("PlayerGardens") end
+    if plots then plots = plots:FindFirstChild("Plots") end
+    
+    if not plots then
+        addUiLog("❌ Plant plots folder not found.")
+        return
+    end
+
+    local count = 0
+    addUiLog("=== Show Name Mutation Fruits Report ===")
+    for _, plot in ipairs(plots:GetChildren()) do
+        local plantedSeeds = plot:FindFirstChild("PlantedSeeds")
+        if plantedSeeds then
+            for _, seed in ipairs(plantedSeeds:GetChildren()) do
+                local plantKey = seed:GetAttribute("PlantKey") or seed.Name
+                local serverConfig = seed:FindFirstChild("ServerConfiguration")
+                local mutationsFolder = serverConfig and serverConfig:FindFirstChild("Mutations")
+                local fruitsConfig = serverConfig and serverConfig:FindFirstChild("Fruits")
+                local hasMut, _, muts = checkMutationMatch(mutationsFolder, "")
+                
+                local fruitMutFound = false
+                local fruitMutNames = {}
+                if fruitsConfig then
+                    for _, fruitCfg in ipairs(fruitsConfig:GetChildren()) do
+                        local fMutFolder = fruitCfg:FindFirstChild("Mutations")
+                        local fHas, _, fMuts = checkMutationMatch(fMutFolder, "")
+                        if fHas then
+                            fruitMutFound = true
+                            for _, m in ipairs(fMuts) do table.insert(fruitMutNames, m) end
+                        end
+                    end
+                end
+
+                if hasMut or fruitMutFound or #muts > 0 then
+                    count = count + 1
+                    local allMuts = {}
+                    for _, m in ipairs(muts) do table.insert(allMuts, m) end
+                    for _, m in ipairs(fruitMutNames) do table.insert(allMuts, m) end
+                    addUiLog(string.format("Plant: %s | Key: %s | Mutations: %s", seed.Name, plantKey, table.concat(allMuts, ", ")))
+                end
+            end
+        end
+    end
+    if count == 0 then addUiLog("❌ No mutation plants found in the garden.") else addUiLog(string.format("Total Mutation Plants Found -> %d", count)) end
+end
+
+local function runToolAutoLoop(updateStatus)
+    if not getgenv().FarmScriptRunning then return 0 end
+    local targets = getTargetPlants()
+    if #targets == 0 then
+        updateStatus("Tool Loop: Searching smart alternative plants...")
+        RecentlyProcessedTool = {}
+        return 0
+    end
+
+    local count = 0
+    for _, target in ipairs(targets) do
+        if not getgenv().FarmScriptRunning then break end
+        RecentlyProcessedTool[target.Instance] = true
+        if not ensureToolEquipped(selectedMode) then
+            updateStatus("Tool Loop: Equip " .. selectedMode)
+            RecentlyProcessedTool[target.Instance] = nil 
+            return 0
+        end
+
+        local actionText = "[COLLECTING]"
+        local actionColor = Color3.fromRGB(0, 255, 127)
+        if selectedMode == "Shovel" then
+            actionText = "[DESTROYING]"
+            actionColor = Color3.fromRGB(255, 60, 60)
+        elseif selectedMode == "Scythe" then
+            actionText = "[HARVESTING]"
+            actionColor = Color3.fromRGB(255, 200, 0)
+        end
+
+        applyActionHighlight(target.Instance, actionText .. " " .. target.PlantKey, actionColor)
+        UseEquippedTool:FireServer({Action = "Use", PlantKey = target.PlantKey, TargetPlantName = target.Instance.Name, TargetType = "Plant", InputMode = "GardenTarget"})
+
+        -- SMART VALIDATION: Check if the plant was successfully removed/updated
+        local success = false
+        local timeout = 2.0 
+        local elapsed = 0
+        
+        while elapsed < timeout do
+            if not getgenv().FarmScriptRunning then break end
+            
+            local isDestroyed = (target.Instance.Parent == nil)
+            
+            if selectedMode == "Shovel" then
+                if isDestroyed then 
+                    success = true 
+                    break 
+                end
+            else
+                local config = target.Instance:FindFirstChild("ServerConfiguration")
+                local serverFruits = config and config:FindFirstChild("Fruits")
+                local hasNoFruits = serverFruits and #serverFruits:GetChildren() == 0
+                
+                if isDestroyed or hasNoFruits then 
+                    success = true 
+                    break 
+                end
+            end
+            
+            task.wait(0.1)
+            elapsed = elapsed + 0.1
+        end
+
+        if success then
+            addUiLog(string.format("✅ [%s] %s Success: %s", selectedMode:upper(), actionText, target.PlantKey))
+            count = count + 1
+            
+            if actionLimit > 0 and count >= actionLimit then
+                if stopToolLoop then stopToolLoop() end
+                addUiLog("🛑 Action Limit Reached (" .. actionLimit .. "). Auto Tool Loop Stopped.")
+                break
+            end
+        else
+            addUiLog(string.format("⚠️ [%s] Failed (Not Destroyed): %s. Retrying next loop...", selectedMode:upper(), target.PlantKey))
+            RecentlyProcessedTool[target.Instance] = nil
+        end
+
+        local delay = getDelayInSeconds()
+        if delay > 0 then task.wait(delay) end
+    end    return count
+end
+
+local function runAutoHarvest(updateStatus)
+    if not getgenv().AutoHarvestRunning then return 0 end
+    local fruits = getHarvestableFruits(harvestTargetName, harvestMode)
+    if #fruits == 0 then
+        updateStatus("Harvest: Finding next smart fruit/plant...")
+        RecentlyProcessedHarvest = {}
+        return 0
+    end
+
+    local count = 0
+    for i, fruitData in ipairs(fruits) do
+        if not getgenv().AutoHarvestRunning then break end
+        RecentlyProcessedHarvest[fruitData.UniqueKey] = true
+        local targetObj = fruitData.PhysicalInstance or fruitData.SeedInstance
+        applyActionHighlight(targetObj, "[COLLECTING] " .. fruitData.PlantName, Color3.fromRGB(0, 255, 127))
+
+        if fruitData.PhysicalInstance then teleportToInstance(fruitData.PhysicalInstance) elseif fruitData.SeedInstance then teleportToInstance(fruitData.SeedInstance) end
+        HarvestCropRemote:FireServer(fruitData.PlantKey, tostring(fruitData.FruitNumber))
+        addUiLog(string.format("✅ [HARVEST] Success: %s | Fruit #%s", fruitData.PlantName, tostring(fruitData.FruitNumber)))
+        count = count + 1
+        
+        if actionLimit > 0 and count >= actionLimit then
+            if stopHarvestLoop then stopHarvestLoop() end
+            addUiLog("🛑 Harvest Limit Reached (" .. actionLimit .. "). Auto Harvest Stopped.")
+            break
+        end
+        local delay = getHarvestDelayInSeconds()
+        if delay > 0 then task.wait(delay) end
+    end
+    return count
+end
+
+-- ==========================================
+-- AUTOMATIC.LUA UI CONSTRUCTION (UNTOUCHED)
+-- ==========================================
+local AutoFarmScreenGui = Instance.new("ScreenGui")
+AutoFarmScreenGui.Name = "AutoFarmV23Gui"
+AutoFarmScreenGui.ResetOnSpawn = false
+AutoFarmScreenGui.Parent = AutoFarmParentGui
+
+local AutoFarmMainFrame = Instance.new("Frame")
+AutoFarmMainFrame.Name = "MainFrame"
+AutoFarmMainFrame.Size = UDim2.new(0, 340, 0, 895)
+AutoFarmMainFrame.Position = UDim2.new(0.5, -170, 0.01, 0)
+AutoFarmMainFrame.BackgroundColor3 = Color3.fromRGB(20, 22, 26)
+AutoFarmMainFrame.BorderSizePixel = 0
+AutoFarmMainFrame.Active = true
+AutoFarmMainFrame.Draggable = true
+AutoFarmMainFrame.Visible = false -- HIDING THE UI BY DEFAULT
+AutoFarmMainFrame.Parent = AutoFarmScreenGui
+
+Instance.new("UICorner", AutoFarmMainFrame).CornerRadius = UDim.new(0, 8)
+
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 36)
+Header.BackgroundColor3 = Color3.fromRGB(28, 30, 36)
+Header.Parent = AutoFarmMainFrame
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 8)
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(0.7, 0, 1, 0)
+Title.Position = UDim2.new(0.05, 0, 0, 0)
+Title.Text = "⚡ Farming Pamel ⚡"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 13
+Title.Font = Enum.Font.SourceSansBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.BackgroundTransparency = 1
+Title.Parent = Header
+
+local Body = Instance.new("Frame")
+Body.Size = UDim2.new(1, -20, 1, -46)
+Body.Position = UDim2.new(0, 10, 0, 40)
+Body.BackgroundTransparency = 1
+Body.Parent = AutoFarmMainFrame
+
+local StatusLabel = Instance.new("TextLabel")
+StatusLabel.Size = UDim2.new(1, 0, 0, 16)
+StatusLabel.Position = UDim2.new(0, 0, 1, -16)
+StatusLabel.Text = "Status: Idle"
+StatusLabel.TextColor3 = Color3.fromRGB(100, 210, 255)
+StatusLabel.TextSize = 11
+StatusLabel.Font = Enum.Font.SourceSansItalic
+StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
+StatusLabel.BackgroundTransparency = 1
+StatusLabel.Parent = Body
+
+local function updateStatus(msg) StatusLabel.Text = msg end
+
+local TargetLabel = Instance.new("TextLabel")
+TargetLabel.Size = UDim2.new(1, 0, 0, 14)
+TargetLabel.Position = UDim2.new(0, 0, 0, 0)
+TargetLabel.Text = "🎯 Active Tool Target Mode"
+TargetLabel.TextColor3 = Color3.fromRGB(180, 185, 195)
+TargetLabel.TextSize = 10
+TargetLabel.Font = Enum.Font.SourceSansBold
+TargetLabel.TextXAlignment = Enum.TextXAlignment.Left
+TargetLabel.BackgroundTransparency = 1
+TargetLabel.Parent = Body
+
+local TargetBtnFrame = Instance.new("Frame")
+TargetBtnFrame.Size = UDim2.new(1, 0, 0, 22)
+TargetBtnFrame.Position = UDim2.new(0, 0, 0, 16)
+TargetBtnFrame.BackgroundTransparency = 1
+TargetBtnFrame.Parent = Body
+
+local TargetBtnCustom = Instance.new("TextButton")
+TargetBtnCustom.Size = UDim2.new(0.48, 0, 1, 0)
+TargetBtnCustom.Position = UDim2.new(0, 0, 0, 0)
+TargetBtnCustom.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+TargetBtnCustom.TextColor3 = Color3.fromRGB(255, 255, 255)
+TargetBtnCustom.Text = "CUSTOM TARGET"
+TargetBtnCustom.TextSize = 10
+TargetBtnCustom.Font = Enum.Font.SourceSansBold
+TargetBtnCustom.Parent = TargetBtnFrame
+Instance.new("UICorner", TargetBtnCustom).CornerRadius = UDim.new(0, 4)
+
+local TargetBtnAll = Instance.new("TextButton")
+TargetBtnAll.Size = UDim2.new(0.48, 0, 1, 0)
+TargetBtnAll.Position = UDim2.new(0.52, 0, 0, 0)
+TargetBtnAll.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+TargetBtnAll.TextColor3 = Color3.fromRGB(255, 255, 255)
+TargetBtnAll.Text = "ALL PLANTS"
+TargetBtnAll.TextSize = 10
+TargetBtnAll.Font = Enum.Font.SourceSansBold
+TargetBtnAll.Parent = TargetBtnFrame
+Instance.new("UICorner", TargetBtnAll).CornerRadius = UDim.new(0, 4)
+
+local CustomTargetInput = Instance.new("TextBox")
+CustomTargetInput.Size = UDim2.new(1, 0, 0, 22)
+CustomTargetInput.Position = UDim2.new(0, 0, 0, 42)
+CustomTargetInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
+CustomTargetInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+CustomTargetInput.Text = customTargetName
+CustomTargetInput.PlaceholderText = "Enter Custom Target Plant Name..."
+CustomTargetInput.TextSize = 11
+CustomTargetInput.Font = Enum.Font.SourceSans
+CustomTargetInput.Parent = Body
+Instance.new("UICorner", CustomTargetInput).CornerRadius = UDim.new(0, 5)
+
+TargetBtnCustom.MouseButton1Click:Connect(function()
+    targetMode = "CUSTOM"
+    TargetBtnCustom.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+    TargetBtnAll.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+    CustomTargetInput.Visible = true
+    addUiLog("🎯 Tool Target Mode ➔ CUSTOM ('" .. customTargetName .. "')")
+end)
+
+TargetBtnAll.MouseButton1Click:Connect(function()
+    targetMode = "ALL PLANTS"
+    TargetBtnAll.BackgroundColor3 = Color3.fromRGB(0, 150, 130)
+    TargetBtnCustom.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+    CustomTargetInput.Visible = false
+    addUiLog("🎯 Tool Target Mode ➔ ALL PLANTS")
+end)
+
+CustomTargetInput.FocusLost:Connect(function() customTargetName = CustomTargetInput.Text end)
+
+local SpeedInput = Instance.new("TextBox")
+SpeedInput.Size = UDim2.new(0.48, 0, 0, 22)
+SpeedInput.Position = UDim2.new(0, 0, 0, 68)
+SpeedInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
+SpeedInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpeedInput.Text = "0.01"
+SpeedInput.PlaceholderText = "Delay Speed (0=Max)"
+SpeedInput.TextSize = 11
+SpeedInput.Font = Enum.Font.SourceSans
+SpeedInput.Parent = Body
+Instance.new("UICorner", SpeedInput).CornerRadius = UDim.new(0, 5)
+
+local LimitInput = Instance.new("TextBox")
+LimitInput.Size = UDim2.new(0.48, 0, 0, 22)
+LimitInput.Position = UDim2.new(0.52, 0, 0, 68)
+LimitInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
+LimitInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+LimitInput.Text = ""
+LimitInput.PlaceholderText = "Action Limit (0=Infinite)"
+LimitInput.TextSize = 11
+LimitInput.Font = Enum.Font.SourceSans
+LimitInput.Parent = Body
+Instance.new("UICorner", LimitInput).CornerRadius = UDim.new(0, 5)
+
+SpeedInput.FocusLost:Connect(function() rawSpeedInput = tonumber(SpeedInput.Text) or 0 end)
+LimitInput.FocusLost:Connect(function() actionLimit = tonumber(LimitInput.Text) or 0 end)
+
+local ToolSelectFrame = Instance.new("Frame")
+ToolSelectFrame.Size = UDim2.new(1, 0, 0, 22)
+ToolSelectFrame.Position = UDim2.new(0, 0, 0, 94)
+ToolSelectFrame.BackgroundTransparency = 1
+ToolSelectFrame.Parent = Body
+
+local toolBtns = {}
+for i, toolName in ipairs({"Scythe", "Shovel", "Retriever"}) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.31, 0, 1, 0)
+    btn.Position = UDim2.new((i - 1) * 0.345, 0, 0, 0)
+    btn.BackgroundColor3 = (selectedMode == toolName) and Color3.fromRGB(0, 122, 255) or Color3.fromRGB(40, 44, 52)
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.Text = toolName
+    btn.TextSize = 11
+    btn.Font = Enum.Font.SourceSansBold
+    btn.Parent = ToolSelectFrame
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+    toolBtns[toolName] = btn
+
+    btn.MouseButton1Click:Connect(function()
+        selectedMode = toolName
+        for name, b in pairs(toolBtns) do b.BackgroundColor3 = (name == selectedMode) and Color3.fromRGB(0, 122, 255) or Color3.fromRGB(40, 44, 52) end
+        addUiLog("🛠️ Selected Active Tool: " .. selectedMode)
+    end)
+end
+
+local MainToolToggleBtn = Instance.new("TextButton")
+MainToolToggleBtn.Size = UDim2.new(1, 0, 0, 24)
+MainToolToggleBtn.Position = UDim2.new(0, 0, 0, 120)
+MainToolToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+MainToolToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+MainToolToggleBtn.Text = "START ACTIVE TOOL LOOP"
+MainToolToggleBtn.TextSize = 11
+MainToolToggleBtn.Font = Enum.Font.SourceSansBold
+MainToolToggleBtn.Parent = Body
+Instance.new("UICorner", MainToolToggleBtn).CornerRadius = UDim.new(0, 5)
+
+stopToolLoop = function()
+    getgenv().FarmScriptRunning = false
+    if MainToolToggleBtn then
+        MainToolToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+        MainToolToggleBtn.Text = "START ACTIVE TOOL LOOP"
+        updateStatus("Tool Loop: Stopped")
+    end
+end
+
+MainToolToggleBtn.MouseButton1Click:Connect(function()
+    if getgenv().FarmScriptRunning then
+        stopToolLoop()
+    else
+        getgenv().FarmScriptRunning = true
+        RecentlyProcessedTool = {}
+        MainToolToggleBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+        MainToolToggleBtn.Text = "STOP ACTIVE TOOL LOOP"
+        task.spawn(function()
+            while getgenv().FarmScriptRunning do
+                local actionsPerformed = runToolAutoLoop(updateStatus)
+                if actionsPerformed == 0 then task.wait(0.5) else if getDelayInSeconds() == 0 then task.wait(0.05) end end
+            end
+        end)
+    end
+end)
+
+local HarvestLabel = Instance.new("TextLabel")
+HarvestLabel.Size = UDim2.new(1, 0, 0, 14)
+HarvestLabel.Position = UDim2.new(0, 0, 0, 150)
+HarvestLabel.Text = "🌾 Super Fast Harvest & Avoidance Settings"
+HarvestLabel.TextColor3 = Color3.fromRGB(180, 185, 195)
+HarvestLabel.TextSize = 10
+HarvestLabel.Font = Enum.Font.SourceSansBold
+HarvestLabel.TextXAlignment = Enum.TextXAlignment.Left
+HarvestLabel.BackgroundTransparency = 1
+HarvestLabel.Parent = Body
+
+local HarvestSpeedInput = Instance.new("TextBox")
+HarvestSpeedInput.Size = UDim2.new(1, 0, 0, 22)
+HarvestSpeedInput.Position = UDim2.new(0, 0, 0, 168)
+HarvestSpeedInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
+HarvestSpeedInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+HarvestSpeedInput.Text = "0"
+HarvestSpeedInput.PlaceholderText = "Harvest Speed Seconds (Super Fast)"
+HarvestSpeedInput.TextSize = 10
+HarvestSpeedInput.Font = Enum.Font.SourceSans
+HarvestSpeedInput.Parent = Body
+Instance.new("UICorner", HarvestSpeedInput).CornerRadius = UDim.new(0, 5)
+
+HarvestSpeedInput.FocusLost:Connect(function() harvestSpeedInput = tonumber(HarvestSpeedInput.Text) or 0.2 end)
+
+local HarvestBtnFrame = Instance.new("Frame")
+HarvestBtnFrame.Size = UDim2.new(1, 0, 0, 22)
+HarvestBtnFrame.Position = UDim2.new(0, 0, 0, 194)
+HarvestBtnFrame.BackgroundTransparency = 1
+HarvestBtnFrame.Parent = Body
+
+local HarvestBtnAll = Instance.new("TextButton")
+HarvestBtnAll.Size = UDim2.new(0.32, 0, 1, 0)
+HarvestBtnAll.Position = UDim2.new(0, 0, 0, 0)
+HarvestBtnAll.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+HarvestBtnAll.TextColor3 = Color3.fromRGB(255, 255, 255)
+HarvestBtnAll.Text = "ALL FRUITS"
+HarvestBtnAll.TextSize = 9
+HarvestBtnAll.Font = Enum.Font.SourceSansBold
+HarvestBtnAll.Parent = HarvestBtnFrame
+Instance.new("UICorner", HarvestBtnAll).CornerRadius = UDim.new(0, 4)
+
+local HarvestBtnSpec = Instance.new("TextButton")
+HarvestBtnSpec.Size = UDim2.new(0.32, 0, 1, 0)
+HarvestBtnSpec.Position = UDim2.new(0.34, 0, 0, 0)
+HarvestBtnSpec.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+HarvestBtnSpec.TextColor3 = Color3.fromRGB(255, 255, 255)
+HarvestBtnSpec.Text = "SPECIFIC NAME"
+HarvestBtnSpec.TextSize = 9
+HarvestBtnSpec.Font = Enum.Font.SourceSansBold
+HarvestBtnSpec.Parent = HarvestBtnFrame
+Instance.new("UICorner", HarvestBtnSpec).CornerRadius = UDim.new(0, 4)
+
+local HarvestBtnMut = Instance.new("TextButton")
+HarvestBtnMut.Size = UDim2.new(0.32, 0, 1, 0)
+HarvestBtnMut.Position = UDim2.new(0.68, 0, 0, 0)
+HarvestBtnMut.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+HarvestBtnMut.TextColor3 = Color3.fromRGB(255, 255, 255)
+HarvestBtnMut.Text = "SPECIFIC MUT"
+HarvestBtnMut.TextSize = 9
+HarvestBtnMut.Font = Enum.Font.SourceSansBold
+HarvestBtnMut.Parent = HarvestBtnFrame
+Instance.new("UICorner", HarvestBtnMut).CornerRadius = UDim.new(0, 4)
+
+local HarvestNameInput = Instance.new("TextBox")
+HarvestNameInput.Size = UDim2.new(1, 0, 0, 22)
+HarvestNameInput.Position = UDim2.new(0, 0, 0, 220)
+HarvestNameInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
+HarvestNameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+HarvestNameInput.Text = harvestTargetName
+HarvestNameInput.PlaceholderText = "Target Fruit/Plant Name..."
+HarvestNameInput.TextSize = 11
+HarvestNameInput.Font = Enum.Font.SourceSans
+HarvestNameInput.Visible = false
+HarvestNameInput.Parent = Body
+Instance.new("UICorner", HarvestNameInput).CornerRadius = UDim.new(0, 5)
+
+local HarvestMutInput = Instance.new("TextBox")
+HarvestMutInput.Size = UDim2.new(1, 0, 0, 22)
+HarvestMutInput.Position = UDim2.new(0, 0, 0, 220)
+HarvestMutInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
+HarvestMutInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+HarvestMutInput.Text = harvestTargetMutName
+HarvestMutInput.PlaceholderText = "Target Mutation Name (e.g. Galaxy)..."
+HarvestMutInput.TextSize = 11
+HarvestMutInput.Font = Enum.Font.SourceSans
+HarvestMutInput.Visible = false
+HarvestMutInput.Parent = Body
+Instance.new("UICorner", HarvestMutInput).CornerRadius = UDim.new(0, 5)
+
+HarvestBtnAll.MouseButton1Click:Connect(function()
+    harvestMode = "HARVEST ALL FRUITS"
+    HarvestBtnAll.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+    HarvestBtnSpec.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+    HarvestBtnMut.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+    HarvestNameInput.Visible = false
+    HarvestMutInput.Visible = false
+end)
+
+HarvestBtnSpec.MouseButton1Click:Connect(function()
+    harvestMode = "SPECIFIC NAME"
+    HarvestBtnSpec.BackgroundColor3 = Color3.fromRGB(155, 89, 182)
+    HarvestBtnAll.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+    HarvestBtnMut.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+    HarvestNameInput.Visible = true
+    HarvestMutInput.Visible = false
+end)
+
+HarvestBtnMut.MouseButton1Click:Connect(function()
+    harvestMode = "SPECIFIC MUT"
+    HarvestBtnMut.BackgroundColor3 = Color3.fromRGB(230, 126, 34)
+    HarvestBtnSpec.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+    HarvestBtnAll.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+    HarvestNameInput.Visible = false
+    HarvestMutInput.Visible = true
+end)
+
+HarvestNameInput.FocusLost:Connect(function() harvestTargetName = HarvestNameInput.Text end)
+HarvestMutInput.FocusLost:Connect(function() harvestTargetMutName = HarvestMutInput.Text end)
+
+local AvoidFrame = Instance.new("Frame")
+AvoidFrame.Size = UDim2.new(1, 0, 0, 22)
+AvoidFrame.Position = UDim2.new(0, 0, 0, 246)
+AvoidFrame.BackgroundTransparency = 1
+AvoidFrame.Parent = Body
+
+local AvoidAllMutBtn = Instance.new("TextButton")
+AvoidAllMutBtn.Size = UDim2.new(0.48, 0, 1, 0)
+AvoidAllMutBtn.Position = UDim2.new(0, 0, 0, 0)
+AvoidAllMutBtn.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+AvoidAllMutBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AvoidAllMutBtn.Text = "🛡️ AVOID ALL MUTATIONS"
+AvoidAllMutBtn.TextSize = 8
+AvoidAllMutBtn.Font = Enum.Font.SourceSansBold
+AvoidAllMutBtn.Parent = AvoidFrame
+Instance.new("UICorner", AvoidAllMutBtn).CornerRadius = UDim.new(0, 4)
+
+local AvoidSpecificInput = Instance.new("TextBox")
+AvoidSpecificInput.Size = UDim2.new(0.48, 0, 1, 0)
+AvoidSpecificInput.Position = UDim2.new(0.52, 0, 0, 0)
+AvoidSpecificInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
+AvoidSpecificInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+AvoidSpecificInput.Text = avoidSpecificMutationsText
+AvoidSpecificInput.PlaceholderText = "Avoid Specific Mut (e.g. Galaxy)"
+AvoidSpecificInput.TextSize = 8
+AvoidSpecificInput.Font = Enum.Font.SourceSans
+AvoidSpecificInput.Parent = AvoidFrame
+Instance.new("UICorner", AvoidSpecificInput).CornerRadius = UDim.new(0, 4)
+
+AvoidAllMutBtn.MouseButton1Click:Connect(function()
+    avoidAllMutations = not avoidAllMutations
+    if avoidAllMutations then AvoidAllMutBtn.BackgroundColor3 = Color3.fromRGB(230, 126, 34) addUiLog("🛡️ Avoid All Mutations Activated!")
+    else AvoidAllMutBtn.BackgroundColor3 = Color3.fromRGB(40, 44, 52) addUiLog("🛡️ Avoid All Mutations Disabled.") end
+end)
+AvoidSpecificInput.FocusLost:Connect(function() avoidSpecificMutationsText = AvoidSpecificInput.Text end)
+
+local HarvestToggleBtn = Instance.new("TextButton")
+HarvestToggleBtn.Size = UDim2.new(1, 0, 0, 24)
+HarvestToggleBtn.Position = UDim2.new(0, 0, 0, 272)
+HarvestToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+HarvestToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+HarvestToggleBtn.Text = "START SUPER FAST AUTO HARVEST"
+HarvestToggleBtn.TextSize = 11
+HarvestToggleBtn.Font = Enum.Font.SourceSansBold
+HarvestToggleBtn.Parent = Body
+Instance.new("UICorner", HarvestToggleBtn).CornerRadius = UDim.new(0, 5)
+
+stopHarvestLoop = function()
+    getgenv().AutoHarvestRunning = false
+    if HarvestToggleBtn then
+        HarvestToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+        HarvestToggleBtn.Text = "START AUTO HARVEST"
+        updateStatus("Auto Harvest: Stopped")
+    end
+end
+
+HarvestToggleBtn.MouseButton1Click:Connect(function()
+    if getgenv().AutoHarvestRunning then
+        stopHarvestLoop()
+    else
+        getgenv().AutoHarvestRunning = true
+        RecentlyProcessedHarvest = {}
+        HarvestToggleBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+        HarvestToggleBtn.Text = "STOP AUTO HARVEST"
+        task.spawn(function()
+            while getgenv().AutoHarvestRunning do
+                local actionsPerformed = runAutoHarvest(updateStatus)
+                if actionsPerformed == 0 then task.wait(0.5) else local delay = getHarvestDelayInSeconds() if delay == 0 then task.wait(0.01) end end
+            end
+        end)
+    end
+end)
+
+local HlLabel = Instance.new("TextLabel")
+HlLabel.Size = UDim2.new(1, 0, 0, 14)
+HlLabel.Position = UDim2.new(0, 0, 0, 304)
+HlLabel.Text = "💡 Auto Highlight Modes & Reports"
+HlLabel.TextColor3 = Color3.fromRGB(180, 185, 195)
+HlLabel.TextSize = 10
+HlLabel.Font = Enum.Font.SourceSansBold
+HlLabel.TextXAlignment = Enum.TextXAlignment.Left
+HlLabel.BackgroundTransparency = 1
+HlLabel.Parent = Body
+
+local HlBtnFrame = Instance.new("Frame")
+HlBtnFrame.Size = UDim2.new(1, 0, 0, 320)
+HlBtnFrame.Position = UDim2.new(0, 0, 0, 320)
+HlBtnFrame.BackgroundTransparency = 1
+HlBtnFrame.Parent = Body
+
+local HlBtnAll = Instance.new("TextButton")
+HlBtnAll.Size = UDim2.new(0.19, 0, 0, 22)
+HlBtnAll.Position = UDim2.new(0, 0, 0, 0)
+HlBtnAll.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+HlBtnAll.TextColor3 = Color3.fromRGB(255, 255, 255)
+HlBtnAll.Text = "ALL FRUITS"
+HlBtnAll.TextSize = 7
+HlBtnAll.Font = Enum.Font.SourceSansBold
+HlBtnAll.Parent = HlBtnFrame
+Instance.new("UICorner", HlBtnAll).CornerRadius = UDim.new(0, 4)
+
+local HlBtnSpec = Instance.new("TextButton")
+HlBtnSpec.Size = UDim2.new(0.20, 0, 0, 22)
+HlBtnSpec.Position = UDim2.new(0.20, 0, 0, 0)
+HlBtnSpec.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+HlBtnSpec.TextColor3 = Color3.fromRGB(255, 255, 255)
+HlBtnSpec.Text = "SPECIFIC"
+HlBtnSpec.TextSize = 7
+HlBtnSpec.Font = Enum.Font.SourceSansBold
+HlBtnSpec.Parent = HlBtnFrame
+Instance.new("UICorner", HlBtnSpec).CornerRadius = UDim.new(0, 4)
+
+local HlBtnMutAll = Instance.new("TextButton")
+HlBtnMutAll.Size = UDim2.new(0.20, 0, 0, 22)
+HlBtnMutAll.Position = UDim2.new(0.41, 0, 0, 0)
+HlBtnMutAll.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+HlBtnMutAll.TextColor3 = Color3.fromRGB(255, 255, 255)
+HlBtnMutAll.Text = "ALL MUT"
+HlBtnMutAll.TextSize = 7
+HlBtnMutAll.Font = Enum.Font.SourceSansBold
+HlBtnMutAll.Parent = HlBtnFrame
+Instance.new("UICorner", HlBtnMutAll).CornerRadius = UDim.new(0, 4)
+
+local HlBtnMutFruit = Instance.new("TextButton")
+HlBtnMutFruit.Size = UDim2.new(0.22, 0, 0, 22)
+HlBtnMutFruit.Position = UDim2.new(0.62, 0, 0, 0)
+HlBtnMutFruit.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+HlBtnMutFruit.TextColor3 = Color3.fromRGB(255, 255, 255)
+HlBtnMutFruit.Text = "SPECIFIC"
+HlBtnMutFruit.TextSize = 7
+HlBtnMutFruit.Font = Enum.Font.SourceSansBold
+HlBtnMutFruit.Parent = HlBtnFrame
+Instance.new("UICorner", HlBtnMutFruit).CornerRadius = UDim.new(0, 4)
+
+local HlBtnOff = Instance.new("TextButton")
+HlBtnOff.Size = UDim2.new(0.14, 0, 0, 22)
+HlBtnOff.Position = UDim2.new(0.85, 0, 0, 0)
+HlBtnOff.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+HlBtnOff.TextColor3 = Color3.fromRGB(255, 255, 255)
+HlBtnOff.Text = "OFF"
+HlBtnOff.TextSize = 7
+HlBtnOff.Font = Enum.Font.SourceSansBold
+HlBtnOff.Parent = HlBtnFrame
+Instance.new("UICorner", HlBtnOff).CornerRadius = UDim.new(0, 4)
+
+local ShowMutFruitsBtn = Instance.new("TextButton")
+ShowMutFruitsBtn.Size = UDim2.new(1, 0, 0, 22)
+ShowMutFruitsBtn.Position = UDim2.new(0, 0, 0, 28)
+ShowMutFruitsBtn.BackgroundColor3 = Color3.fromRGB(142, 68, 173)
+ShowMutFruitsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+ShowMutFruitsBtn.Text = "🔍 SHOW NAME MUTATION FRUITS"
+ShowMutFruitsBtn.TextSize = 9
+ShowMutFruitsBtn.Font = Enum.Font.SourceSansBold
+ShowMutFruitsBtn.Parent = HlBtnFrame
+Instance.new("UICorner", ShowMutFruitsBtn).CornerRadius = UDim.new(0, 4)
+
+ShowMutFruitsBtn.MouseButton1Click:Connect(showNameMutationFruits)
+
+local SpecificFruitInput = Instance.new("TextBox")
+SpecificFruitInput.Size = UDim2.new(1, 0, 0, 22)
+SpecificFruitInput.Position = UDim2.new(0, 0, 0, 372)
+SpecificFruitInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
+SpecificFruitInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+SpecificFruitInput.Text = hlSpecificFruitName
+SpecificFruitInput.PlaceholderText = "Type Specific Fruit Name..."
+SpecificFruitInput.TextSize = 10
+SpecificFruitInput.Font = Enum.Font.SourceSans
+SpecificFruitInput.Visible = false
+SpecificFruitInput.Parent = Body
+Instance.new("UICorner", SpecificFruitInput).CornerRadius = UDim.new(0, 5)
+
+local MutValInput = Instance.new("TextBox")
+MutValInput.Size = UDim2.new(1, 0, 0, 22)
+MutValInput.Position = UDim2.new(0, 0, 0, 372)
+MutValInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
+MutValInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+MutValInput.Text = hlMutationValueText
+MutValInput.PlaceholderText = "Type Mutation Text..."
+MutValInput.TextSize = 10
+MutValInput.Font = Enum.Font.SourceSans
+MutValInput.Visible = false
+MutValInput.Parent = Body
+Instance.new("UICorner", MutValInput).CornerRadius = UDim.new(0, 5)
+
+local MutFruitInput = Instance.new("TextBox")
+MutFruitInput.Size = UDim2.new(1, 0, 0, 22)
+MutFruitInput.Position = UDim2.new(0, 0, 0, 398)
+MutFruitInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
+MutFruitInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+MutFruitInput.Text = hlMutFruitNameText
+MutFruitInput.PlaceholderText = "Type Fruit Name..."
+MutFruitInput.TextSize = 10
+MutFruitInput.Font = Enum.Font.SourceSans
+MutFruitInput.Visible = false
+MutFruitInput.Parent = Body
+Instance.new("UICorner", MutFruitInput).CornerRadius = UDim.new(0, 5)
+
+local function resetHlButtons()
+    HlBtnAll.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+    HlBtnSpec.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+    HlBtnMutAll.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+    HlBtnMutFruit.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+    HlBtnOff.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+    SpecificFruitInput.Visible = false MutValInput.Visible = false MutFruitInput.Visible = false
+    clearAllHighlights()
+end
+
+HlBtnAll.MouseButton1Click:Connect(function() resetHlButtons() highlightMode = "ALL FRUITS" HlBtnAll.BackgroundColor3 = Color3.fromRGB(0, 122, 255) applyFruitHighlights() end)
+HlBtnSpec.MouseButton1Click:Connect(function() resetHlButtons() highlightMode = "SPECIFIC NAME" HlBtnSpec.BackgroundColor3 = Color3.fromRGB(0, 180, 150) SpecificFruitInput.Visible = true applyFruitHighlights() end)
+HlBtnMutAll.MouseButton1Click:Connect(function() resetHlButtons() highlightMode = "ALL MUT" HlBtnMutAll.BackgroundColor3 = Color3.fromRGB(230, 126, 34) MutValInput.Visible = true applyFruitHighlights() end)
+HlBtnMutFruit.MouseButton1Click:Connect(function() resetHlButtons() highlightMode = "SPECIFIC" HlBtnMutFruit.BackgroundColor3 = Color3.fromRGB(155, 89, 182) MutValInput.Visible = true MutFruitInput.Visible = true applyFruitHighlights() end)
+HlBtnOff.MouseButton1Click:Connect(function() resetHlButtons() highlightMode = "OFF" HlBtnOff.BackgroundColor3 = Color3.fromRGB(200, 50, 50) end)
+
+SpecificFruitInput.FocusLost:Connect(function() hlSpecificFruitName = SpecificFruitInput.Text clearAllHighlights() applyFruitHighlights() end)
+MutValInput.FocusLost:Connect(function() hlMutationValueText = MutValInput.Text clearAllHighlights() applyFruitHighlights() end)
+MutFruitInput.FocusLost:Connect(function() hlMutFruitNameText = MutFruitInput.Text clearAllHighlights() applyFruitHighlights() end)
+
+local ExtrasLabel = Instance.new("TextLabel")
+ExtrasLabel.Size = UDim2.new(1, 0, 0, 14)
+ExtrasLabel.Position = UDim2.new(0, 0, 0, 425)
+ExtrasLabel.Text = "📦 Auto Seed Pack & Auto Plant"
+ExtrasLabel.TextColor3 = Color3.fromRGB(180, 185, 195)
+ExtrasLabel.TextSize = 10
+ExtrasLabel.Font = Enum.Font.SourceSansBold
+ExtrasLabel.TextXAlignment = Enum.TextXAlignment.Left
+ExtrasLabel.BackgroundTransparency = 1
+ExtrasLabel.Parent = Body
+
+local AutoSeedBtn = Instance.new("TextButton")
+AutoSeedBtn.Size = UDim2.new(0.48, 0, 0, 24)
+AutoSeedBtn.Position = UDim2.new(0, 0, 0, 445)
+AutoSeedBtn.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+AutoSeedBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AutoSeedBtn.Text = "START AUTO SEED PACK"
+AutoSeedBtn.TextSize = 10
+AutoSeedBtn.Font = Enum.Font.SourceSansBold
+AutoSeedBtn.Parent = Body
+Instance.new("UICorner", AutoSeedBtn).CornerRadius = UDim.new(0, 5)
+
+local AutoPlantBtn = Instance.new("TextButton")
+AutoPlantBtn.Size = UDim2.new(0.48, 0, 0, 24)
+AutoPlantBtn.Position = UDim2.new(0.52, 0, 0, 445)
+AutoPlantBtn.BackgroundColor3 = Color3.fromRGB(40, 44, 52)
+AutoPlantBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AutoPlantBtn.Text = "START AUTO PLANT"
+AutoPlantBtn.TextSize = 10
+AutoPlantBtn.Font = Enum.Font.SourceSansBold
+AutoPlantBtn.Parent = Body
+Instance.new("UICorner", AutoPlantBtn).CornerRadius = UDim.new(0, 5)
+
+AutoSeedBtn.MouseButton1Click:Connect(function()
+    autoOpenSeedPack = not autoOpenSeedPack
+    if autoOpenSeedPack then AutoSeedBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60) AutoSeedBtn.Text = "STOP AUTO SEED PACK" addUiLog("📦 Auto Open Seed Pack Started.")
+    else AutoSeedBtn.BackgroundColor3 = Color3.fromRGB(40, 44, 52) AutoSeedBtn.Text = "START AUTO SEED PACK" addUiLog("📦 Auto Open Seed Pack Stopped.") end
+end)
+
+AutoPlantBtn.MouseButton1Click:Connect(function()
+    autoPlantActive = not autoPlantActive
+    if autoPlantActive then AutoPlantBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60) AutoPlantBtn.Text = "STOP AUTO PLANT" addUiLog("🌱 Auto Plant Started.")
+    else AutoPlantBtn.BackgroundColor3 = Color3.fromRGB(40, 44, 52) AutoPlantBtn.Text = "START AUTO PLANT" addUiLog("🌱 Auto Plant Stopped.") end
+end)
+
+local LogFrame = Instance.new("Frame")
+LogFrame.Name = "LogFrame"
+LogFrame.Size = UDim2.new(1, 0, 0, 360) 
+LogFrame.Position = UDim2.new(0, 0, 0, 480) 
+LogFrame.BackgroundColor3 = Color3.fromRGB(15, 16, 20)
+LogFrame.BorderSizePixel = 0
+LogFrame.Parent = Body
+Instance.new("UICorner", LogFrame).CornerRadius = UDim.new(0, 8)
+
+local LogHeader = Instance.new("Frame")
+LogHeader.Size = UDim2.new(1, 0, 0, 24)
+LogHeader.BackgroundColor3 = Color3.fromRGB(24, 26, 32)
+LogHeader.Parent = LogFrame
+Instance.new("UICorner", LogHeader).CornerRadius = UDim.new(0, 8)
+
+local LogTitle = Instance.new("TextLabel")
+LogTitle.Size = UDim2.new(0.5, 0, 1, 0)
+LogTitle.Position = UDim2.new(0.04, 0, 0, 0)
+LogTitle.Text = "📜 Live Output Logs"
+LogTitle.TextColor3 = Color3.fromRGB(200, 200, 200)
+LogTitle.TextSize = 11
+LogTitle.Font = Enum.Font.SourceSansBold
+LogTitle.TextXAlignment = Enum.TextXAlignment.Left
+LogTitle.BackgroundTransparency = 1
+LogTitle.Parent = LogHeader
+
+local LogToggleBtn = Instance.new("TextButton")
+LogToggleBtn.Size = UDim2.new(0, 65, 0, 18)
+LogToggleBtn.Position = UDim2.new(1, -120, 0.5, -9)
+LogToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+LogToggleBtn.Text = "Logs: ON"
+LogToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+LogToggleBtn.TextSize = 9
+LogToggleBtn.Font = Enum.Font.SourceSansBold
+LogToggleBtn.Parent = LogHeader
+Instance.new("UICorner", LogToggleBtn).CornerRadius = UDim.new(0, 4)
+
+LogToggleBtn.MouseButton1Click:Connect(function()
+    activeLogsEnabled = not activeLogsEnabled
+    if activeLogsEnabled then LogToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113) LogToggleBtn.Text = "Logs: ON" else LogToggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50) LogToggleBtn.Text = "Logs: OFF" end
+end)
+
+local ClearLogsBtn = Instance.new("TextButton")
+ClearLogsBtn.Size = UDim2.new(0, 45, 0, 18)
+ClearLogsBtn.Position = UDim2.new(1, -50, 0.5, -9)
+ClearLogsBtn.BackgroundColor3 = Color3.fromRGB(45, 50, 60)
+ClearLogsBtn.Text = "Clear"
+ClearLogsBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+ClearLogsBtn.TextSize = 10
+ClearLogsBtn.Font = Enum.Font.SourceSansBold
+ClearLogsBtn.Parent = LogHeader
+Instance.new("UICorner", ClearLogsBtn).CornerRadius = UDim.new(0, 4)
+
+local LogScroll = Instance.new("ScrollingFrame")
+LogScroll.Size = UDim2.new(1, -10, 1, -28)
+LogScroll.Position = UDim2.new(0, 5, 0, 26)
+LogScroll.BackgroundTransparency = 1
+LogScroll.ScrollBarThickness = 4
+LogScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+LogScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+LogScroll.Parent = LogFrame
+
+local LogListLayout = Instance.new("UIListLayout")
+LogListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+LogListLayout.Padding = UDim.new(0, 2)
+LogListLayout.Parent = LogScroll
+
+addUiLog = function(msg)
+    if not activeLogsEnabled then return end
+    local timestamp = os.date("%H:%M:%S")
+    if msg == lastLogMessage and lastLogLabel and lastLogLabel.Parent then
+        lastLogCount = lastLogCount + 1
+        lastLogLabel.Text = string.format("[%s] %s (%dx)", timestamp, msg, lastLogCount)
+    else
+        lastLogMessage = msg
+        lastLogCount = 1
+        local textLabel = Instance.new("TextLabel")
+        textLabel.Size = UDim2.new(1, 0, 0, 0)
+        textLabel.AutomaticSize = Enum.AutomaticSize.Y
+        textLabel.BackgroundTransparency = 1
+        textLabel.Text = string.format("[%s] %s", timestamp, msg)
+        textLabel.TextColor3 = Color3.fromRGB(180, 220, 255)
+        textLabel.TextSize = 10
+        textLabel.Font = Enum.Font.Code
+        textLabel.TextXAlignment = Enum.TextXAlignment.Left
+        textLabel.TextWrapped = true
+        textLabel.Parent = LogScroll
+        lastLogLabel = textLabel
+    end
+    task.wait(0.01)
+    LogScroll.CanvasPosition = Vector2.new(0, LogScroll.AbsoluteCanvasSize.Y)
+end
+
+ClearLogsBtn.MouseButton1Click:Connect(function()
+    lastLogMessage = "" lastLogLabel = nil lastLogCount = 1
+    for _, child in ipairs(LogScroll:GetChildren()) do if child:IsA("TextLabel") then child:Destroy() end end
+end)
+
+
+-- ==========================================
+-- RdDr UI: FARMING PANEL INTEGRATION & GUIDES
+-- ==========================================
+yFarm = AddSectionHeader(PageFarming, "Farming Panel Display", yFarm)
+
+-- TOGGLE BUTTON TO REVEAL AUTOMATIC.LUA UI
+local ToggleFarmingBtn = createActionButton("TOGGLE FARMING PANEL and TOGGLE again IF YOU WANT TO remove the ⚡ Farming Pamel ⚡", UDim2.new(0, 10, 0, yFarm), UDim2.new(0, 240, 0, 36), PageFarming, function()
+    if AutoFarmMainFrame then
+        AutoFarmMainFrame.Visible = not AutoFarmMainFrame.Visible
+    end
+end)
+yFarm = yFarm + 50
+
+-- COMPREHENSIVE GUIDES 
+yFarm = AddSectionHeader(PageFarming, "Farming UI Comprehensive Guide", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "1. Click the 'TOGGLE FARMING PANEL' button above to reveal the original Extreme Auto-Farm UI.", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "2. TARGET MODES: Select 'CUSTOM TARGET' to focus on a specific plant (e.g., Apple), or select", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "   'ALL PLANTS' to execute loops across your entire garden plot.", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "3. ACTIVE TOOL SETTINGS: Choose Scythe for harvesting, Shovel for destroying crops, or Retriever.", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "4. SETTING DELAYS: Change Delay Speed to 0 for maximum server execution speed.", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "   Leave Action Limit at 0 to run the background loops infinitely.", yFarm)
+yFarm = AddSectionHeader(PageFarming, "Automation & Harvesting Features", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "5. SUPER FAST HARVEST: This mode completely skips the tool animations and directly fires", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "   the remote events to gather fruit in milliseconds. Filter it by specific names or mutations.", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "6. AVOID MUTATIONS: Toggle the shield button to prevent any mutated plants from being harvested.", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "   You can also specify exact mutation names to avoid (like 'Galaxy').", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "7. HIGHLIGHT & REPORTS: Use the Highlight section to spawn glowing indicators over your fruits.", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "   This also outputs detailed information to the live logs regarding mutation statistics.", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "8. AUTO SEED PACK: Automatically opens your held Seed Pack repeatedly while skipping Gacha rolls.", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "9. AUTO PLANT: Fires the plant remote continuously at your character's exact location.", yFarm)
+yFarm = AddNavInstructionText(PageFarming, "NOTE: The Farming Panel window is draggable and can be placed anywhere on your screen.", yFarm)
+LeftScrollNav.CanvasSize = UDim2.new(0, 0, 0, 550)
