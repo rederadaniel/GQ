@@ -1,4 +1,210 @@
 -- ==========================================
+-- RdDr Premium Framework: Farming Panel FARMING PANEL DISPLAY
+-- ==========================================
+local Players = game:GetService("Players")
+local GuiService = game:GetService("GuiService")
+local Player = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local UserInputService = game:GetService("UserInputService")
+local TeleportService = game:GetService("TeleportService")
+local Character = Player.Character or Player.CharacterAdded:Wait()
+local Humanoid = Character:WaitForChild("Humanoid")
+local PlayerGui = Player:WaitForChild("PlayerGui")
+local VirtualUser = game:GetService("VirtualUser")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+-- ==========================================
+-- RdDr UI Setup
+-- ==========================================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "RdDr_PremiumGUI"
+ScreenGui.ResetOnSpawn = false
+pcall(function() ScreenGui.Parent = game:GetService("CoreGui") end)
+if not ScreenGui.Parent then ScreenGui.Parent = PlayerGui end
+
+local ToggleButton = Instance.new("ImageButton")
+ToggleButton.Name = "RdDr_MinimizeButton"
+ToggleButton.Size = UDim2.new(0, 75, 0, 75)
+ToggleButton.Position = UDim2.new(0, 20, 0.3, 0)
+ToggleButton.BackgroundColor3 = Color3.fromRGB(11, 11, 14)
+ToggleButton.BorderSizePixel = 0
+ToggleButton.Image = "rbxassetid://13580435133"
+ToggleButton.Visible = false
+ToggleButton.Active = true
+ToggleButton.Draggable = true
+ToggleButton.Parent = ScreenGui
+Instance.new("UICorner", ToggleButton).CornerRadius = UDim.new(1, 0)
+local ToggleStroke = Instance.new("UIStroke")
+ToggleStroke.Color = Color3.fromRGB(0, 210, 255)
+ToggleStroke.Thickness = 2.5
+ToggleStroke.Parent = ToggleButton
+
+local MainFrame = Instance.new("Frame")
+MainFrame.BackgroundColor3 = Color3.fromRGB(11, 11, 14)
+MainFrame.BorderSizePixel = 0
+MainFrame.Active = false
+MainFrame.Draggable = true
+MainFrame.Parent = ScreenGui
+Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+
+local LaserBar = Instance.new("Frame")
+LaserBar.Size = UDim2.new(1, 0, 0, 4)
+LaserBar.BackgroundColor3 = Color3.fromRGB(0, 210, 255)
+LaserBar.BorderSizePixel = 0
+LaserBar.Parent = MainFrame
+
+local SidePanel = Instance.new("Frame")
+SidePanel.Size = UDim2.new(0, 195, 1, -55)
+SidePanel.Position = UDim2.new(0, 12, 0, 42)
+SidePanel.BackgroundColor3 = Color3.fromRGB(16, 16, 21)
+SidePanel.BorderSizePixel = 0
+SidePanel.Parent = MainFrame
+Instance.new("UICorner", SidePanel).CornerRadius = UDim.new(0, 10)
+
+local LeftScrollNav = Instance.new("ScrollingFrame")
+LeftScrollNav.Size = UDim2.new(1, 0, 1, 0)
+LeftScrollNav.BackgroundTransparency = 1
+LeftScrollNav.CanvasSize = UDim2.new(0, 0, 0, 460)
+LeftScrollNav.ScrollBarThickness = 2
+LeftScrollNav.Parent = SidePanel
+
+local NavLayout = Instance.new("UIListLayout")
+NavLayout.Padding = UDim.new(0, 5)
+NavLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+NavLayout.Parent = LeftScrollNav
+
+local ViewContainer = Instance.new("Frame")
+ViewContainer.Size = UDim2.new(1, -230, 1, -55)
+ViewContainer.Position = UDim2.new(0, 218, 0, 42)
+ViewContainer.BackgroundColor3 = Color3.fromRGB(16, 16, 21)
+ViewContainer.BorderSizePixel = 0
+ViewContainer.Parent = MainFrame
+Instance.new("UICorner", ViewContainer).CornerRadius = UDim.new(0, 10)
+
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0, 35, 0, 30)
+MinBtn.Position = UDim2.new(1, -75, 0, 6)
+MinBtn.Text = "—"
+MinBtn.TextColor3 = Color3.fromRGB(200, 200, 205)
+MinBtn.Font = Enum.Font.SourceSansBold
+MinBtn.TextSize = 14
+MinBtn.BackgroundTransparency = 1
+MinBtn.Parent = MainFrame
+
+ToggleButton.MouseButton1Click:Connect(function() MainFrame.Visible = true ToggleButton.Visible = false end)
+MinBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false ToggleButton.Visible = true end)
+
+local HubTitle = Instance.new("TextLabel")
+HubTitle.Size = UDim2.new(0, 250, 0, 35)
+HubTitle.Position = UDim2.new(0, 18, 0, 5)
+HubTitle.Text = "RdDr Premium Framework"
+HubTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+HubTitle.Font = Enum.Font.SourceSansBold
+HubTitle.TextSize = 18
+HubTitle.TextXAlignment = Enum.TextXAlignment.Left
+HubTitle.BackgroundTransparency = 1
+HubTitle.Parent = MainFrame
+
+local function applyButtonEffects(btn, defaultColor, hoverColor)
+    btn.MouseEnter:Connect(function() TweenService:Create(btn, TweenInfo.new(0.25), {BackgroundColor3 = hoverColor}):Play() end)
+    btn.MouseLeave:Connect(function() TweenService:Create(btn, TweenInfo.new(0.25), {BackgroundColor3 = defaultColor}):Play() end)
+end
+
+local pages = {}
+local function createPage(name, labelTag)
+    local F = Instance.new("ScrollingFrame")
+    F.Size = UDim2.new(1, -20, 1, -20)
+    F.Position = UDim2.new(0, 10, 0, 10)
+    F.BackgroundTransparency = 1
+    F.CanvasSize = UDim2.new(0, 0, 0, 950)
+    F.ScrollBarThickness = 4
+    F.ScrollBarImageColor3 = Color3.fromRGB(0, 210, 255)
+    F.Visible = false
+    F.Parent = ViewContainer
+    pages[name] = F
+    
+    local TabBtn = Instance.new("TextButton")
+    TabBtn.Size = UDim2.new(0, 175, 0, 36)
+    TabBtn.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+    TabBtn.Text = "  " .. labelTag
+    TabBtn.TextColor3 = Color3.fromRGB(160, 165, 175)
+    TabBtn.Font = Enum.Font.SourceSansBold
+    TabBtn.TextSize = 13
+    TabBtn.TextXAlignment = Enum.TextXAlignment.Left
+    TabBtn.Parent = LeftScrollNav
+    Instance.new("UICorner", TabBtn).CornerRadius = UDim.new(0, 6)
+    
+    local LineAccent = Instance.new("Frame")
+    LineAccent.Size = UDim2.new(0, 4, 1, 0)
+    LineAccent.BackgroundColor3 = Color3.fromRGB(0, 210, 255)
+    LineAccent.BorderSizePixel = 0
+    LineAccent.Visible = false
+    LineAccent.Parent = TabBtn
+
+    TabBtn.MouseButton1Click:Connect(function()
+        for _, p in pairs(pages) do p.Visible = false end
+        for _, btn in ipairs(LeftScrollNav:GetChildren()) do
+            if btn:IsA("TextButton") then
+                btn.BackgroundColor3 = Color3.fromRGB(22, 22, 28)
+                btn.TextColor3 = Color3.fromRGB(160, 165, 175)
+                if btn:FindFirstChild("Frame") then btn.Frame.Visible = false end
+            end
+        end
+        TabBtn.BackgroundColor3 = Color3.fromRGB(28, 30, 40)
+        TabBtn.TextColor3 = Color3.fromRGB(0, 210, 255)
+        LineAccent.Visible = true
+        F.Visible = true
+    end)
+    return F
+end
+
+local function AddNavInstructionText(parent, text, yoffset)
+    local Ins = Instance.new("TextLabel")
+    Ins.Size = UDim2.new(1, -20, 0, 25)
+    Ins.Position = UDim2.new(0, 10, 0, yoffset)
+    Ins.Text = "ℹ️ " .. text
+    Ins.TextColor3 = Color3.fromRGB(170, 175, 190)
+    Ins.Font = Enum.Font.SourceSansItalic
+    Ins.TextSize = 13
+    Ins.TextXAlignment = Enum.TextXAlignment.Left
+    Ins.BackgroundTransparency = 1
+    Ins.Parent = parent
+    return yoffset + 30
+end
+
+local function AddSectionHeader(parent, text, yoffset)
+    local H = Instance.new("TextLabel")
+    H.Size = UDim2.new(1, -20, 0, 30)
+    H.Position = UDim2.new(0, 10, 0, yoffset)
+    H.Text = text:upper()
+    H.TextColor3 = Color3.fromRGB(0, 210, 255)
+    H.Font = Enum.Font.SourceSansBold
+    H.TextSize = 13
+    H.TextXAlignment = Enum.TextXAlignment.Left
+    H.BackgroundTransparency = 1
+    H.Parent = parent
+    return yoffset + 35
+end
+
+local function createActionButton(label, pos, size, parent, callback)
+    local B = Instance.new("TextButton")
+    B.Size = size or UDim2.new(0, 130, 0, 36)
+    B.Position = pos
+    B.BackgroundColor3 = Color3.fromRGB(0, 160, 120)
+    B.Text = label
+    B.TextColor3 = Color3.fromRGB(255, 255, 255)
+    B.Font = Enum.Font.SourceSansBold
+    B.TextSize = 12
+    B.Parent = parent
+    Instance.new("UICorner", B).CornerRadius = UDim.new(0, 4)
+    applyButtonEffects(B, Color3.fromRGB(0, 160, 120), Color3.fromRGB(0, 200, 150))
+    B.MouseButton1Click:Connect(callback)
+    return B
+end
+
+-- ==========================================
 -- AUTOMATIC.LUA INTEGRATION (UNTOUCHED LOGIC & UI)
 -- ==========================================
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1361,7 +1567,7 @@ end)
 local PageFarming = createPage("Farming", "⚡ Farming Pamel ⚡")
 local yFarm = 0
 
-yFarm = AddSectionHeader(PageFarming, "Farming Panel Display", yFarm)
+yFarm = AddSectionHeader(PageFarming, "Farming Panel Display! (TYPE V)", yFarm)
 
 -- TOGGLE BUTTON TO REVEAL AUTOMATIC.LUA UI
 local ToggleFarmingBtn = createActionButton("TOGGLE FARMING PANEL and TOGGLE again IF YOU WANT TO remove the ⚡ Farming Pamel ⚡", UDim2.new(0, 10, 0, yFarm), UDim2.new(0, 240, 0, 36), PageFarming, function()
@@ -1390,3 +1596,17 @@ yFarm = AddNavInstructionText(PageFarming, "8. AUTO SEED PACK: Automatically ope
 yFarm = AddNavInstructionText(PageFarming, "9. AUTO PLANT: Fires the plant remote continuously at your character's exact location.", yFarm)
 yFarm = AddNavInstructionText(PageFarming, "NOTE: The Farming Panel window is draggable and can be placed anywhere on your screen.", yFarm)
 LeftScrollNav.CanvasSize = UDim2.new(0, 0, 0, 550)
+-- ==========================================
+-- KEYBOARD SHORTCUT: V KEY TO TOGGLE GUI
+-- ==========================================
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    
+    if input.KeyCode == Enum.KeyCode.V then
+        if AutoFarmMainFrame then
+            AutoFarmMainFrame.Visible = not AutoFarmMainFrame.Visible
+            addUiLog("GUI Toggled: " .. (AutoFarmMainFrame.Visible and "VISIBLE" or "HIDDEN"))
+        end
+    end
+end)
+print("KEYBOARD SHORTCUT: V KEY TO TOGGLE GUI!")
