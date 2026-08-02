@@ -12,6 +12,16 @@ local Player = Players.LocalPlayer
 local Character = Player.Character
 local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
 local PlayerGui = Player:WaitForChild("PlayerGui")
+local Player = game.Players.LocalPlayer
+local source = game:HttpGet("https://raw.githubusercontent.com/rederadaniel/GQ/refs/heads/main/Farming")
+
+-- Edit/remove the loops here before executing.
+-- (This only works if you know what patterns you're removing.)
+
+local fn = loadstring(source)
+if fn then
+    fn()
+end
 -- --- HIGH-SPEED UI VISIBILITY OVERRIDE MATRIX ---
 RunService.RenderStepped:Connect(function()
     -- 1. Obliterate the Teleport UI instantly if it exists
