@@ -5637,4 +5637,3 @@ task.spawn(mainLoop)
 
 -- Return module
 return AutoSpinRewardsPremium
-print("KEYBOARD SHORTCUT: V KEY TO TOGGLE GUI!")
