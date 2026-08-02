@@ -1,4 +1,4 @@
-local Players = game:GetService("Players") -- ASSET NAV TAB
+local Players = game:GetService("Players") -- ASSET NAV TAB Plank
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
@@ -1231,18 +1231,18 @@ local BUG_RARITY = {
 		InventoryAction = (ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("MainInventory") and ReplicatedStorage.Remotes.MainInventory:FindFirstChild("InventoryAction")) or InventoryAction
 		local islandList = {"SeaSaltHarbor", "PointNemo", "TropicalIsland", "MagicForest"}
 		local raw = [[
-Garden Seeds Shop|GardenSeedShop|CarrotSeed,StrawberrySeed,TomatoSeed,WheatSeed,CornSeed,TurnipSeed,AppleSeed,LeekSeed,EggplantSeed,DragonFruitSeed,WatermelonSeed,PumpkinSeed,GrapeSeed,MaplePearSeed,PeachSeed,GiantPeanutSeed,WisteriaSeed,PrinceCabbage,GlowshroomSpire
-Cabbage Seeds Shop|CabbageSeedShop|CabbageSeed,PurpleCabbageSeed,RedCabbageSeed,SpikyCabbageSeed,CabbageBloomSeed,KingCabbage
+Garden Seeds Shop|GardenSeedShop|CarrotSeed,StrawberrySeed,TomatoSeed,WheatSeed,CornSeed,TurnipSeed,AppleSeed,LeekSeed,EggplantSeed,DragonFruitSeed,WatermelonSeed,PumpkinSeed,GrapeSeed,MaplePearSeed,PeachSeed,GiantPeanutSeed,WisteriaSeed,PrinceCabbageSeed,GlowshroomSpireSeed
+Cabbage Seeds Shop|CabbageSeedShop|CabbageSeed,PurpleCabbageSeed,RedCabbageSeed,SpikyCabbageSeed,CabbageBloomSeed,KingCabbageSeed
 Tropical Seeds Shop|TropicalSeedShop|CoconutSeed,BananaSeed,StoneHeadSeed,YellowDragonfruitSeed,GreatPineappleSeed
 Magic Seeds Shop|MagicSeedShop|HeartGrassSeed,DangoRootSeed,MonsteraDeliciosaSeed,CherryTreeSeed,WhimsicalWisteriaSeed
 Bug Nets Shop|MainBugShop|BasicNet,BlueNet
-Brother Seeds Shop|BrotherSeedShop|RedCarrotSeed,YellowTomatoSeed,GreenGrapeSeed,GreenPearSeed,GrandWhitePumpkinSeed,CabbageSeed
-Mushroom Seed Shop|MushroomSeedShop|PinkJumboMushroomSeed,BlueJumboMushroomSeed,RedJumboMushroomSeed,PurpleJumboMushroomSeed,GreenJumboMushroomSeed,BlackJumboMushroomSeed,CandyshroomSpire
+Brother Seeds Shop|BrotherSeedShop|RedCarrotSeed,YellowTomatoSeed,GreenGrapeSeed,GreenPearSeed,GrandWhitePumpkinSeed
+Mushroom Seed Shop|MushroomSeedShop|PinkJumboMushroomSeed,BlueJumboMushroomSeed,RedJumboMushroomSeed,PurpleJumboMushroomSeed,GreenJumboMushroomSeed,BlackJumboMushroomSeed,CandyshroomSpireSeed
 Mushroom Pet Shop|MushroomPetShop|RedMushroom,LuckyMushroom,SpaceMushroom,LoveMushroom,PrinceMushroom,MightyMushroom
-Gear Shop|MainGearShop|WateringCan,RustySprinkler,StandardSprinkler,Trowel,MoonWand,ExpertSprinkler,FavoriteWand,UltimateSprinkler,Scythe,Retriever,NeptuneSprinkler
-Witch Potions Shop|WitchShop|PotionOfSpeed,PotionOfLeaping,SnailPotion,PotionOfShrinking,SuperSnailPotion,PotionOfGrowing,PotionOfInvisibility,PotionOfBugCatching,PotionOfFishing,HarvestBottle
+Gear Shop|MainGearShop|WateringCan,EventScroll,RustySprinkler,StandardSprinkler,Trowel,MoonWand,ExpertSprinkler,FavoriteWand,UltimateSprinkler,Scythe,Retriever,NeptunesSprinkler
+Witch Potions Shop|WitchShop|PotionOfSpeed,PotionOfLeaping,PotionOfSnail,PotionOfShrinking,PotionOfSuperSnail,PotionOfGrowing,PotionOfInvisibility,PotionOfBugCatching,PotionOfFishing,PotionOfHarvesting
 Pet Shop|MainPetShop|BasicIncubator,CowEgg,FoxEgg,FastIncubator,SmallPetTreat,MediumPetTreat
-]]
+Special Event Shop|SpecialEventShop|PlanetSeedPack,EventScroll,WhitePlankLong,WhitePlankSquare,WhitePlankWide,WhiteMediumStairs,GreyMediumStairs,BrownMediumStairs,WhiteArch,LongArchedWindow,MeadowLongArchedWindow,BlueGalaxyRoomDivider,GreenGalaxyRoomDivider,OrangeGalaxyRoomDivider,PinkGalaxyRoomDivider,PurpleGalaxyRoomDivider]]
 
 		local shops={} for l in raw:gmatch("[^\n]+") do local n,i,t=l:match("([^|]+)|([^|]+)|(.+)") table.insert(shops,{name=n,id=i,items=t:split(",")}) end
 		local selectedItems = {}
