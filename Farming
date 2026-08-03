@@ -1,6 +1,5 @@
 -- ==========================================
--- RdDr Premium Framework: Farming Panel FARMING PANEL DISPLAY WATER POSITION WEATHER LOG
--- GARDEN COMMAND 
+-- RdDr Premium Framework: Farming Panel FARMING PANEL DISPLAY GARDEN COMMAND
 -- ==========================================
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
@@ -22,7 +21,7 @@ if not ScreenGui.Parent then ScreenGui.Parent = PlayerGui end
 local ToggleButton = Instance.new("ImageButton")
 ToggleButton.Name = "RdDr_MinimizeButton"
 ToggleButton.Size = UDim2.fromOffset(56, 56)
-ToggleButton.Position = UDim2.new(0, 0, 0.18, 0)
+ToggleButton.Position = UDim2.new(0, 26, 0.35, 0)
 ToggleButton.BackgroundColor3 = Color3.fromRGB(14, 16, 22)
 ToggleButton.BorderSizePixel = 0
 ToggleButton.Image = "rbxassetid://13580435133"
@@ -169,7 +168,7 @@ HubTitle.Parent = MainFrame
 local HubSubtitle = Instance.new("TextLabel")
 HubSubtitle.Size = UDim2.new(0.6, 0, 0, 14)
 HubSubtitle.Position = UDim2.new(0, 16, 0, 30)
-HubSubtitle.Text = "farming automation suite"
+HubSubtitle.Text = "Farming Automation Suite"
 HubSubtitle.TextColor3 = Color3.fromRGB(120, 128, 148)
 HubSubtitle.Font = Enum.Font.Gotham
 HubSubtitle.TextSize = 11
@@ -2624,7 +2623,7 @@ local function buildFarmingExtras()
 	local UtilityHeader = Instance.new("TextLabel")
 	UtilityHeader.Size = UDim2.new(1, 0, 0, 18)
 	UtilityHeader.Position = UDim2.new(0, 0, 0, 0)
-	UtilityHeader.Text = "⚙ MODES / WEATHER / INVENTORY"
+	UtilityHeader.Text = "⚙ SUPER MODES / WEATHER / INVENTORY"
 	UtilityHeader.TextColor3 = Color3.fromRGB(0, 210, 255)
 	UtilityHeader.TextSize = 11
 	UtilityHeader.Font = Enum.Font.SourceSansBold
@@ -2650,7 +2649,7 @@ local function buildFarmingExtras()
 	WaterPositionBtn.Position = UDim2.new(0.34, 0, 0, 22)
 	WaterPositionBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
 	WaterPositionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	WaterPositionBtn.Text = "--"
+	WaterPositionBtn.Text = "WATER POSITION"
 	WaterPositionBtn.TextSize = 10
 	WaterPositionBtn.Font = Enum.Font.SourceSansBold
 	WaterPositionBtn.Parent = Body
@@ -2751,7 +2750,7 @@ local function buildFarmingExtras()
 		wateringMode = "POSITION"
 		WaterPositionBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
 		WaterModeBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
-		WaterPositionBtn.Text = "-- ✓"
+		WaterPositionBtn.Text = "WATER POSITION ✓"
 		WaterModeBtn.Text = "TP + WATER NOT GROWN"
 		WaterSpecificInput.Visible = false
 		addUiLog("Watering mode: player feet position, no teleport")
@@ -2771,7 +2770,7 @@ local function buildFarmingExtras()
 			addUiLog("Watering mode: teleport to each not-grown plant, then water; fully grown plants will be reported and skipped")
 		end
 		WaterPositionBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
-		WaterPositionBtn.Text = "-"
+		WaterPositionBtn.Text = "WATER POSITION"
 	end)
 	StartWateringBtn.MouseButton1Click:Connect(function()
 		if wateringMode == "SPECIFIC" and wateringSpecificName == "" then addUiLog("Enter a specific plant name first") return end
@@ -2810,6 +2809,28 @@ local function buildFarmingExtras()
 		DeleteToggleBtn.BackgroundColor3 = autoDeleteSpecific and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(28, 32, 42)
 		addUiLog("Auto delete " .. (autoDeleteSpecific and "enabled for " .. autoDeleteName or "disabled"))
 	end)
+
+	local WeatherLogBtn = Instance.new("TextButton")
+	WeatherLogBtn.Size = UDim2.new(0.48, 0, 0, 24)
+	WeatherLogBtn.Position = UDim2.new(0, 0, 0, 142)
+	WeatherLogBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+	WeatherLogBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WeatherLogBtn.Text = "WEATHER LOG"
+	WeatherLogBtn.TextSize = 10
+	WeatherLogBtn.Font = Enum.Font.SourceSansBold
+	WeatherLogBtn.Parent = Body
+	Instance.new("UICorner", WeatherLogBtn).CornerRadius = UDim.new(0, 5)
+
+	local PlayerMessageLogBtn = Instance.new("TextButton")
+	PlayerMessageLogBtn.Size = UDim2.new(0.48, 0, 0, 24)
+	PlayerMessageLogBtn.Position = UDim2.new(0.52, 0, 0, 142)
+	PlayerMessageLogBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+	PlayerMessageLogBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	PlayerMessageLogBtn.Text = "PLAYER MESSAGE LOG"
+	PlayerMessageLogBtn.TextSize = 10
+	PlayerMessageLogBtn.Font = Enum.Font.SourceSansBold
+	PlayerMessageLogBtn.Parent = Body
+	Instance.new("UICorner", PlayerMessageLogBtn).CornerRadius = UDim.new(0, 5)
 
 	Body = TabPages.Logs
 
