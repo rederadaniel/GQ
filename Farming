@@ -1,5 +1,6 @@
 -- ==========================================
 -- RdDr Premium Framework: Farming Panel FARMING PANEL DISPLAY GARDEN COMMAND
+-- track mode
 -- ==========================================
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
@@ -933,6 +934,7 @@ end
 local function getHarvestableFruits(targetNameFilter, modeFilter)
 	local results = {}
 	local query = (targetNameFilter or ""):lower()
+	local isHighlightMode = modeFilter == "ALL FRUITS" or modeFilter == "SPECIFIC NAME" or modeFilter == "ALL MUT" or modeFilter == "SPECIFIC"
 	local plots = Workspace:FindFirstChild("Map")
 	if plots then plots = plots:FindFirstChild("MainIsland") end
 	if plots then plots = plots:FindFirstChild("PlayerGardens") end
@@ -1020,7 +1022,10 @@ local function getHarvestableFruits(targetNameFilter, modeFilter)
 						if modeFilter == "HARVEST ALL FRUITS" or modeFilter == "ALL FRUITS" then isMatch = true
 						elseif modeFilter == "SPECIFIC NAME" then
 							local specFilter = (hlSpecificFruitName ~= "" and hlSpecificFruitName) or query
-							if specFilter ~= "" then isMatch = string.find(plantKey:lower(), specFilter:lower()) ~= nil end
+							if specFilter ~= "" then
+								local normalizedFilter = specFilter:lower()
+								isMatch = string.find(plantKey:lower(), normalizedFilter, 1, true) ~= nil or string.find(getFruitDisplayName(fruitCfg):lower(), normalizedFilter, 1, true) ~= nil or string.find(fruitCfg.Name:lower(), normalizedFilter, 1, true) ~= nil
+							end
 						elseif modeFilter == "SPECIFIC MUT" then
 							local mutFilter = harvestTargetMutName or ""
 							local hasTargetMut, _, _ = checkMutationMatch(seedMutationsFolder, mutFilter)
@@ -1054,7 +1059,7 @@ local function getHarvestableFruits(targetNameFilter, modeFilter)
 						local uniqueTargetKey = tostring(seed) .. "_" .. tostring(fruitCfg.Name)
 						local isRecentlyProcessed = RecentlyProcessedHarvest[uniqueTargetKey]
 
-						if isMatch and passesHarvestFilter and not isFav and not isLocked and not isAvoided and not isRecentlyProcessed then
+						if isMatch and (isHighlightMode or passesHarvestFilter) and (isHighlightMode or (not isFav and not isLocked and not isAvoided and not isRecentlyProcessed)) then
 							table.insert(results, {UniqueKey = uniqueTargetKey, PlantKey = plantKey, PlantName = seed.Name, FruitNumber = fruitCfg.Name, PhysicalInstance = physicalFruit, SeedInstance = seed, HasMutation = anyMutFound or (foundMutationLabel ~= ""), MutationNameText = foundMutationLabel, AllMutations = combinedMuts})
 						end
 					end
@@ -1128,7 +1133,7 @@ applyFruitHighlights = function()
 	local specificMutCounts = targetFruits.SpecificFruitMutationCounts or {}
 
 	for _, fruitData in ipairs(targetFruits) do
-		local targetObj = fruitData.PhysicalInstance
+		local targetObj = fruitData.PhysicalInstance or fruitData.SeedInstance
 		if targetObj and (targetObj:IsA("Model") or targetObj:IsA("BasePart")) then
 			local mutTag = (fruitData.MutationNameText ~= "") and ("[" .. fruitData.MutationNameText .. "] ") or ""
 			local label = mutTag .. fruitData.PlantName .. " #" .. fruitData.FruitNumber
@@ -1532,7 +1537,7 @@ local function buildFarmingShell(parentPage)
 	end
 
 	createTabPage("Tools", 180)
-	createTabPage("Harvest", 240)
+	createTabPage("Harvest", 300)
 	createTabPage("Highlight", 360)
 	createTabPage("Plant", 120)
 	createTabPage("Utility", 700)
@@ -2176,9 +2181,9 @@ local function buildFarmingShell(parentPage)
 
 	local GrowthSpecificName = ""
 	local GrowthTrackerActive = false
-	local GrowthTrackerMode = "ALL PLANT"
+	local GrowthTrackerMode = "PLANT ALL"
 	local GrowthTrackerBtn = Instance.new("TextButton")
-	GrowthTrackerBtn.Size = UDim2.new(0.48, 0, 0, 22)
+	GrowthTrackerBtn.Size = UDim2.new(1, 0, 0, 22)
 	GrowthTrackerBtn.Position = UDim2.new(0, 0, 0, 174)
 	GrowthTrackerBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	GrowthTrackerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -2188,29 +2193,51 @@ local function buildFarmingShell(parentPage)
 	GrowthTrackerBtn.Parent = Body
 	Instance.new("UICorner", GrowthTrackerBtn).CornerRadius = UDim.new(0, 5)
 
-	local GrowthTrackerModeBtn = Instance.new("TextButton")
-	GrowthTrackerModeBtn.Size = UDim2.new(0.48, 0, 0, 22)
-	GrowthTrackerModeBtn.Position = UDim2.new(0.52, 0, 0, 174)
-	GrowthTrackerModeBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
-	GrowthTrackerModeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	GrowthTrackerModeBtn.Text = "TRACK MODE: ALL PLANT"
-	GrowthTrackerModeBtn.TextSize = 9
-	GrowthTrackerModeBtn.Font = Enum.Font.SourceSansBold
-	GrowthTrackerModeBtn.Parent = Body
-	Instance.new("UICorner", GrowthTrackerModeBtn).CornerRadius = UDim.new(0, 5)
+	local GrowthTrackerFruitModeBtn = Instance.new("TextButton")
+	GrowthTrackerFruitModeBtn.Size = UDim2.new(1, 0, 0, 22)
+	GrowthTrackerFruitModeBtn.Position = UDim2.new(0, 0, 0, 200)
+	GrowthTrackerFruitModeBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+	GrowthTrackerFruitModeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	GrowthTrackerFruitModeBtn.Text = "HIGHLIGHT ALL FRUIT FOLDER 1-100 GROWTH"
+	GrowthTrackerFruitModeBtn.TextSize = 8
+	GrowthTrackerFruitModeBtn.Font = Enum.Font.SourceSansBold
+	GrowthTrackerFruitModeBtn.Parent = Body
+	Instance.new("UICorner", GrowthTrackerFruitModeBtn).CornerRadius = UDim.new(0, 5)
+
+	local GrowthTrackerPlantModeBtn = Instance.new("TextButton")
+	GrowthTrackerPlantModeBtn.Size = UDim2.new(1, 0, 0, 22)
+	GrowthTrackerPlantModeBtn.Position = UDim2.new(0, 0, 0, 226)
+	GrowthTrackerPlantModeBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+	GrowthTrackerPlantModeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	GrowthTrackerPlantModeBtn.Text = "HIGHLIGHT ALL PLANT GROWTH PERCENTAGE"
+	GrowthTrackerPlantModeBtn.TextSize = 8
+	GrowthTrackerPlantModeBtn.Font = Enum.Font.SourceSansBold
+	GrowthTrackerPlantModeBtn.Parent = Body
+	Instance.new("UICorner", GrowthTrackerPlantModeBtn).CornerRadius = UDim.new(0, 5)
 
 	local GrowthTrackerNameInput = Instance.new("TextBox")
 	GrowthTrackerNameInput.Size = UDim2.new(1, 0, 0, 22)
-	GrowthTrackerNameInput.Position = UDim2.new(0, 0, 0, 200)
+	GrowthTrackerNameInput.Position = UDim2.new(0, 0, 0, 252)
 	GrowthTrackerNameInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
 	GrowthTrackerNameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-	GrowthTrackerNameInput.PlaceholderText = "Specific plant name for tracking..."
+	GrowthTrackerNameInput.PlaceholderText = "Specific name for tracking (fruit or plant)..."
 	GrowthTrackerNameInput.TextSize = 10
 	GrowthTrackerNameInput.Font = Enum.Font.SourceSans
 	GrowthTrackerNameInput.Visible = false
 	GrowthTrackerNameInput.Parent = Body
 	Instance.new("UICorner", GrowthTrackerNameInput).CornerRadius = UDim.new(0, 5)
 	GrowthTrackerNameInput.FocusLost:Connect(function() GrowthSpecificName = GrowthTrackerNameInput.Text:lower():gsub("^%s+", ""):gsub("%s+$", "") end)
+
+	local function updateGrowthTrackerModeVisibility()
+		GrowthTrackerNameInput.Visible = GrowthTrackerMode == "FRUIT SPEC" or GrowthTrackerMode == "PLANT SPEC"
+		if GrowthTrackerMode == "FRUIT ALL" or GrowthTrackerMode == "FRUIT SPEC" then
+			GrowthTrackerFruitModeBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+			GrowthTrackerPlantModeBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+		else
+			GrowthTrackerFruitModeBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+			GrowthTrackerPlantModeBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+		end
+	end
 
 	GrowthTrackerBtn.MouseButton1Click:Connect(function()
 		GrowthTrackerActive = not GrowthTrackerActive
@@ -2222,105 +2249,214 @@ local function buildFarmingShell(parentPage)
 		end
 	end)
 
-	GrowthTrackerModeBtn.MouseButton1Click:Connect(function()
-		local modes = {["ALL PLANT"] = "ALL FRUIT", ["ALL FRUIT"] = "SPECIFIC PLANT", ["SPECIFIC PLANT"] = "SPECIFIC FRUIT", ["SPECIFIC FRUIT"] = "ALL PLANT"}
-		GrowthTrackerMode = modes[GrowthTrackerMode] or "ALL PLANT"
-		GrowthTrackerModeBtn.Text = "TRACK MODE: " .. GrowthTrackerMode
-		GrowthTrackerNameInput.Visible = GrowthTrackerMode == "SPECIFIC PLANT" or GrowthTrackerMode == "SPECIFIC FRUIT"
+	GrowthTrackerFruitModeBtn.MouseButton1Click:Connect(function()
+		if GrowthTrackerMode == "FRUIT ALL" then
+			GrowthTrackerMode = "FRUIT SPEC"
+		elseif GrowthTrackerMode == "FRUIT SPEC" then
+			GrowthTrackerMode = "FRUIT ALL"
+		else
+			GrowthTrackerMode = "FRUIT ALL"
+		end
+		GrowthTrackerFruitModeBtn.Text = (GrowthTrackerMode == "FRUIT ALL") and "HIGHLIGHT ALL FRUIT FOLDER 1-100 GROWTH" or "HIGHLIGHT ALL FRUIT SPECIFIC NAME FOLDER 1-100"
+		GrowthTrackerPlantModeBtn.Text = "HIGHLIGHT ALL PLANT GROWTH PERCENTAGE"
+		updateGrowthTrackerModeVisibility()
+		addUiLog("Growth tracker mode: " .. GrowthTrackerMode)
+	end)
+
+	GrowthTrackerPlantModeBtn.MouseButton1Click:Connect(function()
+		if GrowthTrackerMode == "PLANT ALL" then
+			GrowthTrackerMode = "PLANT SPEC"
+		elseif GrowthTrackerMode == "PLANT SPEC" then
+			GrowthTrackerMode = "PLANT ALL"
+		else
+			GrowthTrackerMode = "PLANT ALL"
+		end
+		GrowthTrackerPlantModeBtn.Text = (GrowthTrackerMode == "PLANT ALL") and "HIGHLIGHT ALL PLANT GROWTH PERCENTAGE" or "HIGHLIGHT ALL PLANT SPECIFIC NAME PLANT GROWTH PERCENTAGE"
+		GrowthTrackerFruitModeBtn.Text = "HIGHLIGHT ALL FRUIT FOLDER 1-100 GROWTH"
+		updateGrowthTrackerModeVisibility()
 		addUiLog("Growth tracker mode: " .. GrowthTrackerMode)
 	end)
 
 	task.spawn(function()
 		while task.wait(getAutomationDelay(nil, 0.5)) do
 			if GrowthTrackerActive then
+				local taggedCrops = {}
+
+				-- Helper: search all plot folders 1-100 across all map areas
+				local function getAllPlotFolders()
+					local result = {}
+					local map = Workspace:FindFirstChild("Map")
+					if not map then return result end
+					for _, area in ipairs(map:GetChildren()) do
+						local gardens = area:FindFirstChild("PlayerGardens")
+						local plots = gardens and gardens:FindFirstChild("Plots")
+						if plots then
+							for i = 1, 100 do
+								local plot = plots:FindFirstChild("Plot" .. tostring(i))
+								if plot then
+									table.insert(result, plot)
+								end
+							end
+							for _, plot in ipairs(plots:GetChildren()) do
+								if plot.Name:match("^Plot%d+$") and not table.find(result, plot) then
+									table.insert(result, plot)
+								end
+							end
+						end
+					end
+					return result
+				end
+
+				local function createOrUpdateTag(parent, displayText, isReady)
+					local tag = parent:FindFirstChild("GrowthTrackerTag")
+					if not tag then
+						tag = Instance.new("BillboardGui")
+						tag.Name = "GrowthTrackerTag"
+						tag.Size = UDim2.new(0, 220, 0, 50)
+						tag.StudsOffset = Vector3.new(0, 4, 0)
+						tag.AlwaysOnTop = true
+						tag.Parent = parent
+					end
+					local text = tag:FindFirstChildOfClass("TextLabel")
+					if not text then
+						text = Instance.new("TextLabel")
+						text.Name = "TagLabel"
+						text.Size = UDim2.new(1, 0, 1, 0)
+						text.BackgroundTransparency = 1
+						text.TextStrokeTransparency = 0
+						text.TextSize = 12
+						text.Font = Enum.Font.SourceSansBold
+						text.Parent = tag
+					end
+					text.Text = displayText
+					text.TextColor3 = isReady and Color3.fromRGB(0, 255, 127) or Color3.fromRGB(255, 255, 255)
+					return tag
+				end
+
+				local function processCropForFruitTracking(crop, mode, specificName, taggedCrops)
+					local serverConfig = crop:FindFirstChild("ServerConfiguration")
+					local fruitsConfig = serverConfig and serverConfig:FindFirstChild("Fruits")
+					if not fruitsConfig then return end
+
+					local cleanName = crop.Name:match("^([^:]+)") or crop.Name
+
+					if mode == "FRUIT SPEC" and specificName ~= "" then
+						if not string.find(cleanName:lower(), specificName, 1, true) then return end
+					end
+
+					local fruitData = {}
+					local allReady = true
+					local minGrowth = 100
+					for _, fruitCfg in ipairs(fruitsConfig:GetChildren()) do
+						local gp = fruitCfg:FindFirstChild("GrowthPercentage")
+						local growthVal = (gp and typeof(gp.Value) == "number") and gp.Value or 0
+						table.insert(fruitData, { name = fruitCfg.Name, growth = growthVal })
+						if growthVal < 100 then allReady = false end
+						if growthVal < minGrowth then minGrowth = growthVal end
+					end
+
+					if #fruitData == 0 then return end
+
+					local serverDuration = crop:GetAttribute("ServerDuration") or (serverConfig and serverConfig:GetAttribute("ServerDuration")) or 0
+					local remainingTime = 0
+					if serverDuration and serverDuration > 0 and minGrowth < 100 then
+						remainingTime = serverDuration * (1 - minGrowth / 100)
+					end
+
+					local timeStr = ""
+					if remainingTime > 0 then
+						local mins = math.floor(remainingTime / 60)
+						local secs = math.floor(remainingTime % 60)
+						timeStr = string.format(" | %dm %ds", mins, secs)
+					elseif allReady then
+						timeStr = " | READY!"
+					end
+
+					local fruitStrs = {}
+					for _, fd in ipairs(fruitData) do
+						table.insert(fruitStrs, string.format("F%s:%d%%", fd.name, math.floor(fd.growth)))
+					end
+					local fruitSummary = table.concat(fruitStrs, " ")
+
+					local displayText = string.format("🍎 %s | %d%%%s\n📊 %s", cleanName, math.floor(minGrowth), timeStr, fruitSummary)
+
+					createOrUpdateTag(crop, displayText, allReady)
+					taggedCrops[crop] = true
+				end
+
+				local function processCropForPlantTracking(crop, specificName, taggedCrops)
+					local serverConfig = crop:FindFirstChild("ServerConfiguration")
+					local cleanName = crop.Name:match("^([^:]+)") or crop.Name
+
+					if specificName ~= "" and not string.find(cleanName:lower(), specificName, 1, true) then
+						return
+					end
+
+					local growthPct = getCropPercent(crop)
+					local serverDuration = crop:GetAttribute("ServerDuration") or (serverConfig and serverConfig:GetAttribute("ServerDuration")) or 0
+					local remainingTime = 0
+					if serverDuration and serverDuration > 0 and growthPct < 100 then
+						remainingTime = serverDuration * (1 - growthPct / 100)
+					end
+
+					local timeStr = ""
+					if remainingTime > 0 then
+						local mins = math.floor(remainingTime / 60)
+						local secs = math.floor(remainingTime % 60)
+						timeStr = string.format(" | %dm %ds", mins, secs)
+					elseif growthPct >= 100 then
+						timeStr = " | READY!"
+					end
+
+					local displayText = string.format("🌱 %s | %d%%%s", cleanName, math.floor(growthPct), timeStr)
+					createOrUpdateTag(crop, displayText, growthPct >= 100)
+					taggedCrops[crop] = true
+				end
+
+				-- Search all plot folders 1-100 across all map areas
+				local allPlots = getAllPlotFolders()
+				for _, plot in ipairs(allPlots) do
+					local planted = plot:FindFirstChild("PlantedSeeds")
+					if planted then
+						for _, crop in ipairs(planted:GetChildren()) do
+							if GrowthTrackerMode == "FRUIT ALL" or GrowthTrackerMode == "FRUIT SPEC" then
+								processCropForFruitTracking(crop, GrowthTrackerMode, GrowthSpecificName, taggedCrops)
+							elseif GrowthTrackerMode == "PLANT ALL" or GrowthTrackerMode == "PLANT SPEC" then
+								processCropForPlantTracking(crop, GrowthSpecificName, taggedCrops)
+							end
+						end
+					end
+				end
+
+				-- Fallback: also search via getPlotFolder
 				local plots = getPlotFolder()
 				if plots then
 					for _, plot in ipairs(plots:GetChildren()) do
 						local planted = plot:FindFirstChild("PlantedSeeds")
 						if planted then
 							for _, crop in ipairs(planted:GetChildren()) do
-								local shouldTrack = false
-								local displayName = crop.Name
-								local growthPct = 0
-
-								if GrowthTrackerMode == "ALL PLANT" then
-									shouldTrack = true
-									growthPct = getCropPercent(crop)
-								elseif GrowthTrackerMode == "ALL FRUIT" then
-									local serverConfig = crop:FindFirstChild("ServerConfiguration")
-									local fruitsConfig = serverConfig and serverConfig:FindFirstChild("Fruits")
-									if fruitsConfig then
-										for _, fruitCfg in ipairs(fruitsConfig:GetChildren()) do
-											shouldTrack = true
-											local gp = fruitCfg:FindFirstChild("GrowthPercentage")
-											if gp and typeof(gp.Value) == "number" then growthPct = math.max(growthPct, gp.Value) end
-										end
-									end
-								elseif GrowthTrackerMode == "SPECIFIC PLANT" then
-									if GrowthSpecificName == "" or string.find(crop.Name:lower(), GrowthSpecificName, 1, true) then
-										shouldTrack = true
-										growthPct = getCropPercent(crop)
-									end
-								elseif GrowthTrackerMode == "SPECIFIC FRUIT" then
-									local serverConfig = crop:FindFirstChild("ServerConfiguration")
-									local fruitsConfig = serverConfig and serverConfig:FindFirstChild("Fruits")
-									if fruitsConfig and (GrowthSpecificName == "" or string.find(crop.Name:lower(), GrowthSpecificName, 1, true)) then
-										for _, fruitCfg in ipairs(fruitsConfig:GetChildren()) do
-											shouldTrack = true
-											local gp = fruitCfg:FindFirstChild("GrowthPercentage")
-											if gp and typeof(gp.Value) == "number" then growthPct = math.max(growthPct, gp.Value) end
-										end
-									end
-								end
-
-								if shouldTrack then
-									local tag = crop:FindFirstChild("GrowthTrackerTag")
-									if not tag then
-										tag = Instance.new("BillboardGui")
-										tag.Name = "GrowthTrackerTag"
-										tag.Size = UDim2.new(0, 200, 0, 35)
-										tag.StudsOffset = Vector3.new(0, 4, 0)
-										tag.AlwaysOnTop = true
-										tag.Parent = crop
-									end
-									local text = tag:FindFirstChildOfClass("TextLabel")
-									if not text then
-										text = Instance.new("TextLabel")
-										text.Size = UDim2.new(1, 0, 1, 0)
-										text.BackgroundTransparency = 1
-										text.TextStrokeTransparency = 0
-										text.TextSize = 13
-										text.Font = Enum.Font.SourceSansBold
-										text.Parent = tag
-									end
-
-									-- Get server duration attribute for countdown
-									local serverConfig = crop:FindFirstChild("ServerConfiguration")
-									local serverDuration = crop:GetAttribute("ServerDuration") or (serverConfig and serverConfig:GetAttribute("ServerDuration")) or 0
-									local remainingTime = 0
-									if serverDuration and serverDuration > 0 and growthPct < 100 then
-										remainingTime = serverDuration * (1 - growthPct / 100)
-									end
-
-									local timeStr = ""
-									if remainingTime > 0 then
-										local mins = math.floor(remainingTime / 60)
-										local secs = math.floor(remainingTime % 60)
-										timeStr = string.format(" | %dm %ds", mins, secs)
-									elseif growthPct >= 100 then
-										timeStr = " | READY!"
-									end
-
-									text.Text = string.format("🌱 %s | %d%%%s", displayName, math.floor(growthPct), timeStr)
-									if growthPct >= 100 then
-										text.TextColor3 = Color3.fromRGB(0, 255, 127)
-									else
-										text.TextColor3 = Color3.fromRGB(255, 255, 255)
+								if not taggedCrops[crop] then
+									if GrowthTrackerMode == "FRUIT ALL" or GrowthTrackerMode == "FRUIT SPEC" then
+										processCropForFruitTracking(crop, GrowthTrackerMode, GrowthSpecificName, taggedCrops)
+									elseif GrowthTrackerMode == "PLANT ALL" or GrowthTrackerMode == "PLANT SPEC" then
+										processCropForPlantTracking(crop, GrowthSpecificName, taggedCrops)
 									end
 								end
 							end
 						end
 					end
+				end
+
+				-- Remove tags from crops no longer being tracked
+				for _, obj in ipairs(Workspace:GetDescendants()) do
+					if obj.Name == "GrowthTrackerTag" and obj.Parent and not taggedCrops[obj.Parent] then
+						obj:Destroy()
+					end
+				end
+			else
+				-- Tracker is off, clean up all tags
+				for _, obj in ipairs(Workspace:GetDescendants()) do
+					if obj.Name == "GrowthTrackerTag" then obj:Destroy() end
 				end
 			end
 		end
@@ -3217,26 +3353,26 @@ task.defer(function()
 	end
 	for _, root in ipairs(styleRoots) do
 		for _, obj in ipairs(root:GetDescendants()) do
-		if obj:IsA("TextButton") then
-			if obj.Font == Enum.Font.SourceSansBold then obj.Font = Enum.Font.GothamMedium end
-			local corner = obj:FindFirstChildOfClass("UICorner")
-			if corner and corner.CornerRadius.Offset > 0 and corner.CornerRadius.Offset < 8 then
-				corner.CornerRadius = UDim.new(0, 8)
+			if obj:IsA("TextButton") then
+				if obj.Font == Enum.Font.SourceSansBold then obj.Font = Enum.Font.GothamMedium end
+				local corner = obj:FindFirstChildOfClass("UICorner")
+				if corner and corner.CornerRadius.Offset > 0 and corner.CornerRadius.Offset < 8 then
+					corner.CornerRadius = UDim.new(0, 8)
+				end
+			elseif obj:IsA("TextBox") then
+				if obj.Font == Enum.Font.SourceSans then obj.Font = Enum.Font.Gotham end
+				obj.BackgroundColor3 = Color3.fromRGB(10, 12, 18)
+				if not obj:FindFirstChildOfClass("UIStroke") then
+					local stroke = Instance.new("UIStroke")
+					stroke.Color = Color3.fromRGB(40, 46, 58)
+					stroke.Thickness = 1
+					stroke.Transparency = 0.55
+					stroke.Parent = obj
+				end
+			elseif obj:IsA("TextLabel") then
+				if obj.Font == Enum.Font.SourceSansBold then obj.Font = Enum.Font.GothamMedium end
+				if obj.Font == Enum.Font.SourceSansItalic then obj.Font = Enum.Font.Gotham end
 			end
-		elseif obj:IsA("TextBox") then
-			if obj.Font == Enum.Font.SourceSans then obj.Font = Enum.Font.Gotham end
-			obj.BackgroundColor3 = Color3.fromRGB(10, 12, 18)
-			if not obj:FindFirstChildOfClass("UIStroke") then
-				local stroke = Instance.new("UIStroke")
-				stroke.Color = Color3.fromRGB(40, 46, 58)
-				stroke.Thickness = 1
-				stroke.Transparency = 0.55
-				stroke.Parent = obj
-			end
-		elseif obj:IsA("TextLabel") then
-			if obj.Font == Enum.Font.SourceSansBold then obj.Font = Enum.Font.GothamMedium end
-			if obj.Font == Enum.Font.SourceSansItalic then obj.Font = Enum.Font.Gotham end
-		end
 		end
 	end
 end)
