@@ -1,6 +1,6 @@
 -- ==========================================
 -- RdDr Premium Framework: Farming Panel FARMING PANEL DISPLAY GARDEN COMMAND
--- track mode PLANTING SELL AUTO HARVEST PLUS START AUTO PLANT SMART PLANT
+-- track mode PLANTING SELL AUTO HARVEST PLUS START AUTO PLANT SMART PLANT ⚡ Farming Panel ⚡
 -- ==========================================
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
@@ -342,6 +342,56 @@ local function createActionButton(label, pos, size, parent, callback)
 	B.MouseButton1Click:Connect(callback)
 	return B
 end
+
+-- Create the Notification UI Guide on execution
+local guideGui = Instance.new("ScreenGui")
+guideGui.Name = "FarmingPanelGuideGui"
+guideGui.ResetOnSpawn = false
+guideGui.Parent = playerGui
+
+local guideFrame = Instance.new("Frame")
+guideFrame.Name = "GuideFrame"
+guideFrame.Size = UDim2.new(0, 380, 0, 130)
+guideFrame.Position = UDim2.new(0.5, -190, 0.2, 0)
+guideFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+guideFrame.BorderSizePixel = 0
+guideFrame.Parent = guideGui
+
+local frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 8)
+frameCorner.Parent = guideFrame
+
+local guideText = Instance.new("TextLabel")
+guideText.Name = "GuideText"
+guideText.Size = UDim2.new(1, -20, 0, 60)
+guideText.Position = UDim2.new(0, 10, 0, 10)
+guideText.BackgroundTransparency = 1
+guideText.Text = "DOUBLE CLICK THE SCREEN TO TOGGLE/VISIBLE/SHOW/OPEN\n⚡ Farming Panel ⚡!"
+guideText.TextColor3 = Color3.fromRGB(255, 255, 255)
+guideText.TextWrapped = true
+guideText.TextSize = 16
+guideText.Font = Enum.Font.SourceSansBold
+guideText.Parent = guideFrame
+
+local closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 120, 0, 32)
+closeButton.Position = UDim2.new(0.5, -60, 1, -42)
+closeButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+closeButton.Text = "CLOSE"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextSize = 15
+closeButton.Font = Enum.Font.SourceSansBold
+closeButton.Parent = guideFrame
+
+local buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 6)
+buttonCorner.Parent = closeButton
+
+-- Remove the GUI Guide when the player clicks CLOSE
+closeButton.MouseButton1Click:Connect(function()
+    guideGui:Destroy()
+end)
 
 -- ==========================================
 -- AUTOMATIC.LUA INTEGRATION (UNTOUCHED LOGIC & UI)
@@ -3731,14 +3781,86 @@ task.defer(function()
 end)
 
 -- ==========================================
--- KEYBOARD SHORTCUT: V KEY TO TOGGLE GUI
+-- DOUBLE CLICK SHORTCUT TO TOGGLE GUI + GUIDE
 -- ==========================================
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
+UserInputService = game:GetService("UserInputService")
+Players = game:GetService("Players")
 
-	if input.KeyCode == Enum.KeyCode.V then
-		MainFrame.Visible = not MainFrame.Visible
-		addUiLog("Garden Command toggled: " .. (MainFrame.Visible and "VISIBLE" or "HIDDEN"))
-	end
+player = Players.LocalPlayer
+playerGui = player:WaitForChild("PlayerGui")
+
+-- Create the Notification UI Guide on execution
+guideGui = Instance.new("ScreenGui")
+guideGui.Name = "FarmingPanelGuideGui"
+guideGui.ResetOnSpawn = false
+guideGui.Parent = playerGui
+
+guideFrame = Instance.new("Frame")
+guideFrame.Name = "GuideFrame"
+guideFrame.Size = UDim2.new(0, 380, 0, 130)
+guideFrame.Position = UDim2.new(0.5, -190, 0.2, 0)
+guideFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
+guideFrame.BorderSizePixel = 0
+guideFrame.Parent = guideGui
+
+frameCorner = Instance.new("UICorner")
+frameCorner.CornerRadius = UDim.new(0, 8)
+frameCorner.Parent = guideFrame
+
+guideText = Instance.new("TextLabel")
+guideText.Name = "GuideText"
+guideText.Size = UDim2.new(1, -20, 0, 60)
+guideText.Position = UDim2.new(0, 10, 0, 10)
+guideText.BackgroundTransparency = 1
+guideText.Text = "DOUBLE CLICK THE SCREEN TO TOGGLE/VISIBLE/SHOW/OPEN\n⚡ Farming Panel ⚡!"
+guideText.TextColor3 = Color3.fromRGB(255, 255, 255)
+guideText.TextWrapped = true
+guideText.TextSize = 16
+guideText.Font = Enum.Font.SourceSansBold
+guideText.Parent = guideFrame
+
+closeButton = Instance.new("TextButton")
+closeButton.Name = "CloseButton"
+closeButton.Size = UDim2.new(0, 120, 0, 32)
+closeButton.Position = UDim2.new(0.5, -60, 1, -42)
+closeButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+closeButton.Text = "CLOSE"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextSize = 15
+closeButton.Font = Enum.Font.SourceSansBold
+closeButton.Parent = guideFrame
+
+buttonCorner = Instance.new("UICorner")
+buttonCorner.CornerRadius = UDim.new(0, 6)
+buttonCorner.Parent = closeButton
+
+-- Remove the GUI Guide when the player clicks CLOSE
+closeButton.MouseButton1Click:Connect(function()
+    guideGui:Destroy()
 end)
-print("KEYBOARD SHORTCUT: V KEY TO TOGGLE GARDEN COMMAND!")
+
+-- Double click shortcut logic
+lastClickTime = 0
+DOUBLE_CLICK_THRESHOLD = 0.3 -- Time in seconds between clicks
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    -- Triggers on Left Mouse Click or Touch Tap
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        local currentTime = os.clock()
+        
+        if (currentTime - lastClickTime) <= DOUBLE_CLICK_THRESHOLD then
+            if MainFrame then
+                MainFrame.Visible = not MainFrame.Visible
+                if typeof(addUiLog) == "function" then
+                    addUiLog("Garden Command toggled: " .. (MainFrame.Visible and "VISIBLE" or "HIDDEN"))
+                end
+            end
+            lastClickTime = 0 -- Reset after triggering double click
+        else
+            lastClickTime = currentTime
+        end
+    end
+end)
+print("DOUBLE CLICK THE SCREEN TO TOGGLE/VISIBLE/SHOW/OPEN ⚡ Farming Panel ⚡!")
