@@ -1,6 +1,6 @@
 -- ==========================================
 -- RdDr Premium Framework: Farming Panel FARMING PANEL DISPLAY GARDEN COMMAND
--- track mode PLANTING
+-- track mode PLANTING SELL AUTO HARVEST PLUS START AUTO PLANT SMART PLANT
 -- ==========================================
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
@@ -1612,35 +1612,48 @@ local function sellAllCrops()
 				}
 				sellRemote:FireServer(unpack(args))
 			end)
-			addUiLog("AUTO HARVEST PLUS: Sell All Crops sent")
+			addUiLog("AUTO SELL WHEN MAX CROPS/FRUITS: Sell All Crops sent")
 			maxCropsReached = false
 			return true
 		end
 	end
-	addUiLog("AUTO HARVEST PLUS: Sell remote or SellCart not found")
+	addUiLog("AUTO SELL WHEN MAX CROPS/FRUITS: Sell remote or SellCart not found")
 	return false
 end
 
 local maxCropsSelling = false
 local function sellAllCropsAndWait()
-	if maxCropsSelling then return end
-	maxCropsSelling = true
-	addUiLog("⚠️ Max crops in inventory! Teleporting to sell cart...")
-	-- Teleport to sell cart position
-	local character = LocalPlayer.Character
-	if character then
-		local hrp = character:FindFirstChild("HumanoidRootPart")
-		if hrp then
-			hrp.CFrame = CFrame.new(1016, 41, -117)
-			addUiLog("📍 Teleported to SellCart at 1016, 41, -117")
-		end
-	end
-	task.wait(1)
-	sellAllCrops()
-	addUiLog("⏳ Waiting 9 seconds before resuming harvest...")
-	task.wait(9)
-	maxCropsSelling = false
-	addUiLog("✅ Sell complete, resuming auto harvest...")
+    if maxCropsSelling then return end
+    maxCropsSelling = true
+    addUiLog("⚠️ Max crops in inventory! Teleporting to sell cart...")
+
+    local character = LocalPlayer.Character
+    local hrp = character and character:FindFirstChild("HumanoidRootPart")
+    
+    -- Store original position before teleporting
+    local originalCFrame = hrp and hrp.CFrame
+
+    if hrp then
+        hrp.CFrame = CFrame.new(1016, 41, -117)
+        addUiLog("📍 Teleported to SellCart at 1016, 41, -117")
+    end
+
+    task.wait(1)
+    sellAllCrops()
+    addUiLog("⏳ Waiting 6.2 seconds before resuming harvest...")
+    task.wait(6.2)
+
+    -- Re-fetch character and HRP in case of respawn during wait
+    character = LocalPlayer.Character
+    hrp = character and character:FindFirstChild("HumanoidRootPart")
+
+    if hrp and originalCFrame then
+        hrp.CFrame = originalCFrame
+        addUiLog("📍 Teleported back to original position")
+    end
+
+    maxCropsSelling = false
+    addUiLog("✅ Sell complete, resuming auto harvest...")
 end
 
 local function runAutoHarvest(updateStatus)
@@ -2373,16 +2386,16 @@ local function buildFarmingShell(parentPage)
 	HarvestPlusBtn.Position = UDim2.new(0, 0, 0, 122)
 	HarvestPlusBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	HarvestPlusBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	HarvestPlusBtn.Text = "AUTO HARVEST PLUS: OFF"
+	HarvestPlusBtn.Text = "AUTO SELL WHEN MAX CROPS/FRUITS: OFF"
 	HarvestPlusBtn.TextSize = 10
 	HarvestPlusBtn.Font = Enum.Font.SourceSansBold
 	HarvestPlusBtn.Parent = Body
 	Instance.new("UICorner", HarvestPlusBtn).CornerRadius = UDim.new(0, 5)
 	HarvestPlusBtn.MouseButton1Click:Connect(function()
 		autoHarvestPlus = not autoHarvestPlus
-		HarvestPlusBtn.Text = autoHarvestPlus and "AUTO HARVEST PLUS: ON" or "AUTO HARVEST PLUS: OFF"
+		HarvestPlusBtn.Text = autoHarvestPlus and "AUTO SELL WHEN MAX CROPS/FRUITS: ON" or "AUTO SELL WHEN MAX CROPS/FRUITS: OFF"
 		HarvestPlusBtn.BackgroundColor3 = autoHarvestPlus and Color3.fromRGB(0, 150, 130) or Color3.fromRGB(28, 32, 42)
-		addUiLog("Auto Harvest Plus: " .. (autoHarvestPlus and "ON" or "OFF"))
+		addUiLog("AUTO SELL WHEN MAX CROPS/FRUITS: " .. (autoHarvestPlus and "ON" or "OFF"))
 	end)
 
 	HarvestToggleBtn = Instance.new("TextButton")
@@ -3033,30 +3046,30 @@ local function buildFarmingExtras()
 	PlantModeRandomBtn.Parent = Body
 	Instance.new("UICorner", PlantModeRandomBtn).CornerRadius = UDim.new(0, 5)
 
-	local PlantModeSmartBtn = Instance.new("TextButton")
-	PlantModeSmartBtn.Size = UDim2.new(0.31, 0, 0, 22)
-	PlantModeSmartBtn.Position = UDim2.new(0.69, 0, 0, 44)
-	PlantModeSmartBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
-	PlantModeSmartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	PlantModeSmartBtn.Text = "SMART PLANT"
-	PlantModeSmartBtn.TextSize = 9
-	PlantModeSmartBtn.Font = Enum.Font.SourceSansBold
-	PlantModeSmartBtn.Parent = Body
-	Instance.new("UICorner", PlantModeSmartBtn).CornerRadius = UDim.new(0, 5)
+	--local PlantModeSmartBtn = Instance.new("TextButton")
+	--PlantModeSmartBtn.Size = UDim2.new(0.31, 0, 0, 22)
+	--PlantModeSmartBtn.Position = UDim2.new(0.69, 0, 0, 44)
+	--PlantModeSmartBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+	--PlantModeSmartBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	--PlantModeSmartBtn.Text = "SMART PLANT"
+	--PlantModeSmartBtn.TextSize = 9
+	--PlantModeSmartBtn.Font = Enum.Font.SourceSansBold
+	--PlantModeSmartBtn.Parent = Body
+	--Instance.new("UICorner", PlantModeSmartBtn).CornerRadius = UDim.new(0, 5)
 
 	local function setPlantModeHighlight(mode)
 		plantMode = mode
 		PlantModePositionBtn.BackgroundColor3 = mode == "POSITION" and Color3.fromRGB(0, 122, 255) or Color3.fromRGB(28, 32, 42)
 		PlantModeRandomBtn.BackgroundColor3 = mode == "RANDOM" and Color3.fromRGB(230, 126, 34) or Color3.fromRGB(28, 32, 42)
-		PlantModeSmartBtn.BackgroundColor3 = mode == "SMART" and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(28, 32, 42)
+		--PlantModeSmartBtn.BackgroundColor3 = mode == "SMART" and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(28, 32, 42)
 	end
 	PlantModePositionBtn.MouseButton1Click:Connect(function() setPlantModeHighlight("POSITION") addUiLog("Auto plant mode: POSITION") end)
 	PlantModeRandomBtn.MouseButton1Click:Connect(function() setPlantModeHighlight("RANDOM") addUiLog("Auto plant mode: RANDOM (random soil + random seed)") end)
-	PlantModeSmartBtn.MouseButton1Click:Connect(function() setPlantModeHighlight("SMART") addUiLog("Auto plant mode: SMART (nearest empty soil + best seed)") end)
+	--PlantModeSmartBtn.MouseButton1Click:Connect(function() setPlantModeHighlight("SMART") addUiLog("Auto plant mode: SMART (nearest empty soil + best seed)") end)
 
 	local AutoPlantBtn = Instance.new("TextButton")
 	AutoPlantBtn.Size = UDim2.new(0.48, 0, 0, 24)
-	AutoPlantBtn.Position = UDim2.new(0.52, 0, 0, 44)
+	AutoPlantBtn.Position = UDim2.new(0.52, 0, 0, 18)
 	AutoPlantBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	AutoPlantBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	AutoPlantBtn.Text = "START AUTO PLANT"
