@@ -1,4 +1,4 @@
-local Players = game:GetService("Players") -- ASSET NAV TAB Plank
+local Players = game:GetService("Players") -- ASSET NAV TAB Plank FISHQUEST |Bug Catch Settings| NO ALL | FISH_RARITY |  UI VISIBILITY | SOURCE | Garden Seeds Shop | INSTANT AUTO SPIN & AUTO
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
@@ -4084,7 +4084,7 @@ Special Event Shop|SpecialEventShop|PlanetSeedPack,EventScroll,WhitePlankLong,Wh
 				AfkIntLbl.BackgroundTransparency = 1
 				AfkIntLbl.Parent = Page1
 				createAmtInputBox(UDim2.new(0, 330, 0, CfgY + 254), 30, Page1, function(v) antiAfkInterval = math.clamp(math.floor(v), 5, 300) end)
-				local PROMO_CODES = {"RELEASEDAY", "HAPPYBIRTHDAYGQ", "FISHQUEST", "BIGSPOON", "MAGICFOREST", "ORB", "CABBAGE", "FOX", "ROCKET"}
+				local PROMO_CODES = {"RELEASEDAY", "HAPPYBIRTHDAYGQ", "FISHQUEST", "BIGSPOON", "MAGICFOREST", "ORB", "CABBAGE", "FOX", "ROCKET", "SPACE", "HAPPY1MONTH" }
 				local PROMO_DESCRIPTIONS = {
 					RELEASEDAY = "x5 Premium Flower Pack",
 					HAPPYBIRTHDAYGQ = "x1 Birthday Cow",
@@ -4095,6 +4095,8 @@ Special Event Shop|SpecialEventShop|PlanetSeedPack,EventScroll,WhitePlankLong,Wh
 					CABBAGE = "x1 Premium Cabbage Pack",
 					FOX = "x1 Fox Egg",
 					ROCKET = "x1 Permanent Lock",
+					SPACE = "1x Gold Watering Can",
+					HAPPY1MONTH = "2x Premium Magic Pack",
 				}
 				local CodeLog
 				local autoRedeemCodes = false
