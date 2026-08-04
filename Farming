@@ -160,13 +160,13 @@ local destroyFarmingPanel
 -- RdDr UI Setup
 -- ==========================================
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "RdDr_PremiumGUI"
+ScreenGui.Name = "FARMINGPANEL"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.IgnoreGuiInset = true
 ScreenGui.Parent = PlayerGui
 
 local ToggleButton = Instance.new("ImageButton")
-ToggleButton.Name = "RdDr_MinimizeButton"
+ToggleButton.Name = "FARMINGPANEL_MinimizeButton"
 ToggleButton.Size = UDim2.fromOffset(42, 42)
 ToggleButton.Position = UDim2.new(1, -945, 0, 13)
 ToggleButton.AnchorPoint = Vector2.new(0, 0)
