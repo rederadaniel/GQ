@@ -1,4 +1,5 @@
 local Players = game:GetService("Players") -- ASSET NAV TAB Plank FISHQUEST |Bug Catch Settings| NO ALL | FISH_RARITY |  UI VISIBILITY | SOURCE | Garden Seeds Shop | INSTANT AUTO SPIN & AUTO
+-- HAPPY1MONTH GardenSeedShop
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
@@ -1242,9 +1243,14 @@ Mushroom Seed Shop|MushroomSeedShop|PinkJumboMushroomSeed,BlueJumboMushroomSeed,
 Mushroom Pet Shop|MushroomPetShop|RedMushroom,LuckyMushroom,SpaceMushroom,LoveMushroom,PrinceMushroom,MightyMushroom
 Gear Shop|MainGearShop|WateringCan,EventScroll,RustySprinkler,StandardSprinkler,Trowel,MoonWand,ExpertSprinkler,FavoriteWand,UltimateSprinkler,Scythe,Retriever,NeptunesSprinkler
 Witch Potions Shop|WitchShop|PotionOfSpeed,PotionOfLeaping,PotionOfSnail,PotionOfShrinking,PotionOfSuperSnail,PotionOfGrowing,PotionOfInvisibility,PotionOfBugCatching,PotionOfFishing,PotionOfHarvesting
-Pet Shop|MainPetShop|BasicIncubator,CowEgg,FoxEgg,FastIncubator,SmallPetTreat,MediumPetTreat
-Special Event Shop|SpecialEventShop|PlanetSeedPack,EventScroll,WhitePlankLong,WhitePlankSquare,WhitePlankWide,WhiteMediumStairs,GreyMediumStairs,BrownMediumStairs,WhiteArch,LongArchedWindow,MeadowLongArchedWindow,BlueGalaxyRoomDivider,GreenGalaxyRoomDivider,OrangeGalaxyRoomDivider,PinkGalaxyRoomDivider,PurpleGalaxyRoomDivider]]
-
+Pet Shop|MainPetShop|BasicIncubator,CowEgg,FoxEgg,CatEgg,FastIncubator,SmallPetTreat,MediumPetTreat
+Special Event Shop|SpecialEventShop|SpottedCat,BlueAlienCat,CatEgg,CosmicWillowSeed,PlanetSeedPack,EventScroll,WhitePlankLong,WhitePlankSquare,WhitePlankWide,WhiteMediumStairs,GreyMediumStairs,BrownMediumStairs,WhiteArch,LongArchedWindow,MeadowLongArchedWindow,BlueGalaxyRoomDivider,GreenGalaxyRoomDivider,OrangeGalaxyRoomDivider,PinkGalaxyRoomDivider,PurpleGalaxyRoomDivider
+Main Mount Shop|MainMountShop|WalnutHorseMount,WinterlandHorseMount,SilvermaneHorseMount,OakrunnerHorseMount,NightchargerHorseMount,FlameveilRunnerHorseMount,TimberheadTrotterHorseMount,MaelstromMoondancerHorseMount,MidnightStallionHorseMount
+Space Mount Shop|SpaceMountShop|Catstroneer,SpikyMushroomMount,EvilMushroomMount
+Main Appliance Shop|MainApplianceShop|CookingCauldron
+Main Furniture Shop|MainFurnitureShop|Nil
+Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
+]]
 		local shops={} for l in raw:gmatch("[^\n]+") do local n,i,t=l:match("([^|]+)|([^|]+)|(.+)") table.insert(shops,{name=n,id=i,items=t:split(",")}) end
 		local selectedItems = {}
 		for _, s in ipairs(shops) do
@@ -4084,19 +4090,20 @@ Special Event Shop|SpecialEventShop|PlanetSeedPack,EventScroll,WhitePlankLong,Wh
 				AfkIntLbl.BackgroundTransparency = 1
 				AfkIntLbl.Parent = Page1
 				createAmtInputBox(UDim2.new(0, 330, 0, CfgY + 254), 30, Page1, function(v) antiAfkInterval = math.clamp(math.floor(v), 5, 300) end)
-				local PROMO_CODES = {"RELEASEDAY", "HAPPYBIRTHDAYGQ", "FISHQUEST", "BIGSPOON", "MAGICFOREST", "ORB", "CABBAGE", "FOX", "ROCKET", "SPACE", "HAPPY1MONTH" }
+				local PROMO_CODES = {"RELEASEDAY", "HAPPYBIRTHDAYGQ", "FISHQUEST", "BIGSPOON", "MAGICFOREST", "ORB", "CABBAGE", "FOX", "ROCKET", "SPACE", "HAPPY1MONTH", "WILLOW" }
 				local PROMO_DESCRIPTIONS = {
-					RELEASEDAY = "x5 Premium Flower Pack",
-					HAPPYBIRTHDAYGQ = "x1 Birthday Cow",
-					FISHQUEST = "x1 Bottle of Fishing",
-					BIGSPOON = "x3 Retrievers",
-					MAGICFOREST = "x1 Neptune Sprinkler",
-					ORB = "x3 Scythe",
-					CABBAGE = "x1 Premium Cabbage Pack",
-					FOX = "x1 Fox Egg",
-					ROCKET = "x1 Permanent Lock",
-					SPACE = "1x Gold Watering Can",
-					HAPPY1MONTH = "2x Premium Magic Pack",
+					RELEASEDAY = "x5 Premium Flower Pack 🌱 ",
+					HAPPYBIRTHDAYGQ = "x1 Birthday Cow 🥚 ",
+					FISHQUEST = "x1 Bottle of Fishing 🧪 ",
+					BIGSPOON = "x3 Retrievers ⚙️ ",
+					MAGICFOREST = "x1 Neptune Sprinkler ⚙️ ",
+					ORB = " x3 Scythe ⚙️ ",
+					CABBAGE = " x1 Premium Cabbage Pack 🌱 ",
+					FOX = " x1 Fox Egg 🥚 ",
+					ROCKET = "x1 Permanent Lock 🔒 ",
+					SPACE = " 1x Gold Watering Can 🧺 ",
+					HAPPY1MONTH = "2x Premium Magic Pack 🌱 ",
+					WILLOW = "x1 Protection Lock 🔒 "
 				}
 				local CodeLog
 				local autoRedeemCodes = false
