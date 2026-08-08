@@ -1,0 +1,5068 @@
+-- AutoFarmManager - Auto Farm Egg, Quest, & Item System
+-- Part 1: Services, Remotes, State Variables 967 CLEAR LOG local success, message INSTUCTION ALL QUESTS: 6
+-- Choose egg AllItemsButton Rod
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+-- ===== REMOTES =====
+local Remotes = ReplicatedStorage:FindFirstChild("Remotes") or ReplicatedStorage:WaitForChild("Remotes", 15)
+local QuestBoardRemotes = Remotes and Remotes:FindFirstChild("QuestBoard")
+local RequestQuestBoardState = QuestBoardRemotes and QuestBoardRemotes:FindFirstChild("RequestQuestBoardState")
+local ClaimQuestReward = QuestBoardRemotes and QuestBoardRemotes:FindFirstChild("ClaimQuestReward")
+local RefreshQuestBoard = QuestBoardRemotes and QuestBoardRemotes:FindFirstChild("RefreshQuestBoard")
+local ApplianceRemotes = Remotes and Remotes:FindFirstChild("Appliances")
+local OpenIncubatorUi = ApplianceRemotes and ApplianceRemotes:FindFirstChild("OpenIncubatorUi")
+local RequestIncubatorState = ApplianceRemotes and ApplianceRemotes:FindFirstChild("RequestIncubatorState")
+local RequestCookingState = ApplianceRemotes and ApplianceRemotes:FindFirstChild("RequestCookingState")
+local MainInventoryRemotes = Remotes and Remotes:FindFirstChild("MainInventory")
+local InventoryAction = MainInventoryRemotes and MainInventoryRemotes:FindFirstChild("InventoryAction")
+local AssignHotbarSlot = MainInventoryRemotes and MainInventoryRemotes:FindFirstChild("AssignHotbarSlot")
+local ClearHotbarSlot = MainInventoryRemotes and MainInventoryRemotes:WaitForChild("ClearHotbarSlot", 10)
+local UseHotbarSlot = MainInventoryRemotes and MainInventoryRemotes:FindFirstChild("UseHotbarSlot")
+local CookingStateUpdated = ApplianceRemotes and ApplianceRemotes:FindFirstChild("CookingStateUpdated")
+local RequestStartCooking = ApplianceRemotes and ApplianceRemotes:FindFirstChild("RequestStartCooking")
+local RequestClaimCooking = ApplianceRemotes and ApplianceRemotes:FindFirstChild("RequestClaimCooking")
+local OpenCookingApplianceUi = ApplianceRemotes and ApplianceRemotes:FindFirstChild("OpenCookingApplianceUi")
+local UnequipGear = MainInventoryRemotes and MainInventoryRemotes:FindFirstChild("UnequipGear")
+
+-- ===== STATE VARIABLES =====
+local AutoFarm = {
+	enabled = false,
+	autoEgg = false,
+	autoClaim = false,
+	autoRefresh = false,
+	autoCookingCauldron = false,
+	autoEquipInv = false,
+	autoEquipHotbar = false,
+	autoEquipEggName = "",
+	fruitSlots = {"", "", "", ""},
+	autoHeldFruitName = "",
+	autoHeldFruitMode = "Inventory",
+	autoHeldFruitInventory = false,
+	autoHeldFruitHotbar = false,
+	randomFruit = false,
+	randomMilk = false,
+	randomFish = false,
+	avoidItems = "",
+	autoCookingFruitSlots = 1,
+	autoAssignHotbarSlot = false,
+	hotbarSlotItems = {"", "", "", "", "", "", "", ""},
+	autoClearHotbarSlot = false,
+	autoClearSlots = {false, false, false, false, false, false, false, false},
+	questBoardVisible = false,
+	-- questBoardVisible/questBoardFrozen removed - auto-save via remote polling
+}
+
+local highlightSettings = { cauldron = false, incubator = false, auto = false }
+local activeHighlights = {}
+
+local incubatorCountdowns = {}  -- { [incubatorName] = { totalSeconds, finishAt, startAt } }
+local lastQuestState = nil
+local isClaimingQuest = false
+local isRefreshingQuests = false
+local isInteractingIncubator = false
+
+-- ===== CONSTANTS =====
+local POLL_INTERVAL = 0.15
+local COOKING_CAULDRON_INTERVAL = 1
+local QUEST_POLL_INTERVAL = 0.15
+local COUNTDOWN_UPDATE = 0.15
+local AUTO_EQUIP_INTERVAL = 0.15
+local QUEST_GUI_SNAPSHOT_INTERVAL = 0.15
+local questFetchInFlight = false
+
+print("[AutoFarm] Part 1 loaded: Services & Remotes initialized")
+
+-- ===== PART 2: HELPER FUNCTIONS =====
+
+-- Find the local player's plot by OwnerUserId attribute
+local function findPlayerPlot()
+	local map = Workspace:FindFirstChild("Map")
+	if not map then return nil end
+	local island = map:FindFirstChild("MainIsland")
+	if not island then return nil end
+	local gardens = island:FindFirstChild("PlayerGardens")
+	if not gardens then return nil end
+	local plots = gardens:FindFirstChild("Plots")
+	if not plots then return nil end
+
+	local userId = LocalPlayer.UserId
+	for _, plot in ipairs(plots:GetChildren()) do
+		local ownerAttr = plot:GetAttribute("OwnerUserId")
+		if ownerAttr == userId then
+			return plot
+		end
+	end
+	-- Fallback: return first plot if no owner match (for testing)
+	if #plots:GetChildren() > 0 then
+		return plots:GetChildren()[1]
+	end
+	return nil
+end
+
+-- Find all incubators (BasicIncubator or FastIncubator) in the plot's PlacedFurniture
+local function findIncubators(plot)
+	local placedFurniture = plot:FindFirstChild("PlacedFurniture")
+	if not placedFurniture then return {} end
+
+	local incubators = {}
+	for _, item in ipairs(placedFurniture:GetChildren()) do
+		local name = item.Name
+		local isIncubator = (name == "BasicIncubator" or name == "FastIncubator")
+		isIncubator = isIncubator or (item:GetAttribute("IsPetIncubator") == true)
+		isIncubator = isIncubator or (item:GetAttribute("ApplianceType") == "PetIncubator")
+		isIncubator = isIncubator or (item:GetAttribute("IsIncubator") == true)
+		if isIncubator then
+			table.insert(incubators, item)
+		end
+	end
+	return incubators
+end
+
+-- Get incubator status from attributes and Sign TextLabel
+local function getIncubatorStatus(incubator)
+	local status = {
+		hasEgg = false,
+		isHatching = false,
+		hatchReady = false,
+		hatchFinishAt = nil,
+		hatchStartAt = nil,
+		eggItemName = nil,
+		signText = "",
+		totalSeconds = 0,
+		remainingSeconds = 0,
+		isDone = false,
+		isEmpty = false,
+	}
+
+	-- Read attributes
+	status.hasEgg = incubator:GetAttribute("HasEgg") == true
+	status.isHatching = incubator:GetAttribute("IsHatching") == true
+	status.hatchReady = incubator:GetAttribute("HatchReady") == true
+	status.hatchFinishAt = incubator:GetAttribute("HatchFinishAt")
+	status.hatchStartAt = incubator:GetAttribute("HatchStartAt")
+	status.eggItemName = incubator:GetAttribute("EggItemName")
+
+	-- Read Sign TextLabel text
+	local sign = incubator:FindFirstChild("Sign")
+	if sign then
+		local surfaceGui = sign:FindFirstChild("SurfaceGui")
+		if surfaceGui then
+			local textLabel = surfaceGui:FindFirstChild("TextLabel")
+			if textLabel and textLabel:IsA("TextLabel") then
+				status.signText = textLabel.Text or ""
+			end
+		end
+	end
+
+	-- Also check for ActiveEggVisual child
+	local activeEggVisual = incubator:FindFirstChild("ActiveEggVisual")
+	if activeEggVisual then
+		status.hasEgg = true
+	end
+
+	-- Check EggAnchor for spawned egg visual
+	local eggAnchor = incubator:FindFirstChild("EggAnchor")
+	if eggAnchor and #eggAnchor:GetChildren() > 0 then
+		status.hasEgg = true
+	end
+
+	-- Determine state
+	local now = os.time()
+	if status.hatchFinishAt and status.hatchFinishAt > 0 then
+		status.totalSeconds = math.max(0, status.hatchFinishAt - (status.hatchStartAt or 0))
+		status.remainingSeconds = math.max(0, status.hatchFinishAt - now)
+		if status.remainingSeconds <= 0 then
+			status.isDone = true
+		end
+	end
+
+	-- Also check sign text for Ready/Done
+	local signLower = string.lower(status.signText)
+	if string.find(signLower, "ready") or string.find(signLower, "done") then
+		status.isDone = true
+		status.hasEgg = true
+	end
+
+	-- If no egg at all
+	if not status.hasEgg and not status.isHatching then
+		status.isEmpty = true
+	end
+
+	return status
+end
+
+-- Teleport player near a part (client-side CFrame set)
+local function teleportToPart(part)
+	local character = LocalPlayer.Character
+	if not character then return false end
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return false end
+
+	-- Position 5 studs in front and 3 studs up from the part
+	local targetCFrame = part.CFrame * CFrame.new(0, 3, 6)
+	hrp.CFrame = targetCFrame
+	return true
+end
+
+local function pressE(duration)
+	local pressed = false
+	local success = pcall(function()
+		VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+		pressed = true
+		task.wait(duration)
+		VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+	end)
+	if pressed and not success then
+		pcall(function()
+			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+		end)
+	end
+	return success
+end
+
+local function clickCloseButton()
+	local questBoardGui = PlayerGui:FindFirstChild("QuestBoardGui")
+	local shade = questBoardGui and questBoardGui:FindFirstChild("Shade")
+	local panel = shade and shade:FindFirstChild("Panel")
+	local closeButton = panel and panel:FindFirstChild("CloseButton")
+
+	if not closeButton then
+		return false
+	end
+
+	local fired = false
+	if closeButton:IsA("GuiButton") then
+		fired = pcall(function()
+			-- 1. Try built-in Roblox button activation
+			closeButton:Activate()
+
+			-- 2. Fire connections directly (for MouseButton1Click / Activated bindings)
+			for _, connection in ipairs(getconnections(closeButton.MouseButton1Click)) do
+				connection:Fire()
+			end
+			for _, connection in ipairs(getconnections(closeButton.Activated)) do
+				connection:Fire()
+			end
+
+			-- 3. Simulate actual physical click over button position
+			local pos = closeButton.AbsolutePosition
+			local size = closeButton.AbsoluteSize
+			local centerX = pos.X + (size.X / 2)
+			local centerY = pos.Y + (size.Y / 2) + 36 -- Offset for top bar inset
+
+			VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, true, game, 0)
+			task.wait(0.05)
+			VirtualInputManager:SendMouseButtonEvent(centerX, centerY, 0, false, game, 0)
+		end)
+	end
+
+	-- Fallback: If UI remains enabled after attempt, force hide it
+	task.wait(0.1)
+	if questBoardGui and questBoardGui.Enabled then
+		questBoardGui.Enabled = false
+	end
+
+	return fired
+end
+local function triggerQuestBoardPrompt()
+	local character = LocalPlayer.Character
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+	if not root or not humanoid then
+		return false, "Player character is not ready"
+	end
+
+	local originalCFrame = root.CFrame
+	local originalVelocity = root.AssemblyLinearVelocity
+	local interactionPosition = Vector3.new(967, 41, -599)
+	local interactionCFrame = CFrame.lookAt(interactionPosition, interactionPosition + Vector3.new(0, 0, -1))
+	local triggered = false
+	local success, errorMessage = xpcall(function()
+		humanoid:Move(Vector3.zero)
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.CFrame = interactionCFrame
+		task.wait(0.1)
+		root.CFrame = interactionCFrame
+		pressE(0.3)
+		pressE(0.6)
+		task.wait(1.1)
+		clickCloseButton()
+		task.wait(1.1)
+
+		triggered = true
+	end, debug.traceback)
+
+	if root.Parent then
+		root.AssemblyLinearVelocity = Vector3.zero
+		root.CFrame = originalCFrame
+		task.wait()
+		if root.Parent then
+			root.AssemblyLinearVelocity = originalVelocity
+		end
+	end
+
+	if not success then
+		warn("[AutoFarm] Run Sequence failed: " .. tostring(errorMessage))
+		return false, "Run Sequence failed"
+	end
+	return triggered, "Teleported, held E for 0.5s, closed QuestBoardGui, and restored original position"
+end
+
+local function triggerIncubator(incubator)
+	local interactionPart = incubator:FindFirstChild("InteractionPart")
+	if not interactionPart then return false end
+
+	-- Teleport near the incubator
+	teleportToPart(interactionPart)
+
+	-- Method 1: Fire OpenIncubatorUi remote
+	local placementId = incubator:GetAttribute("PlacementId")
+	if placementId then
+		pcall(function()
+			OpenIncubatorUi:FireServer(placementId)
+		end)
+	end
+
+	-- Method 2: Try fireproximityprompt if available (some environments have it)
+	local prompt = interactionPart:FindFirstChild("AppliancePrompt")
+	if not prompt then
+		prompt = interactionPart:FindFirstChildOfClass("ProximityPrompt")
+	end
+	if not prompt then
+		-- Search descendants
+		for _, desc in ipairs(interactionPart:GetDescendants()) do
+			if desc:IsA("ProximityPrompt") then
+				prompt = desc
+				break
+			end
+		end
+	end
+
+	if prompt then
+		-- Try fireproximityprompt global function
+		if type(fireproximityprompt) == "function" then
+			pcall(function()
+				fireproximityprompt(prompt)
+			end)
+		end
+
+		-- Try VirtualInputManager to simulate E key
+		pcall(function()
+			local VIM = game:GetService("VirtualInputManager")
+			VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+			task.wait(0.1)
+			VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+		end)
+	end
+
+	return true
+end
+
+-- Request quest board state from server
+local function getQuestState()
+	if questFetchInFlight then
+		return lastQuestState
+	end
+	questFetchInFlight = true
+	lastQuestFetchAt = os.clock()
+	if not RequestQuestBoardState then
+		questFetchInFlight = false
+		return lastQuestState
+	end
+	local success, result = pcall(function()
+		return RequestQuestBoardState:InvokeServer()
+	end)
+	questFetchInFlight = false
+	if success and type(result) == "table" then
+		lastQuestState = result
+		return result
+	end
+	return lastQuestState
+end
+
+-- Format seconds into human-readable time
+local function formatTime(seconds)
+	seconds = math.max(0, math.floor(seconds))
+	return string.format("%ds", seconds)
+end
+
+-- Find a tool in the hotbar by name/type
+local function findHotbarSlot(toolName)
+	local hotbarGui = PlayerGui:FindFirstChild("HotbarGui")
+	if not hotbarGui then return nil end
+	local mainFrame = hotbarGui:FindFirstChild("MainFrame")
+	if not mainFrame then return nil end
+
+	for i = 1, 8 do
+		local slot = mainFrame:FindFirstChild("Slot" .. i)
+		if slot then
+			local nameLabel = slot:FindFirstChild("NameLabel")
+			if nameLabel and string.find(string.lower(nameLabel.Text or ""), string.lower(toolName)) then
+				return i
+			end
+		end
+	end
+	return nil
+end
+
+-- Equip a tool by finding it in hotbar and using the slot
+local function equipTool(toolName)
+	local slot = findHotbarSlot(toolName)
+	if slot then
+		pcall(function()
+			UseHotbarSlot:FireServer(slot)
+		end)
+		return true
+	end
+	return false
+end
+
+-- ===== AUTO EQUIP HELPER FUNCTIONS =====
+
+-- Check if the player is currently holding/equipped with the specified item
+local function isItemHeld(itemName)
+	if not itemName or itemName == "" then return false end
+	local character = LocalPlayer.Character
+	if not character then return false end
+	local itemNameLower = string.lower(itemName)
+	for _, child in ipairs(character:GetChildren()) do
+		if string.find(string.lower(child.Name), itemNameLower) then
+			return true
+		end
+	end
+	return false
+end
+
+-- Find an item in the inventory GUI by ItemName attribute, return ItemId
+local function findInventoryItem(itemName)
+	if not itemName or itemName == "" then return nil end
+	local inventoryGui = PlayerGui:FindFirstChild("InventoryGui")
+	if not inventoryGui then return nil end
+	local mainFrame = inventoryGui:FindFirstChild("MainFrame")
+	if not mainFrame then return nil end
+	local itemsFrame = mainFrame:FindFirstChild("ItemsFrame")
+	if not itemsFrame then return nil end
+
+	local itemNameLower = string.lower(itemName)
+	for _, item in ipairs(itemsFrame:GetChildren()) do
+		-- Skip favorited items
+		local contentFrame = item:FindFirstChild("ContentFrame")
+		if contentFrame then
+			local favBtn = contentFrame:FindFirstChild("FavoriteButton")
+			if favBtn then
+				local data = favBtn:FindFirstChild("Data")
+				if data and data.Visible then
+					continue
+				end
+			end
+		end
+		local attrName = item:GetAttribute("ItemName")
+		if attrName and string.lower(attrName) == itemNameLower then
+			local itemId = item:GetAttribute("ItemId")
+			if itemId then
+				return itemId
+			end
+		end
+	end
+	return nil
+end
+
+-- Find a hotbar slot by item name (checks both ItemName attribute and NameLabel text)
+local function findHotbarSlotByName(itemName)
+	if not itemName or itemName == "" then return nil end
+	local hotbarGui = PlayerGui:FindFirstChild("HotbarGui")
+	if not hotbarGui then return nil end
+	local mainFrame = hotbarGui:FindFirstChild("MainFrame")
+	if not mainFrame then return nil end
+
+	local itemNameLower = string.lower(itemName)
+	for i = 1, 8 do
+		local slot = mainFrame:FindFirstChild("Slot" .. i)
+		if slot then
+			local attrName = slot:GetAttribute("ItemName")
+			if attrName and string.lower(attrName) == itemNameLower then
+				return i
+			end
+			local nameLabel = slot:FindFirstChild("NameLabel")
+			if nameLabel and nameLabel.Text and string.lower(nameLabel.Text) == itemNameLower then
+				return i
+			end
+		end
+	end
+	return nil
+end
+
+-- Auto equip from inventory: find item in inventory GUI and fire UseItem action
+local function autoEquipFromInventory(itemName)
+	if not itemName or itemName == "" then return false end
+	local itemId = findInventoryItem(itemName)
+	if itemId then
+		pcall(function()
+			InventoryAction:FireServer({
+				Action = "UseItem",
+				ItemId = itemId
+			})
+		end)
+		return true
+	end
+	return false
+end
+
+-- Auto equip from hotbar: find slot and fire UseHotbarSlot
+local function autoEquipFromHotbar(itemName)
+	if not itemName or itemName == "" then return false end
+	local slot = findHotbarSlotByName(itemName)
+	if slot then
+		pcall(function()
+			UseHotbarSlot:FireServer(slot)
+		end)
+		return true
+	end
+	return false
+end
+
+local function resolveFruitItemId(itemName)
+	return findInventoryItem(itemName)
+end
+
+local function getHotbarItemName(slotNumber)
+	local hotbarGui = PlayerGui:FindFirstChild("HotbarGui")
+	local mainFrame = hotbarGui and hotbarGui:FindFirstChild("MainFrame")
+	local slot = mainFrame and mainFrame:FindFirstChild("Slot" .. tostring(slotNumber))
+	if not slot then return nil end
+
+	local itemName = slot:GetAttribute("ItemName")
+	if type(itemName) == "string" and itemName ~= "" then
+		return itemName
+	end
+
+	local nameLabel = slot:FindFirstChild("NameLabel")
+	if nameLabel and nameLabel:IsA("TextLabel") and nameLabel.Text ~= "" then
+		return nameLabel.Text
+	end
+	return nil
+end
+
+local function holdFruitFromInventory(itemName)
+	itemName = itemName or AutoFarm.autoHeldFruitName
+	local itemId = resolveFruitItemId(itemName)
+	if not InventoryAction or type(itemId) ~= "string" or itemId == "" then
+		return false
+	end
+	local success = pcall(function()
+		InventoryAction:FireServer({
+			Action = "UseItem",
+			ItemId = itemId,
+		})
+	end)
+	return success
+end
+
+local function holdFruitFromHotbar(itemName)
+	if not AssignHotbarSlot then
+		return false
+	end
+	itemName = itemName or AutoFarm.autoHeldFruitName
+	local targetName = string.lower(tostring(itemName or ""))
+	if targetName == "" then
+		return false
+	end
+	for slotNumber = 1, 8 do
+		local itemName = getHotbarItemName(slotNumber)
+		if type(itemName) == "string" and string.lower(itemName) == targetName then
+			local success = pcall(function()
+				AssignHotbarSlot:FireServer({
+					Slot = slotNumber,
+					ItemId = itemName,
+				})
+			end)
+			return success
+		end
+	end
+	return false
+end
+
+local function unequipFood()
+	if UnequipGear then
+		pcall(function()
+			UnequipGear:FireServer()
+		end)
+	end
+end
+
+-- Hold a fruit for cooking by checking both the hotbar and the inventory.
+local function holdFruitForCooking(itemName)
+	if AutoFarm.autoHeldFruitMode == "Hotbar" then
+		if holdFruitFromHotbar(itemName) then return true end
+		return holdFruitFromInventory(itemName)
+	end
+	if holdFruitFromInventory(itemName) then return true end
+	return holdFruitFromHotbar(itemName)
+end
+
+print("[AutoFarm] Part 2 loaded: Helper functions defined")
+
+-- ===== PART 3: GUI CREATION =====
+
+-- Shared references that later parts (4-8) need. Declared here so the GUI
+-- creation locals below can be scoped inside a do-block, keeping the number
+-- of top-level locals under Luau's 200-register limit.
+local Colors
+local content
+local questLogFrame
+local guiSnapshotEntries = {}
+local updateIncubatorPredictorLog
+local scanAllIncubators
+local incubatorSortMode
+local cauldronSortMode
+local refreshCookingCauldronLogs
+local processCookingCauldrons
+local updateQuestLog
+local renderQuestSummary
+local renderQuestLog
+local isSelectedFruitEquipped
+local createDivider
+local createSectionLabel
+local createCollapsibleHeader
+local registerSectionElement
+local setToggleState
+local nextLayoutOrder
+local cookingBusy
+-- Additional forward declarations to keep top-level locals under the 200 limit
+local questLogEntries
+local questLogHistory
+local questLogCleared
+local clearQuestLogEntries
+local qs
+local ps
+local cookingStates
+local serverTimeOffset
+local getCauldronPlacementId
+local waitForCauldronState
+local cauldronHasStartedCooking
+local isCookingJobReady
+local getCookingStateText
+local findCookingCauldrons
+local findCookingPrompts
+local fireCookingPrompt
+local triggerCookingCauldron
+local getPredPetData
+local PET_RARITIES
+local clearHotbarLogFrame
+local clearHotbarLogLabel
+local clearHotbarLogEntries = {}
+local clearHotbarLogHistory = {}
+local updateClearHotbarLog
+
+-- Build the entire GUI inside a function so all GUI-local variables are scoped
+-- to this function body instead of the top-level chunk (avoids the 200 local
+-- register limit). Shared references are forward-declared above and assigned
+-- here as upvalues.
+local function buildGui()
+	-- Colors
+	Colors = {
+		BG = Color3.fromRGB(12, 15, 25),
+		PANEL = Color3.fromRGB(24, 29, 45),
+		HEADER = Color3.fromRGB(35, 45, 75),
+		TOGGLE_OFF = Color3.fromRGB(42, 49, 70),
+		TOGGLE_ON = Color3.fromRGB(45, 190, 145),
+		TEXT = Color3.fromRGB(244, 247, 255),
+		TEXT_MUTED = Color3.fromRGB(155, 169, 195),
+		LOG_BG = Color3.fromRGB(15, 20, 34),
+		LOG_ENTRY = Color3.fromRGB(29, 37, 58),
+		ACCENT = Color3.fromRGB(95, 156, 255),
+		ACCENT_2 = Color3.fromRGB(166, 108, 255),
+		INCUBATOR_ACCENT = Color3.fromRGB(95, 156, 255),
+		CAULDRON_ACCENT = Color3.fromRGB(255, 150, 80),
+		QUEST_ACCENT = Color3.fromRGB(166, 108, 255),
+		RED = Color3.fromRGB(255, 80, 80),
+	}
+
+	-- Create ScreenGui
+	local screenGui = Instance.new("ScreenGui")
+	screenGui.Name = "AutoFarmGui"
+	screenGui.ResetOnSpawn = false
+	screenGui.DisplayOrder = 300
+	screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
+	screenGui.Parent = PlayerGui
+	screenGui.Enabled = true
+
+	-- Main Panel
+	local mainPanel = Instance.new("Frame")
+	mainPanel.Name = "MainPanel"
+	mainPanel.Visible = true
+	mainPanel.BackgroundColor3 = Colors.PANEL
+	mainPanel.BackgroundTransparency = 0.08
+	mainPanel.BorderSizePixel = 0
+	mainPanel.Size = UDim2.fromOffset(380, 560)
+	mainPanel.Position = UDim2.new(0, 10, 0.5, -280)
+
+	local panelScale = Instance.new("UIScale")
+	panelScale.Name = "ResponsiveScale"
+	panelScale.Scale = UserInputService.TouchEnabled and 0.9 or 0.92
+	panelScale.Parent = mainPanel
+	mainPanel.Active = true
+	mainPanel.Parent = screenGui
+
+	local panelCorner = Instance.new("UICorner")
+	panelCorner.CornerRadius = UDim.new(0, 10)
+	panelCorner.Parent = mainPanel
+
+	local panelStroke = Instance.new("UIStroke")
+	panelStroke.Color = Colors.ACCENT
+	panelStroke.Transparency = 0.35
+	panelStroke.Thickness = 1.5
+	panelStroke.Parent = mainPanel
+
+	-- Header
+	local header = Instance.new("Frame")
+	header.Name = "Header"
+	header.BackgroundColor3 = Colors.HEADER
+	header.BackgroundTransparency = 0.12
+	header.BorderSizePixel = 0
+	header.Size = UDim2.new(1, 0, 0, 38)
+	header.Parent = mainPanel
+
+	local headerCorner = Instance.new("UICorner")
+	headerCorner.CornerRadius = UDim.new(0, 10)
+	headerCorner.Parent = header
+
+	local title = Instance.new("TextLabel")
+	title.Name = "Title"
+	title.BackgroundTransparency = 1
+	title.Text = "Auto Farm Panel"
+	title.TextColor3 = Colors.TEXT
+	title.Font = Enum.Font.GothamBold
+	title.TextSize = 16
+	title.Size = UDim2.new(1, -120, 1, 0)
+	title.Position = UDim2.fromOffset(12, 0)
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.Parent = header
+
+	-- Minimize Button (pro design with icon + hover glow)
+	local minBtn = Instance.new("TextButton")
+	minBtn.Name = "MinButton"
+	minBtn.BackgroundColor3 = Color3.fromRGB(45, 55, 85)
+	minBtn.BackgroundTransparency = 0.2
+	minBtn.BorderSizePixel = 0
+	minBtn.Text = "-"
+	minBtn.TextColor3 = Colors.TEXT
+	minBtn.Font = Enum.Font.GothamBold
+	minBtn.TextSize = 18
+	minBtn.Size = UDim2.fromOffset(30, 30)
+	minBtn.Position = UDim2.new(1, -100, 0, 6)
+	minBtn.Parent = header
+	local minCorner = Instance.new("UICorner")
+	minCorner.CornerRadius = UDim.new(0, 8)
+	minCorner.Parent = minBtn
+	local minStroke = Instance.new("UIStroke")
+	minStroke.Color = Colors.ACCENT
+	minStroke.Transparency = 0.6
+	minStroke.Thickness = 1
+	minStroke.Parent = minBtn
+	minBtn.MouseEnter:Connect(function()
+		minBtn.BackgroundColor3 = Color3.fromRGB(70, 90, 140)
+		minBtn.BackgroundTransparency = 0
+	end)
+	minBtn.MouseLeave:Connect(function()
+		minBtn.BackgroundColor3 = Color3.fromRGB(45, 55, 85)
+		minBtn.BackgroundTransparency = 0.2
+	end)
+
+	-- Close Button (hides panel, can reopen) - icon design
+	local closeBtn = Instance.new("TextButton")
+	closeBtn.Name = "CloseButton"
+	closeBtn.BackgroundColor3 = Color3.fromRGB(145, 55, 78)
+	closeBtn.BackgroundTransparency = 0.2
+	closeBtn.BorderSizePixel = 0
+	closeBtn.Text = "×"
+	closeBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
+	closeBtn.Font = Enum.Font.GothamBold
+	closeBtn.TextSize = 16
+	closeBtn.Size = UDim2.fromOffset(30, 30)
+	closeBtn.Position = UDim2.new(1, -68, 0, 6)
+	closeBtn.Parent = header
+	local closeCorner = Instance.new("UICorner")
+	closeCorner.CornerRadius = UDim.new(0, 8)
+	closeCorner.Parent = closeBtn
+	local closeStroke = Instance.new("UIStroke")
+	closeStroke.Color = Color3.fromRGB(255, 100, 100)
+	closeStroke.Transparency = 0.5
+	closeStroke.Thickness = 1
+	closeStroke.Parent = closeBtn
+	closeBtn.MouseEnter:Connect(function()
+		closeBtn.BackgroundColor3 = Color3.fromRGB(200, 75, 105)
+		closeBtn.BackgroundTransparency = 0
+	end)
+	closeBtn.MouseLeave:Connect(function()
+		closeBtn.BackgroundColor3 = Color3.fromRGB(145, 55, 78)
+		closeBtn.BackgroundTransparency = 0.2
+	end)
+
+	-- Destroy Button (destroys entire GUI permanently)
+	local destroyBtn = Instance.new("TextButton")
+	destroyBtn.Name = "DestroyButton"
+	destroyBtn.BackgroundColor3 = Color3.fromRGB(145, 55, 78)
+	destroyBtn.BackgroundTransparency = 0.15
+	destroyBtn.Text = "🗑"
+	destroyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	destroyBtn.Font = Enum.Font.GothamBold
+	destroyBtn.TextSize = 16
+	destroyBtn.Size = UDim2.fromOffset(30, 30)
+	destroyBtn.Position = UDim2.new(1, -36, 0, 6)
+	destroyBtn.Parent = header
+
+	local destroyCorner = Instance.new("UICorner")
+	destroyCorner.CornerRadius = UDim.new(0, 8)
+	destroyCorner.Parent = destroyBtn
+
+
+	-- Reopen Button (floating button to restore hidden panel) - enhanced design
+	local reopenBtn = Instance.new("TextButton")
+	reopenBtn.Name = "ReopenButton"
+	reopenBtn.BackgroundColor3 = Colors.PANEL
+	reopenBtn.BackgroundTransparency = 0
+	reopenBtn.BorderSizePixel = 0
+	reopenBtn.Text = "🌾"
+	reopenBtn.TextColor3 = Colors.TEXT
+	reopenBtn.Font = Enum.Font.GothamBold
+	reopenBtn.TextSize = 22
+	reopenBtn.Size = UDim2.fromOffset(52, 52)
+	reopenBtn.Position = UDim2.new(0, 10, 0.5, -26)
+	reopenBtn.Visible = false
+	reopenBtn.Parent = screenGui
+	reopenBtn.ZIndex = 50
+
+	local reopenCorner = Instance.new("UICorner")
+	reopenCorner.CornerRadius = UDim.new(0, 12)
+	reopenCorner.Parent = reopenBtn
+
+	local reopenStroke = Instance.new("UIStroke")
+	reopenStroke.Color = Colors.ACCENT
+	reopenStroke.Transparency = 0.3
+	reopenStroke.Thickness = 2
+	reopenStroke.Parent = reopenBtn
+
+	local reopenGradient = Instance.new("UIGradient")
+	reopenGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(35, 45, 75)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 29, 45)),
+	})
+	reopenGradient.Rotation = 90
+	reopenGradient.Parent = reopenBtn
+
+	-- Subtitle label under the icon
+	local reopenLabel = Instance.new("TextLabel")
+	reopenLabel.Name = "ReopenLabel"
+	reopenLabel.BackgroundTransparency = 1
+	reopenLabel.Text = "Auto Farm"
+	reopenLabel.TextColor3 = Colors.TEXT_MUTED
+	reopenLabel.Font = Enum.Font.GothamMedium
+	reopenLabel.TextSize = 9
+	reopenLabel.Size = UDim2.new(1, 0, 0, 14)
+	reopenLabel.Position = UDim2.new(0, 0, 1, -16)
+	reopenLabel.Parent = reopenBtn
+
+	-- Hover glow effect
+	reopenBtn.MouseEnter:Connect(function()
+		TweenService:Create(reopenBtn, TweenInfo.new(0.15), {
+			BackgroundColor3 = Color3.fromRGB(45, 60, 100),
+			BackgroundTransparency = 0,
+		}):Play()
+		reopenStroke.Transparency = 0.1
+		reopenStroke.Thickness = 2.5
+		reopenBtn.TextSize = 24
+	end)
+	reopenBtn.MouseLeave:Connect(function()
+		TweenService:Create(reopenBtn, TweenInfo.new(0.15), {
+			BackgroundColor3 = Colors.PANEL,
+			BackgroundTransparency = 0,
+		}):Play()
+		reopenStroke.Transparency = 0.3
+		reopenStroke.Thickness = 2
+		reopenBtn.TextSize = 22
+	end)
+
+	-- Pulsing animation when visible
+	local reopenPulse = Instance.new("UIStroke")
+	reopenPulse.Name = "PulseStroke"
+	reopenPulse.Color = Colors.ACCENT_2
+	reopenPulse.Transparency = 1
+	reopenPulse.Thickness = 3
+	reopenPulse.Parent = reopenBtn
+	task.spawn(function()
+		while reopenBtn and reopenBtn.Parent do
+			if reopenBtn.Visible then
+				TweenService:Create(reopenPulse, TweenInfo.new(0.8), {Transparency = 0.6, Thickness = 4}):Play()
+				task.wait(0.8)
+				TweenService:Create(reopenPulse, TweenInfo.new(0.8), {Transparency = 1, Thickness = 3}):Play()
+				task.wait(0.8)
+			else
+				task.wait(0.5)
+			end
+		end
+	end)
+
+	-- Content ScrollingFrame (holds all sections, scrolls if too tall)
+	content = Instance.new("ScrollingFrame")
+	content.Name = "Content"
+	content.BackgroundTransparency = 1
+	content.Size = UDim2.new(1, 0, 1, -38)
+	content.Position = UDim2.fromOffset(0, 38)
+	content.ScrollBarThickness = 6
+	content.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	content.CanvasSize = UDim2.fromOffset(0, 0)
+	content.Parent = mainPanel
+
+	local contentLayout = Instance.new("UIListLayout")
+	contentLayout.Padding = UDim.new(0, 6)
+	contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	contentLayout.Parent = content
+
+	local contentPadding = Instance.new("UIPadding")
+	contentPadding.PaddingTop = UDim.new(0, 10)
+	contentPadding.PaddingBottom = UDim.new(0, 10)
+	contentPadding.PaddingLeft = UDim.new(0, 12)
+	contentPadding.PaddingRight = UDim.new(0, 12)
+	contentPadding.Parent = content
+
+	-- Layout order counter for content children
+	local layoutOrder = 0
+	nextLayoutOrder = function()
+		local o = layoutOrder
+		layoutOrder = layoutOrder + 1
+		return o
+	end
+
+	-- Helper: create section header label
+	createSectionLabel = function(text)
+		local lbl = Instance.new("TextLabel")
+		lbl.BackgroundTransparency = 1
+		lbl.Text = text
+		lbl.TextColor3 = Colors.ACCENT
+		lbl.Font = Enum.Font.GothamBold
+		lbl.TextSize = 14
+		lbl.Size = UDim2.new(1, 0, 0, 22)
+		lbl.LayoutOrder = nextLayoutOrder()
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.Parent = content
+		return lbl
+	end
+
+	-- Helper: create visual divider
+	createDivider = function()
+		local div = Instance.new("Frame")
+		div.BackgroundColor3 = Colors.HEADER
+		div.BorderSizePixel = 0
+		div.Size = UDim2.new(1, 0, 0, 1)
+		div.LayoutOrder = nextLayoutOrder()
+		div.Parent = content
+		return div
+	end
+
+	-- Collapsible section header: a clickable header that hides/shows all
+	-- registered content elements for that section.
+	local collapsibleSections = {}
+	createCollapsibleHeader = function(title)
+		local header = Instance.new("TextButton")
+		header.BackgroundTransparency = 1
+		header.Text = "-  " .. title
+		header.TextColor3 = Colors.ACCENT
+		header.Font = Enum.Font.GothamBold
+		header.TextSize = 14
+		header.Size = UDim2.new(1, 0, 0, 22)
+		header.LayoutOrder = nextLayoutOrder()
+		header.TextXAlignment = Enum.TextXAlignment.Left
+		header.Parent = content
+		local section = { elements = {} }
+		collapsibleSections[header] = section
+		header.MouseButton1Click:Connect(function()
+			local first = section.elements[1]
+			local visible = not (first and first.Visible)
+			for _, el in ipairs(section.elements) do
+				el.Visible = visible
+			end
+			header.Text = (visible and "-  " or "+  ") .. title
+		end)
+		return header, section
+	end
+	registerSectionElement = function(section, element)
+		if section and element then
+			table.insert(section.elements, element)
+		end
+	end
+
+	-- ===== SECTION 1: MAIN TOGGLES =====
+	local mainTogglesHeader, mainTogglesSection = createCollapsibleHeader("Main Toggles")
+
+	-- Toggle container
+	local toggleContainer = Instance.new("Frame")
+	toggleContainer.Name = "Toggles"
+	toggleContainer.BackgroundTransparency = 1
+	toggleContainer.Size = UDim2.new(1, 0, 0, 0)
+	toggleContainer.AutomaticSize = Enum.AutomaticSize.Y
+	toggleContainer.LayoutOrder = nextLayoutOrder()
+	toggleContainer.Parent = content
+	registerSectionElement(mainTogglesSection, toggleContainer)
+
+	local toggleLayout = Instance.new("UIListLayout")
+	toggleLayout.Padding = UDim.new(0, 6)
+	toggleLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	toggleLayout.Parent = toggleContainer
+
+	local togglePadding = Instance.new("UIPadding")
+	togglePadding.PaddingLeft = UDim.new(0, 0)
+	togglePadding.PaddingRight = UDim.new(0, 0)
+	togglePadding.Parent = toggleContainer
+
+	-- Toggle button factory
+	local toggleButtons = {}
+	local function createToggle(name, label, order, parent)
+		local btn = Instance.new("TextButton")
+		btn.Name = name
+		btn.ZIndex = 10
+		btn.BackgroundColor3 = Colors.TOGGLE_OFF
+		btn.BackgroundTransparency = 0
+		btn.BorderSizePixel = 0
+		btn.Text = ""
+		btn.Size = UDim2.new(1, 0, 0, 36)
+		btn.LayoutOrder = order
+		btn.Parent = parent or toggleContainer
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 6)
+		corner.Parent = btn
+
+		local labelEl = Instance.new("TextLabel")
+		labelEl.BackgroundTransparency = 1
+		labelEl.Text = label
+		labelEl.TextColor3 = Colors.TEXT
+		labelEl.Font = Enum.Font.GothamMedium
+		labelEl.TextSize = 14
+		labelEl.Size = UDim2.new(1, -60, 1, 0)
+		labelEl.Position = UDim2.fromOffset(12, 0)
+		labelEl.TextXAlignment = Enum.TextXAlignment.Left
+		labelEl.ZIndex = 11
+		labelEl.Parent = btn
+
+		local statusEl = Instance.new("TextLabel")
+		statusEl.BackgroundTransparency = 1
+		statusEl.Text = "OFF"
+		statusEl.TextColor3 = Colors.TEXT_MUTED
+		statusEl.Font = Enum.Font.GothamBold
+		statusEl.TextSize = 13
+		statusEl.Size = UDim2.fromOffset(48, 30)
+		statusEl.Position = UDim2.new(1, -54, 0, 3)
+		statusEl.ZIndex = 11
+		statusEl.Parent = btn
+
+		toggleButtons[name] = {btn = btn, status = statusEl, state = false}
+
+		btn.MouseButton1Click:Connect(function()
+			local t = toggleButtons[name]
+			local newState = not t.state
+			setToggleState(name, newState)
+			if name == "AutoHighlight" then
+				setToggleState("HighlightCauldron", newState)
+				setToggleState("HighlightIncubator", newState)
+			end
+			if name == "AutoHighlight" or name == "HighlightCauldron" or name == "HighlightIncubator" then
+				if applyHighlights then applyHighlights() end
+			end
+		end)
+
+		return btn
+	end
+
+	local clearSlotFrame
+	setToggleState = function(name, state)
+		local t = toggleButtons[name]
+		if not t then return end
+		t.state = state
+		if state then
+			t.status.Text = "ON"
+			t.status.TextColor3 = Color3.fromRGB(255, 255, 255)
+			t.btn.BackgroundColor3 = Color3.fromRGB(40, 170, 80)
+		else
+			t.status.Text = "OFF"
+			t.status.TextColor3 = Colors.TEXT_MUTED
+			t.btn.BackgroundColor3 = Colors.TOGGLE_OFF
+		end
+		if name == "AutoEgg" then AutoFarm.autoEgg = state
+		elseif name == "AutoCookingCauldron" then AutoFarm.autoCookingCauldron = state
+		elseif name == "AutoClaim" then AutoFarm.autoClaim = state
+		elseif name == "AutoRefresh" then AutoFarm.autoRefresh = state
+		elseif name == "MasterToggle" then AutoFarm.enabled = state
+		elseif name == "AutoHighlight" then highlightSettings.auto = state
+		elseif name == "HighlightCauldron" then highlightSettings.cauldron = state
+		elseif name == "HighlightIncubator" then highlightSettings.incubator = state
+		elseif name == "AutoAssignHotbarSlot" then AutoFarm.autoAssignHotbarSlot = state
+		elseif name == "AutoClearHotbarSlot" then
+			AutoFarm.autoClearHotbarSlot = state
+			-- Master toggle: set all 8 slots to match
+			for i = 1, 8 do
+				AutoFarm.autoClearSlots[i] = state
+				local slotBtn = clearSlotFrame and clearSlotFrame:FindFirstChild("ClearSlot" .. i)
+				if slotBtn then
+					slotBtn.BackgroundColor3 = state and Color3.fromRGB(40, 170, 80) or Colors.TOGGLE_OFF
+				end
+			end
+		elseif name == "RandomFruit" then AutoFarm.randomFruit = state
+		elseif name == "RandomMilk" then AutoFarm.randomMilk = state
+		elseif name == "RandomFish" then AutoFarm.randomFish = state
+		elseif name == "QuestBoardShow" then AutoFarm.questBoardVisible = state
+		end
+	end
+
+	-- Create toggle buttons (Main Toggles)
+	createToggle("MasterToggle", "Start Farming", 0)
+	createToggle("AutoClaim", "Auto Claim Quests", 1)
+	createToggle("AutoRefresh", "Auto Refresh Quests", 2)
+
+	-- ===== HIGHLIGHT SETTINGS SECTION =====
+	createDivider()
+	local highlightHeader, highlightSection = createCollapsibleHeader("Highlight Settings")
+	createToggle("AutoHighlight", "Auto Highlight Incubator & Cauldron", nextLayoutOrder(), content)
+	createToggle("HighlightCauldron", "Highlight Cauldron (Show FoodName)", nextLayoutOrder(), content)
+	createToggle("HighlightIncubator", "Highlight Incubator (Show PetName)", nextLayoutOrder(), content)
+	registerSectionElement(highlightSection, toggleButtons.AutoHighlight.btn)
+	registerSectionElement(highlightSection, toggleButtons.HighlightCauldron.btn)
+	registerSectionElement(highlightSection, toggleButtons.HighlightIncubator.btn)
+
+	-- ===== ASSIGN HOTBAR SLOT SECTION =====
+	createDivider()
+	local assignHotbarHeader, assignHotbarSection = createCollapsibleHeader("Assign Hotbar Slot")
+	createToggle("AutoAssignHotbarSlot", "Auto Assign Hotbar Slot", nextLayoutOrder(), content)
+	registerSectionElement(assignHotbarSection, toggleButtons.AutoAssignHotbarSlot.btn)
+
+	-- Auto Assign Hotbar: 8 item-name inputs (slots 1-8)
+	local hotbarSlotInputs = {}
+	local HOTBAR_DEFAULT_NAMES = {"Shovel", "BasicRod", "BasicNet", "BlueNet", "FavoriteWand", "Trowel", "WateringCan", "RustySprinkler"}
+	for slotNumber = 1, 8 do
+		local hotbarInputBox = Instance.new("TextBox")
+		hotbarInputBox.Name = "HotbarSlot" .. slotNumber .. "Input"
+		hotbarInputBox.BackgroundColor3 = Colors.LOG_BG
+		hotbarInputBox.BorderSizePixel = 0
+		hotbarInputBox.Text = HOTBAR_DEFAULT_NAMES[slotNumber]
+		hotbarInputBox.PlaceholderText = "Slot " .. slotNumber .. " Item Name"
+		hotbarInputBox.PlaceholderColor3 = Colors.TEXT_MUTED
+		hotbarInputBox.TextColor3 = Colors.TEXT
+		hotbarInputBox.Font = Enum.Font.GothamMedium
+		hotbarInputBox.TextSize = 13
+		hotbarInputBox.Size = UDim2.new(1, 0, 0, 30)
+		hotbarInputBox.LayoutOrder = nextLayoutOrder()
+		hotbarInputBox.TextXAlignment = Enum.TextXAlignment.Left
+		hotbarInputBox.ClearTextOnFocus = false
+		hotbarInputBox.Parent = content
+		local hotbarInputCorner = Instance.new("UICorner")
+		hotbarInputCorner.CornerRadius = UDim.new(0, 6)
+		hotbarInputCorner.Parent = hotbarInputBox
+		local hotbarInputPadding = Instance.new("UIPadding")
+		hotbarInputPadding.PaddingLeft = UDim.new(0, 10)
+		hotbarInputPadding.Parent = hotbarInputBox
+		hotbarSlotInputs[slotNumber] = hotbarInputBox
+		registerSectionElement(assignHotbarSection, hotbarInputBox)
+		AutoFarm.hotbarSlotItems[slotNumber] = HOTBAR_DEFAULT_NAMES[slotNumber]
+		hotbarInputBox:GetPropertyChangedSignal("Text"):Connect(function()
+			AutoFarm.hotbarSlotItems[slotNumber] = hotbarInputBox.Text or ""
+		end)
+	end
+
+	-- Auto Clear Hotbar Slot master toggle (enables/disables all 8 slots at once)
+	createToggle("AutoClearHotbarSlot", "Clear Hotbar Slot 1-8", nextLayoutOrder(), content)
+	registerSectionElement(assignHotbarSection, toggleButtons.AutoClearHotbarSlot.btn)
+
+	clearHotbarLogFrame = Instance.new("ScrollingFrame")
+	clearHotbarLogFrame.Name = "ClearHotbarSlotLogs"
+	clearHotbarLogFrame.BackgroundColor3 = Colors.LOG_BG
+	clearHotbarLogFrame.BorderSizePixel = 0
+	clearHotbarLogFrame.ScrollBarImageColor3 = Colors.ACCENT
+	clearHotbarLogFrame.ScrollBarThickness = 6
+	clearHotbarLogFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+	clearHotbarLogFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+	clearHotbarLogFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	clearHotbarLogFrame.Size = UDim2.new(1, 0, 0, 150)
+	clearHotbarLogFrame.LayoutOrder = nextLayoutOrder()
+	clearHotbarLogFrame.ClipsDescendants = true
+	clearHotbarLogFrame.Parent = content
+	registerSectionElement(assignHotbarSection, clearHotbarLogFrame)
+
+	local clearHotbarLogLayout = Instance.new("UIListLayout")
+	clearHotbarLogLayout.Name = "LogLayout"
+	clearHotbarLogLayout.FillDirection = Enum.FillDirection.Vertical
+	clearHotbarLogLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+	clearHotbarLogLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	clearHotbarLogLayout.Padding = UDim.new(0, 2)
+	clearHotbarLogLayout.Parent = clearHotbarLogFrame
+
+	local clearHotbarLogPadding = Instance.new("UIPadding")
+	clearHotbarLogPadding.PaddingTop = UDim.new(0, 6)
+	clearHotbarLogPadding.PaddingBottom = UDim.new(0, 6)
+	clearHotbarLogPadding.PaddingLeft = UDim.new(0, 8)
+	clearHotbarLogPadding.PaddingRight = UDim.new(0, 8)
+	clearHotbarLogPadding.Parent = clearHotbarLogFrame
+
+	clearHotbarLogLabel = Instance.new("TextLabel")
+	clearHotbarLogLabel.Name = "LogHeader"
+	clearHotbarLogLabel.BackgroundTransparency = 1
+	clearHotbarLogLabel.TextColor3 = Colors.ACCENT
+	clearHotbarLogLabel.Font = Enum.Font.GothamBold
+	clearHotbarLogLabel.TextSize = 11
+	clearHotbarLogLabel.TextXAlignment = Enum.TextXAlignment.Left
+	clearHotbarLogLabel.TextYAlignment = Enum.TextYAlignment.Top
+	clearHotbarLogLabel.Size = UDim2.new(1, -16, 0, 18)
+	clearHotbarLogLabel.LayoutOrder = 1
+	clearHotbarLogLabel.Text = "Clear Hotbar Slot Logs"
+	clearHotbarLogLabel.Parent = clearHotbarLogFrame
+	registerSectionElement(assignHotbarSection, clearHotbarLogFrame)
+
+	-- 8 individual slot toggle buttons (each toggles auto-clear for its slot at 0.5s interval)
+	local clearSlotHintLabel = Instance.new("TextLabel")
+	clearSlotHintLabel.Name = "ClearSlotHint"
+	clearSlotHintLabel.BackgroundTransparency = 1
+	clearSlotHintLabel.Text = "Toggle individual slots to auto-clear (each fires every 0.5s):"
+	clearSlotHintLabel.TextColor3 = Colors.TEXT_MUTED
+	clearSlotHintLabel.Font = Enum.Font.GothamMedium
+	clearSlotHintLabel.TextSize = 12
+	clearSlotHintLabel.Size = UDim2.new(1, 0, 0, 18)
+	clearSlotHintLabel.LayoutOrder = nextLayoutOrder()
+	clearSlotHintLabel.TextXAlignment = Enum.TextXAlignment.Left
+	clearSlotHintLabel.Parent = content
+	registerSectionElement(assignHotbarSection, clearSlotHintLabel)
+
+	clearSlotFrame = Instance.new("Frame")
+	clearSlotFrame.Name = "ClearSlotSelectors"
+	clearSlotFrame.BackgroundTransparency = 1
+	clearSlotFrame.Size = UDim2.new(1, 0, 0, 34)
+	clearSlotFrame.LayoutOrder = nextLayoutOrder()
+	clearSlotFrame.Parent = content
+	registerSectionElement(assignHotbarSection, clearSlotFrame)
+
+	local clearSlotLayout = Instance.new("UIListLayout")
+	clearSlotLayout.FillDirection = Enum.FillDirection.Horizontal
+	clearSlotLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	clearSlotLayout.Padding = UDim.new(0, 2)
+	clearSlotLayout.Parent = clearSlotFrame
+
+	for slotNumber = 1, 8 do
+		local slotBtn = Instance.new("TextButton")
+		slotBtn.Name = "ClearSlot" .. slotNumber
+		slotBtn.BackgroundColor3 = Colors.TOGGLE_OFF
+		slotBtn.BorderSizePixel = 0
+		slotBtn.Text = tostring(slotNumber)
+		slotBtn.TextColor3 = Colors.TEXT
+		slotBtn.Font = Enum.Font.GothamBold
+		slotBtn.TextSize = 12
+		slotBtn.Size = UDim2.new(0.125, -1, 1, 0)
+		slotBtn.Parent = clearSlotFrame
+		local slotCorner = Instance.new("UICorner")
+		slotCorner.CornerRadius = UDim.new(0, 6)
+		slotCorner.Parent = slotBtn
+		slotBtn.MouseButton1Click:Connect(function()
+			AutoFarm.autoClearSlots[slotNumber] = not AutoFarm.autoClearSlots[slotNumber]
+			if AutoFarm.autoClearSlots[slotNumber] then
+				slotBtn.BackgroundColor3 = Color3.fromRGB(40, 170, 80)
+			else
+				slotBtn.BackgroundColor3 = Colors.TOGGLE_OFF
+			end
+		end)
+	end
+
+	-- Reference to the food ingredient data module for validating Fruit/Milk/Fish inputs
+	local IngredientDataModule = nil
+	local ingredientDataRef = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("Food") and ReplicatedStorage.Modules.Food:FindFirstChild("IngredientData")
+	if ingredientDataRef then
+		local ok, mod = pcall(require, ingredientDataRef)
+		if ok and type(mod) == "table" then
+			IngredientDataModule = mod
+		end
+	end
+
+	-- Reference to CaughtFish data for fish display names
+	local CaughtFishModule = nil
+	local caughtFishRef = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("ItemDisplayDataCategories") and ReplicatedStorage.Modules.ItemDisplayDataCategories:FindFirstChild("CaughtFish")
+	if caughtFishRef then
+		local okFish, fishMod = pcall(require, caughtFishRef)
+		if okFish and type(fishMod) == "table" then
+			CaughtFishModule = fishMod
+		end
+	end
+
+	-- Validate that an item is a valid cooking ingredient (Fruit, Milk, or Fish)
+	local function isValidCookingIngredient(itemName)
+		if not itemName or itemName == "" then return false end
+		local lower = string.lower(itemName)
+		-- Fruit or Milk via IngredientData
+		if IngredientDataModule then
+			if IngredientDataModule.hasFoodType(itemName, "Fruit") then return true end
+			if IngredientDataModule.hasFoodType(itemName, "Milk") then return true end
+		end
+		-- Fish: item name contains "Fish" or is in the CaughtFish inventory category
+		if string.find(lower, "fish") then return true end
+		local inventoryGui = PlayerGui:FindFirstChild("InventoryGui")
+		if inventoryGui then
+			local mainFrame = inventoryGui:FindFirstChild("MainFrame")
+			local itemsFrame = mainFrame and mainFrame:FindFirstChild("ItemsFrame")
+			if itemsFrame then
+				for _, item in ipairs(itemsFrame:GetChildren()) do
+					local attrName = item:GetAttribute("ItemName")
+					local category = item:GetAttribute("Category")
+					if attrName and string.lower(attrName) == lower and category == "CaughtFish" then
+						return true
+					end
+				end
+			end
+		end
+		return false
+	end
+
+
+
+	-- ===== SECTION 2: AUTO EQUIP / HOLD EGG =====
+	createDivider()
+	local autoEquipHeader, autoEquipSection = createCollapsibleHeader("Auto Held Egg / Fruit")
+
+	-- Egg name input TextBox
+	local eggInputBox = Instance.new("TextBox")
+	eggInputBox.Name = "EggNameInput"
+	eggInputBox.BackgroundColor3 = Colors.LOG_BG
+	eggInputBox.BorderSizePixel = 0
+	eggInputBox.Text = ""
+	eggInputBox.PlaceholderText = "Enter Egg Name (e,g, CowEgg, FoxEgg etc)..."
+	eggInputBox.PlaceholderColor3 = Colors.TEXT_MUTED
+	eggInputBox.TextColor3 = Colors.TEXT
+	eggInputBox.Font = Enum.Font.GothamMedium
+	eggInputBox.TextSize = 14
+	eggInputBox.Size = UDim2.new(1, 0, 0, 34)
+	eggInputBox.LayoutOrder = nextLayoutOrder()
+	eggInputBox.TextXAlignment = Enum.TextXAlignment.Left
+	eggInputBox.ClearTextOnFocus = false
+	eggInputBox.Parent = content
+	registerSectionElement(autoEquipSection, eggInputBox)
+
+	local eggInputCorner = Instance.new("UICorner")
+	eggInputCorner.CornerRadius = UDim.new(0, 6)
+	eggInputCorner.Parent = eggInputBox
+
+	local eggInputPadding = Instance.new("UIPadding")
+	eggInputPadding.PaddingLeft = UDim.new(0, 10)
+	eggInputPadding.Parent = eggInputBox
+
+	eggInputBox:GetPropertyChangedSignal("Text"):Connect(function()
+		AutoFarm.autoEquipEggName = eggInputBox.Text or ""
+	end)
+
+	-- Dynamic egg dropdown populated from ReplicatedStorage.Eggs
+	local eggDropdownContainer = Instance.new("Frame")
+	eggDropdownContainer.Name = "EggDropdownContainer"
+	eggDropdownContainer.BackgroundTransparency = 1
+	eggDropdownContainer.ZIndex = 100
+	eggDropdownContainer.Size = UDim2.new(1, 0, 0, 34)
+	eggDropdownContainer.LayoutOrder = nextLayoutOrder()
+	eggDropdownContainer.Parent = content
+	registerSectionElement(autoEquipSection, eggDropdownContainer)
+
+	local eggDropdownBtn = Instance.new("TextButton")
+	eggDropdownBtn.Name = "EggDropdownButton"
+	eggDropdownBtn.ZIndex = 101
+	eggDropdownBtn.BackgroundColor3 = Colors.LOG_BG
+	eggDropdownBtn.BorderSizePixel = 0
+	eggDropdownBtn.Text = "Select Egg..."
+	eggDropdownBtn.TextColor3 = Colors.TEXT
+	eggDropdownBtn.Font = Enum.Font.GothamMedium
+	eggDropdownBtn.TextSize = 13
+	eggDropdownBtn.Size = UDim2.new(1, 0, 1, 0)
+	eggDropdownBtn.TextXAlignment = Enum.TextXAlignment.Left
+	eggDropdownBtn.Parent = eggDropdownContainer
+	local eggDropdownCorner = Instance.new("UICorner")
+	eggDropdownCorner.CornerRadius = UDim.new(0, 6)
+	eggDropdownCorner.Parent = eggDropdownBtn
+	local eggDropdownPad = Instance.new("UIPadding")
+	eggDropdownPad.PaddingLeft = UDim.new(0, 10)
+	eggDropdownPad.Parent = eggDropdownBtn
+
+	local eggDropdownList = Instance.new("ScrollingFrame")
+	eggDropdownList.Name = "EggDropdownList"
+	eggDropdownList.BackgroundColor3 = Colors.LOG_BG
+	eggDropdownList.BorderSizePixel = 0
+	eggDropdownList.Size = UDim2.new(1, 0, 0, 120)
+	eggDropdownList.Position = UDim2.new(0, 0, 1, 2)
+	eggDropdownList.ScrollBarThickness = 4
+	eggDropdownList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	eggDropdownList.CanvasSize = UDim2.fromOffset(0, 0)
+	eggDropdownList.Visible = false
+	eggDropdownList.ZIndex = 102
+	eggDropdownList.Parent = eggDropdownContainer
+	local eggDropdownListCorner = Instance.new("UICorner")
+	eggDropdownListCorner.CornerRadius = UDim.new(0, 6)
+	eggDropdownListCorner.Parent = eggDropdownList
+	local eggDropdownListLayout = Instance.new("UIListLayout")
+	eggDropdownListLayout.Padding = UDim.new(0, 2)
+	eggDropdownListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	eggDropdownListLayout.Parent = eggDropdownList
+	local eggDropdownListPad = Instance.new("UIPadding")
+	eggDropdownListPad.PaddingTop = UDim.new(0, 4)
+	eggDropdownListPad.PaddingBottom = UDim.new(0, 4)
+	eggDropdownListPad.PaddingLeft = UDim.new(0, 4)
+	eggDropdownListPad.PaddingRight = UDim.new(0, 4)
+	eggDropdownListPad.Parent = eggDropdownList
+
+	local function populateEggDropdown()
+		for _, child in ipairs(eggDropdownList:GetChildren()) do
+			if child:IsA("TextButton") then child:Destroy() end
+		end
+		local eggsFolder = ReplicatedStorage:FindFirstChild("Eggs")
+		if not eggsFolder then return end
+		local eggNames = {}
+		for _, egg in ipairs(eggsFolder:GetChildren()) do
+			if egg:IsA("Instance") and egg.Name ~= "" then
+				table.insert(eggNames, egg.Name)
+			end
+		end
+		table.sort(eggNames)
+		for _, eggName in ipairs(eggNames) do
+			local eggBtn = Instance.new("TextButton")
+			eggBtn.Name = "Egg_" .. eggName
+			eggBtn.BackgroundColor3 = Colors.TOGGLE_OFF
+			eggBtn.BorderSizePixel = 0
+			eggBtn.Text = eggName
+			eggBtn.TextColor3 = Colors.TEXT
+			eggBtn.Font = Enum.Font.GothamMedium
+			eggBtn.TextSize = 12
+			eggBtn.Size = UDim2.new(1, 0, 0, 26)
+			eggBtn.TextXAlignment = Enum.TextXAlignment.Left
+			eggBtn.ZIndex = 103
+			eggBtn.Parent = eggDropdownList
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 5)
+			corner.Parent = eggBtn
+			local pad = Instance.new("UIPadding")
+			pad.PaddingLeft = UDim.new(0, 8)
+			pad.Parent = eggBtn
+			eggBtn.MouseButton1Click:Connect(function()
+				eggInputBox.Text = eggName
+				AutoFarm.autoEquipEggName = eggName
+				eggDropdownBtn.Text = eggName
+				eggDropdownList.Visible = false
+			end)
+		end
+	end
+
+	eggDropdownBtn.MouseButton1Click:Connect(function()
+		eggDropdownList.Visible = not eggDropdownList.Visible
+		if eggDropdownList.Visible then
+			populateEggDropdown()
+		end
+	end)
+
+	-- Close dropdown when clicking elsewhere
+	UserInputService.InputBegan:Connect(function(input)
+		if eggDropdownList.Visible and input.UserInputType == Enum.UserInputType.MouseButton1 then
+			local mousePos = UserInputService:GetMouseLocation()
+			local btnPos = eggDropdownBtn.AbsolutePosition
+			local btnSize = eggDropdownBtn.AbsoluteSize
+			local listPos = eggDropdownList.AbsolutePosition
+			local listSize = eggDropdownList.AbsoluteSize
+			local inBtn = mousePos.X >= btnPos.X and mousePos.X <= btnPos.X + btnSize.X and mousePos.Y >= btnPos.Y and mousePos.Y <= btnPos.Y + btnSize.Y
+			local inList = mousePos.X >= listPos.X and mousePos.X <= listPos.X + listSize.X and mousePos.Y >= listPos.Y and mousePos.Y <= listPos.Y + listSize.Y
+			if not inBtn and not inList then
+				eggDropdownList.Visible = false
+			end
+		end
+	end)
+
+	-- Helper to create auto equip toggle buttons (parented to content)
+	local function createEquipToggle(name, label)
+		local btn = Instance.new("TextButton")
+		btn.Name = name
+		btn.ZIndex = 10
+		btn.BackgroundColor3 = Colors.TOGGLE_OFF
+		btn.BackgroundTransparency = 0
+		btn.BorderSizePixel = 0
+		btn.Text = ""
+		btn.Size = UDim2.new(1, 0, 0, 34)
+		btn.LayoutOrder = nextLayoutOrder()
+		btn.Parent = content
+
+		local corner = Instance.new("UICorner")
+		corner.CornerRadius = UDim.new(0, 6)
+		corner.Parent = btn
+
+		local labelEl = Instance.new("TextLabel")
+		labelEl.BackgroundTransparency = 1
+		labelEl.Text = label
+		labelEl.TextColor3 = Colors.TEXT
+		labelEl.Font = Enum.Font.GothamMedium
+		labelEl.TextSize = 13
+		labelEl.Size = UDim2.new(1, -60, 1, 0)
+		labelEl.Position = UDim2.fromOffset(12, 0)
+		labelEl.TextXAlignment = Enum.TextXAlignment.Left
+		labelEl.ZIndex = 11
+		labelEl.Parent = btn
+
+		local statusEl = Instance.new("TextLabel")
+		statusEl.BackgroundTransparency = 1
+		statusEl.Text = "OFF"
+		statusEl.TextColor3 = Colors.TEXT_MUTED
+		statusEl.Font = Enum.Font.GothamBold
+		statusEl.TextSize = 12
+		statusEl.Size = UDim2.fromOffset(48, 28)
+		statusEl.Position = UDim2.new(1, -54, 0, 2)
+		statusEl.ZIndex = 11
+		statusEl.Parent = btn
+
+		local state = false
+		btn.MouseButton1Click:Connect(function()
+			state = not state
+			if state then
+				statusEl.Text = "ON"
+				statusEl.TextColor3 = Color3.fromRGB(255, 255, 255)
+				btn.BackgroundColor3 = Color3.fromRGB(40, 170, 80)
+			else
+				statusEl.Text = "OFF"
+				statusEl.TextColor3 = Colors.TEXT_MUTED
+				btn.BackgroundColor3 = Colors.TOGGLE_OFF
+			end
+			if name == "CheckInventory" then
+				AutoFarm.autoEquipInv = state
+				AutoFarm.autoHeldFruitInventory = state
+				AutoFarm.autoHeldFruitMode = "Inventory"
+			elseif name == "CheckHotbar" then
+				AutoFarm.autoEquipHotbar = state
+				AutoFarm.autoHeldFruitHotbar = state
+				AutoFarm.autoHeldFruitMode = "Hotbar"
+			end
+		end)
+
+		return btn
+	end
+
+	local autoEquipCheckInventoryButton = createEquipToggle("CheckInventory", "Check Inventory (Egg + Fruit)")
+	local autoEquipCheckHotbarButton = createEquipToggle("CheckHotbar", "Check Hotbar (Egg + Fruit)")
+	local autoHeldFruitModeButton = autoEquipCheckInventoryButton
+	local autoHeldFruitHotbarButton = autoEquipCheckHotbarButton
+	registerSectionElement(autoEquipSection, autoEquipCheckInventoryButton)
+	registerSectionElement(autoEquipSection, autoEquipCheckHotbarButton)
+
+
+	local autoHeldFruitLabel = Instance.new("TextLabel")
+	autoHeldFruitLabel.Name = "AutoHeldFruitHint"
+	autoHeldFruitLabel.BackgroundTransparency = 1
+	autoHeldFruitLabel.Text = "CookingCauldron accepts Fruit/Milk/Fish. Auto Farm checks Inventory and Hotbar to hold each item, fills the selected number of slots per cauldron, then moves to the next cauldron."
+	autoHeldFruitLabel.TextColor3 = Colors.TEXT_MUTED
+	autoHeldFruitLabel.Font = Enum.Font.Gotham
+	autoHeldFruitLabel.TextSize = 11
+	autoHeldFruitLabel.TextWrapped = true
+	autoHeldFruitLabel.Size = UDim2.new(1, 0, 0, 28)
+	autoHeldFruitLabel.LayoutOrder = nextLayoutOrder()
+	autoHeldFruitLabel.Parent = content
+	registerSectionElement(autoEquipSection, autoHeldFruitLabel)
+
+	-- Hint label
+	local equipHintLabel = Instance.new("TextLabel")
+	equipHintLabel.Name = "EquipHint"
+	equipHintLabel.BackgroundTransparency = 1
+	equipHintLabel.Text = "Inv: needs inventory open | Hotbar: no inventory needed"
+	equipHintLabel.TextColor3 = Colors.TEXT_MUTED
+	equipHintLabel.Font = Enum.Font.Gotham
+	equipHintLabel.TextSize = 11
+	equipHintLabel.Size = UDim2.new(1, 0, 0, 16)
+	equipHintLabel.LayoutOrder = nextLayoutOrder()
+	equipHintLabel.TextXAlignment = Enum.TextXAlignment.Left
+	equipHintLabel.Parent = content
+	registerSectionElement(autoEquipSection, equipHintLabel)
+
+	-- Auto Farm Egg & CookingCauldron toggles (moved to Auto Equip section)
+	local autoEggToggle = createToggle("AutoEgg", "Auto Farm Egg", nextLayoutOrder(), content)
+	local autoCookingToggle = createToggle("AutoCookingCauldron", "Auto Farm CookingCauldron", nextLayoutOrder(), content)
+	registerSectionElement(autoEquipSection, autoEggToggle)
+	registerSectionElement(autoEquipSection, autoCookingToggle)
+
+	-- Fruit slot inputs (1-4) for CookingCauldron
+	local fruitSlotInputs = {}
+	local cookingSlotCountInputBox -- forward-declared so fruit slot change handlers can update it
+	for slotNumber = 1, 4 do
+		local fruitInputBox = Instance.new("TextBox")
+		fruitInputBox.Name = "FruitSlot" .. slotNumber .. "Input"
+		fruitInputBox.BackgroundColor3 = Colors.LOG_BG
+		fruitInputBox.BorderSizePixel = 0
+		fruitInputBox.Text = ""
+		fruitInputBox.PlaceholderText = "CookingCauldron Slot " .. slotNumber .. " (Fruit/Milk/Fish)"
+		fruitInputBox.PlaceholderColor3 = Colors.TEXT_MUTED
+		fruitInputBox.TextColor3 = Colors.TEXT
+		fruitInputBox.Font = Enum.Font.GothamMedium
+		fruitInputBox.TextSize = 13
+		fruitInputBox.Size = UDim2.new(1, 0, 0, 30)
+		fruitInputBox.LayoutOrder = nextLayoutOrder()
+		fruitInputBox.TextXAlignment = Enum.TextXAlignment.Left
+		fruitInputBox.ClearTextOnFocus = false
+		fruitInputBox.Parent = content
+		local fruitInputCorner = Instance.new("UICorner")
+		fruitInputCorner.CornerRadius = UDim.new(0, 6)
+		fruitInputCorner.Parent = fruitInputBox
+		local fruitInputPadding = Instance.new("UIPadding")
+		fruitInputPadding.PaddingLeft = UDim.new(0, 10)
+		fruitInputPadding.Parent = fruitInputBox
+		fruitSlotInputs[slotNumber] = fruitInputBox
+		registerSectionElement(autoEquipSection, fruitInputBox)
+		fruitInputBox:GetPropertyChangedSignal("Text"):Connect(function()
+			AutoFarm.fruitSlots[slotNumber] = fruitInputBox.Text or ""
+			if slotNumber == 1 then
+				AutoFarm.autoHeldFruitName = fruitInputBox.Text or ""
+			end
+			-- Auto-update autoCookingFruitSlots based on how many slots have items
+			local filledCount = 0
+			for i = 1, 4 do
+				if AutoFarm.fruitSlots[i] and AutoFarm.fruitSlots[i] ~= "" then
+					filledCount = filledCount + 1
+				end
+			end
+			AutoFarm.autoCookingFruitSlots = math.max(1, filledCount)
+			if cookingSlotCountInputBox then
+				cookingSlotCountInputBox.Text = tostring(AutoFarm.autoCookingFruitSlots)
+			end
+		end)
+	end
+
+	-- Cooking slot count input (how many slots each CookingCauldron fills)
+	cookingSlotCountInputBox = Instance.new("TextBox")
+	cookingSlotCountInputBox.Name = "CookingSlotCountInput"
+	cookingSlotCountInputBox.BackgroundColor3 = Colors.LOG_BG
+	cookingSlotCountInputBox.BorderSizePixel = 0
+	cookingSlotCountInputBox.Text = "1"
+	cookingSlotCountInputBox.PlaceholderText = "Slots per CookingCauldron (1-4)"
+	cookingSlotCountInputBox.PlaceholderColor3 = Colors.TEXT_MUTED
+	cookingSlotCountInputBox.TextColor3 = Colors.TEXT
+	cookingSlotCountInputBox.Font = Enum.Font.GothamMedium
+	cookingSlotCountInputBox.TextSize = 13
+	cookingSlotCountInputBox.Size = UDim2.new(1, 0, 0, 30)
+	cookingSlotCountInputBox.LayoutOrder = nextLayoutOrder()
+	cookingSlotCountInputBox.TextXAlignment = Enum.TextXAlignment.Left
+	cookingSlotCountInputBox.ClearTextOnFocus = false
+	cookingSlotCountInputBox.Parent = content
+	local cookingSlotCountCorner = Instance.new("UICorner")
+	cookingSlotCountCorner.CornerRadius = UDim.new(0, 6)
+	cookingSlotCountCorner.Parent = cookingSlotCountInputBox
+	local cookingSlotCountPadding = Instance.new("UIPadding")
+	cookingSlotCountPadding.PaddingLeft = UDim.new(0, 10)
+	cookingSlotCountPadding.Parent = cookingSlotCountInputBox
+	registerSectionElement(autoEquipSection, cookingSlotCountInputBox)
+	cookingSlotCountInputBox:GetPropertyChangedSignal("Text"):Connect(function()
+		local n = tonumber(cookingSlotCountInputBox.Text)
+		if n then
+			AutoFarm.autoCookingFruitSlots = math.clamp(math.floor(n), 1, 4)
+		end
+	end)
+
+	-- Random Fruit/Milk/Fish toggle buttons
+	local randomFruitToggle = createToggle("RandomFruit", "Random Fruit (Inventory)", nextLayoutOrder(), content)
+	registerSectionElement(autoEquipSection, randomFruitToggle)
+	local randomMilkToggle = createToggle("RandomMilk", "Random Milk (Inventory)", nextLayoutOrder(), content)
+	registerSectionElement(autoEquipSection, randomMilkToggle)
+	local randomFishToggle = createToggle("RandomFish", "Random Fish (Inventory)", nextLayoutOrder(), content)
+	registerSectionElement(autoEquipSection, randomFishToggle)
+
+	-- Avoid Items single input field
+	local avoidInputBox = Instance.new("TextBox")
+	avoidInputBox.Name = "AvoidItemsInput"
+	avoidInputBox.BackgroundColor3 = Colors.LOG_BG
+	avoidInputBox.BorderSizePixel = 0
+	avoidInputBox.Text = AutoFarm.avoidItems or ""
+	avoidInputBox.PlaceholderText = "Avoid Items: Tomato, Carrot, YellowTomato, Apple, Coconut"
+	avoidInputBox.PlaceholderColor3 = Colors.TEXT_MUTED
+	avoidInputBox.TextColor3 = Colors.TEXT
+	avoidInputBox.Font = Enum.Font.GothamMedium
+	avoidInputBox.TextSize = 13
+	avoidInputBox.Size = UDim2.new(1, 0, 0, 30)
+	avoidInputBox.LayoutOrder = nextLayoutOrder()
+	avoidInputBox.TextXAlignment = Enum.TextXAlignment.Left
+	avoidInputBox.ClearTextOnFocus = false
+	avoidInputBox.Parent = content
+	registerSectionElement(autoEquipSection, avoidInputBox)
+	local avoidInputCorner = Instance.new("UICorner")
+	avoidInputCorner.CornerRadius = UDim.new(0, 6)
+	avoidInputCorner.Parent = avoidInputBox
+	local avoidInputPadding = Instance.new("UIPadding")
+	avoidInputPadding.PaddingLeft = UDim.new(0, 10)
+	avoidInputPadding.Parent = avoidInputBox
+	avoidInputBox:GetPropertyChangedSignal("Text"):Connect(function()
+		AutoFarm.avoidItems = avoidInputBox.Text or ""
+	end)
+
+	-- Helper: get avoid items list from comma-separated string
+	local function getAvoidItemsList()
+		local avoidStr = AutoFarm.avoidItems or ""
+		local list = {}
+		for item in string.gmatch(avoidStr, "[^,]+") do
+			item = string.gsub(item, "^%s+", "")
+			item = string.gsub(item, "%s+$", "")
+			if item ~= "" then
+				list[string.lower(item)] = true
+			end
+		end
+		return list
+	end
+
+	-- Helper: pick lowest-quantity item from inventory by category (Fruit/Milk/Fish)
+	-- Respects avoidItems list. Returns item name with lowest quantity.
+	local function pickLowestQuantityFromInventory(category)
+		local inventoryGui = PlayerGui:FindFirstChild("InventoryGui")
+		if not inventoryGui then return nil end
+		local mainFrame = inventoryGui:FindFirstChild("MainFrame")
+		if not mainFrame then return nil end
+		local itemsFrame = mainFrame:FindFirstChild("ItemsFrame")
+		if not itemsFrame then return nil end
+
+		local avoidList = getAvoidItemsList()
+		local candidates = {}
+		for _, item in ipairs(itemsFrame:GetChildren()) do
+			local attrName = item:GetAttribute("ItemName")
+			if attrName and attrName ~= "" then
+				-- Skip avoided items
+				if avoidList[string.lower(attrName)] then
+					continue
+				end
+				local isMatch = false
+				if category == "Fruit" and IngredientDataModule and IngredientDataModule.hasFoodType(attrName, "Fruit") then
+					isMatch = true
+				elseif category == "Milk" and IngredientDataModule and IngredientDataModule.hasFoodType(attrName, "Milk") then
+					isMatch = true
+				elseif category == "Fish" then
+					local lower = string.lower(attrName)
+					if string.find(lower, "fish") then
+						isMatch = true
+					else
+						local cat = item:GetAttribute("Category")
+						if cat == "CaughtFish" then
+							isMatch = true
+						end
+					end
+				end
+				if isMatch then
+					-- Skip favorited items
+					local contentFrame = item:FindFirstChild("ContentFrame")
+					if contentFrame then
+						local favBtn = contentFrame:FindFirstChild("FavoriteButton")
+						if favBtn then
+							local data = favBtn:FindFirstChild("Data")
+							if data and data.Visible then
+								isMatch = false
+							end
+						end
+					end
+				end
+				if isMatch then
+					-- Get quantity from AmountLabel
+					local amount = 999999
+					local contentFrame = item:FindFirstChild("ContentFrame")
+					if contentFrame then
+						local amountLabel = contentFrame:FindFirstChild("AmountLabel")
+						if amountLabel and amountLabel:IsA("TextLabel") then
+							local amt = tonumber(string.match(amountLabel.Text or "", "%d+"))
+							if amt then amount = amt end
+						end
+					end
+					table.insert(candidates, {name = attrName, amount = amount})
+				end
+			end
+		end
+		if #candidates == 0 then return nil end
+		-- Sort by lowest quantity
+		table.sort(candidates, function(a, b) return a.amount < b.amount end)
+		return candidates[1].name
+	end
+
+	-- Continuous 0.1s scanning for random fruit/milk/fish
+	-- Prioritizes items with lowest quantity, respects avoidItems list
+	local lastRandomPick = {Fruit = "", Milk = "", Fish = ""}
+	local function startRandomScanner(category, toggleName)
+		task.spawn(function()
+			while true do
+				task.wait(0.1)
+				if AutoFarm[toggleName == "RandomFruit" and "randomFruit" or toggleName == "RandomMilk" and "randomMilk" or "randomFish"] then
+					local catMap = {RandomFruit = "Fruit", RandomMilk = "Milk", RandomFish = "Fish"}
+					local picked = pickLowestQuantityFromInventory(catMap[toggleName])
+					if picked and picked ~= lastRandomPick[category] then
+						lastRandomPick[category] = picked
+						AutoFarm.fruitSlots[1] = picked
+						AutoFarm.autoHeldFruitName = picked
+						if fruitSlotInputs[1] then fruitSlotInputs[1].Text = picked end
+					end
+				end
+			end
+		end)
+	end
+	startRandomScanner("Fruit", "RandomFruit")
+	startRandomScanner("Milk", "RandomMilk")
+	startRandomScanner("Fish", "RandomFish")
+
+
+
+	-- ===== RECIPE GUIDE & INGREDIENT SELECTOR =====
+	do
+		createDivider()
+		local recipeHeader, recipeSection = createCollapsibleHeader("Recipe Guide & Ingredients")
+
+		local recipeGuideLabel = Instance.new("TextLabel")
+		recipeGuideLabel.Name = "RecipeGuideLabel"
+		recipeGuideLabel.BackgroundColor3 = Colors.LOG_BG
+		recipeGuideLabel.BackgroundTransparency = 0
+		recipeGuideLabel.BorderSizePixel = 0
+		recipeGuideLabel.Text = "Click an ingredient to fill the next empty slot. Use filters to narrow the list. Try recipe presets for quick fills!"
+		recipeGuideLabel.TextColor3 = Colors.TEXT_MUTED
+		recipeGuideLabel.Font = Enum.Font.Gotham
+		recipeGuideLabel.TextSize = 11
+		recipeGuideLabel.TextWrapped = true
+		recipeGuideLabel.AutomaticSize = Enum.AutomaticSize.Y
+		recipeGuideLabel.Size = UDim2.new(1, 0, 0, 0)
+		recipeGuideLabel.LayoutOrder = nextLayoutOrder()
+		recipeGuideLabel.TextXAlignment = Enum.TextXAlignment.Left
+		recipeGuideLabel.Parent = content
+		registerSectionElement(recipeSection, recipeGuideLabel)
+		local recipeGuidePadding = Instance.new("UIPadding")
+		recipeGuidePadding.PaddingLeft = UDim.new(0, 8)
+		recipeGuidePadding.PaddingRight = UDim.new(0, 8)
+		recipeGuidePadding.Parent = recipeGuideLabel
+		local recipeGuideCorner = Instance.new("UICorner")
+		recipeGuideCorner.CornerRadius = UDim.new(0, 6)
+		recipeGuideCorner.Parent = recipeGuideLabel
+
+		-- Ingredient filter buttons row
+		local filterFrame = Instance.new("Frame")
+		filterFrame.Name = "IngredientFilterFrame"
+		filterFrame.BackgroundTransparency = 1
+		filterFrame.Size = UDim2.new(1, 0, 0, 30)
+		filterFrame.LayoutOrder = nextLayoutOrder()
+		filterFrame.Parent = content
+		registerSectionElement(recipeSection, filterFrame)
+		local filterLayout = Instance.new("UIListLayout")
+		filterLayout.FillDirection = Enum.FillDirection.Horizontal
+		filterLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		filterLayout.Padding = UDim.new(0, 4)
+		filterLayout.Parent = filterFrame
+
+		local FILTER_TYPES = {"All", "Berry", "Dairy", "Egg", "Fruit", "Grain", "Milk", "Root", "Savory", "Sweet", "Vegetable"}
+		local activeFilter = "All"
+
+		-- Ingredient list frame
+		local ingredientListFrame = Instance.new("ScrollingFrame")
+		ingredientListFrame.Name = "IngredientListFrame"
+		ingredientListFrame.BackgroundColor3 = Colors.LOG_BG
+		ingredientListFrame.BorderSizePixel = 0
+		ingredientListFrame.Size = UDim2.new(1, 0, 0, 120)
+		ingredientListFrame.LayoutOrder = nextLayoutOrder()
+		ingredientListFrame.ScrollBarThickness = 4
+		ingredientListFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		ingredientListFrame.CanvasSize = UDim2.fromOffset(0, 0)
+		ingredientListFrame.Parent = content
+		registerSectionElement(recipeSection, ingredientListFrame)
+		local ingredientListCorner = Instance.new("UICorner")
+		ingredientListCorner.CornerRadius = UDim.new(0, 6)
+		ingredientListCorner.Parent = ingredientListFrame
+		local ingredientListLayout = Instance.new("UIListLayout")
+		ingredientListLayout.Padding = UDim.new(0, 2)
+		ingredientListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		ingredientListLayout.Parent = ingredientListFrame
+		local ingredientListPadding = Instance.new("UIPadding")
+		ingredientListPadding.PaddingTop = UDim.new(0, 2)
+		ingredientListPadding.PaddingBottom = UDim.new(0, 2)
+		ingredientListPadding.PaddingLeft = UDim.new(0, 4)
+		ingredientListPadding.PaddingRight = UDim.new(0, 4)
+		ingredientListPadding.Parent = ingredientListFrame
+
+		local HARDCODED_INGREDIENTS = {
+			{key = "Apple", display = "Apple", foodTypes = {Fruit = true, Sweet = true}},
+			{key = "Carrot", display = "Carrot", foodTypes = {Vegetable = true, Root = true}},
+			{key = "Tomato", display = "Tomato", foodTypes = {Fruit = true, Vegetable = true, Savory = true}},
+			{key = "Strawberry", display = "Strawberry", foodTypes = {Fruit = true, Berry = true, Sweet = true}},
+			{key = "Corn", display = "Corn", foodTypes = {Vegetable = true, Grain = true, Sweet = true}},
+			{key = "ChickenEggFood", display = "Chicken Egg", foodTypes = {Egg = true}},
+			{key = "Milk", display = "Milk Carton", foodTypes = {Dairy = true, Milk = true}},
+			{key = "FastMilk", display = "Fast Milk", foodTypes = {Dairy = true, Milk = true}},
+			{key = "ChocolateMilk", display = "Chocolate Milk", foodTypes = {Dairy = true, Milk = true, Sweet = true}},
+			{key = "BigMilk", display = "Big Milk", foodTypes = {Dairy = true, Milk = true}},
+			{key = "BigMintyMilk", display = "Big Minty Milk", foodTypes = {Dairy = true, Milk = true, Sweet = true}},
+			{key = "CottonCandyMilk", display = "Cotton Candy Milk", foodTypes = {Dairy = true, Milk = true, Sweet = true}},
+			{key = "StrawberryMilkCarton", display = "Strawberry Milk Carton", foodTypes = {Dairy = true, Milk = true, Sweet = true}},
+			{key = "Turnip", display = "Turnip", foodTypes = {Vegetable = true, Root = true}},
+		}
+
+		local function setFruitSlot(slotNumber, itemName)
+			if slotNumber < 1 or slotNumber > 4 then return end
+			AutoFarm.fruitSlots[slotNumber] = itemName
+			local box = fruitSlotInputs[slotNumber]
+			if box then box.Text = itemName end
+		end
+
+		local function fillFirstEmptySlot(itemName)
+			for i = 1, 4 do
+				local current = AutoFarm.fruitSlots[i] or ""
+				if current == "" then
+					setFruitSlot(i, itemName)
+					return true
+				end
+			end
+			return false
+		end
+
+		local function refreshIngredientList()
+			for _, child in ipairs(ingredientListFrame:GetChildren()) do
+				if child:IsA("TextButton") then child:Destroy() end
+			end
+			local entries = {}
+			for _, ingredient in ipairs(HARDCODED_INGREDIENTS) do
+				local matches = activeFilter == "All"
+				if not matches and ingredient.foodTypes then
+					matches = ingredient.foodTypes[activeFilter] == true
+				end
+				if matches then
+					table.insert(entries, {key = ingredient.key, display = ingredient.display})
+				end
+			end
+			table.sort(entries, function(a, b) return a.display < b.display end)
+			for _, entry in ipairs(entries) do
+				local btn = Instance.new("TextButton")
+				btn.Name = "Ingredient_" .. entry.key
+				btn.BackgroundColor3 = Colors.TOGGLE_OFF
+				btn.BorderSizePixel = 0
+				btn.Text = entry.display
+				btn.TextColor3 = Colors.TEXT
+				btn.Font = Enum.Font.GothamMedium
+				btn.TextSize = 12
+				btn.Size = UDim2.new(1, 0, 0, 26)
+				btn.TextXAlignment = Enum.TextXAlignment.Left
+				btn.Parent = ingredientListFrame
+				local corner = Instance.new("UICorner")
+				corner.CornerRadius = UDim.new(0, 5)
+				corner.Parent = btn
+				local pad = Instance.new("UIPadding")
+				pad.PaddingLeft = UDim.new(0, 8)
+				pad.Parent = btn
+				btn.MouseButton1Click:Connect(function()
+					fillFirstEmptySlot(entry.key)
+				end)
+			end
+		end
+
+		-- Filter buttons (with active highlight)
+		local filterButtons = {}
+		local function updateFilterHighlight()
+			for ft, fb in pairs(filterButtons) do
+				fb.BackgroundColor3 = ft == activeFilter and Colors.TOGGLE_ON or Colors.TOGGLE_OFF
+			end
+		end
+		for _, filterType in ipairs(FILTER_TYPES) do
+			local btn = Instance.new("TextButton")
+			btn.Name = "Filter" .. filterType
+			btn.BackgroundColor3 = filterType == "All" and Colors.TOGGLE_ON or Colors.TOGGLE_OFF
+			btn.BorderSizePixel = 0
+			btn.Text = filterType
+			btn.TextColor3 = Colors.TEXT
+			btn.Font = Enum.Font.GothamBold
+			btn.TextSize = 11
+			btn.Size = UDim2.new(0, 0, 1, 0)
+			btn.AutomaticSize = Enum.AutomaticSize.X
+			btn.Parent = filterFrame
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 6)
+			corner.Parent = btn
+			filterButtons[filterType] = btn
+			btn.MouseButton1Click:Connect(function()
+				activeFilter = filterType
+				updateFilterHighlight()
+				refreshIngredientList()
+			end)
+		end
+
+		-- Current slots display
+		local slotsDisplayLabel = Instance.new("TextLabel")
+		slotsDisplayLabel.Name = "CurrentSlotsDisplay"
+		slotsDisplayLabel.BackgroundColor3 = Colors.LOG_BG
+		slotsDisplayLabel.BackgroundTransparency = 0
+		slotsDisplayLabel.BorderSizePixel = 0
+		slotsDisplayLabel.Text = ""
+		slotsDisplayLabel.TextColor3 = Colors.TEXT
+		slotsDisplayLabel.Font = Enum.Font.GothamMedium
+		slotsDisplayLabel.TextSize = 11
+		slotsDisplayLabel.TextWrapped = true
+		slotsDisplayLabel.AutomaticSize = Enum.AutomaticSize.Y
+		slotsDisplayLabel.Size = UDim2.new(1, 0, 0, 0)
+		slotsDisplayLabel.LayoutOrder = nextLayoutOrder()
+		slotsDisplayLabel.TextXAlignment = Enum.TextXAlignment.Left
+		slotsDisplayLabel.Parent = content
+		registerSectionElement(recipeSection, slotsDisplayLabel)
+		local slotsDisplayPad = Instance.new("UIPadding")
+		slotsDisplayPad.PaddingLeft = UDim.new(0, 8)
+		slotsDisplayPad.PaddingRight = UDim.new(0, 8)
+		slotsDisplayPad.PaddingTop = UDim.new(0, 4)
+		slotsDisplayPad.PaddingBottom = UDim.new(0, 4)
+		slotsDisplayPad.Parent = slotsDisplayLabel
+		local slotsDisplayCorner = Instance.new("UICorner")
+		slotsDisplayCorner.CornerRadius = UDim.new(0, 6)
+		slotsDisplayCorner.Parent = slotsDisplayLabel
+
+		local function updateSlotsDisplay()
+			local parts = {}
+			for i = 1, 4 do
+				local item = AutoFarm.fruitSlots[i] or ""
+				if item == "" then item = "Empty" end
+				table.insert(parts, "Slot" .. i .. ": " .. item)
+			end
+			slotsDisplayLabel.Text = "Current Slots:  " .. table.concat(parts, "  |  ")
+		end
+
+		-- Update slots display when fruit slot inputs change
+		for slotNum = 1, 4 do
+			local box = fruitSlotInputs[slotNum]
+			if box then
+				box:GetPropertyChangedSignal("Text"):Connect(updateSlotsDisplay)
+			end
+		end
+		updateSlotsDisplay()
+
+		refreshIngredientList()
+
+		-- Recipe preset buttons (Salad Bowl, Stew, Tomato Soup)
+		local recipePresetsFrame = Instance.new("Frame")
+		recipePresetsFrame.Name = "RecipePresetsFrame"
+		recipePresetsFrame.BackgroundTransparency = 1
+		recipePresetsFrame.Size = UDim2.new(1, 0, 0, 30)
+		recipePresetsFrame.LayoutOrder = nextLayoutOrder()
+		recipePresetsFrame.Parent = content
+		registerSectionElement(recipeSection, recipePresetsFrame)
+		local recipePresetsLayout = Instance.new("UIListLayout")
+		recipePresetsLayout.FillDirection = Enum.FillDirection.Horizontal
+		recipePresetsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		recipePresetsLayout.Padding = UDim.new(0, 4)
+		recipePresetsLayout.Parent = recipePresetsFrame
+
+		local RECIPE_PRESETS = {
+			{name = "Salad Bowl", ingredients = {"Carrot", "", "", ""}},
+			{name = "Stew", ingredients = {"Carrot", "Carrot", "Carrot", "Carrot"}},
+			{name = "Tomato Soup", ingredients = {"Tomato", "Tomato", "Milk", "Tomato"}},
+		}
+
+		for _, preset in ipairs(RECIPE_PRESETS) do
+			local btn = Instance.new("TextButton")
+			btn.Name = preset.name
+			btn.BackgroundColor3 = Colors.TOGGLE_OFF
+			btn.BorderSizePixel = 0
+			btn.Text = preset.name
+			btn.TextColor3 = Colors.TEXT
+			btn.Font = Enum.Font.GothamBold
+			btn.TextSize = 11
+			btn.Size = UDim2.new(0.33, -2, 1, 0)
+			btn.Parent = recipePresetsFrame
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 6)
+			corner.Parent = btn
+			btn.MouseButton1Click:Connect(function()
+				-- Fixed recipe presets
+				for i = 1, 4 do
+					setFruitSlot(i, preset.ingredients[i] or "")
+				end
+			end)
+		end
+
+		-- Random fill buttons
+		local randomFrame = Instance.new("Frame")
+		randomFrame.Name = "RandomIngredientFrame"
+		randomFrame.BackgroundTransparency = 1
+		randomFrame.Size = UDim2.new(1, 0, 0, 30)
+		randomFrame.LayoutOrder = nextLayoutOrder()
+		randomFrame.Parent = content
+		registerSectionElement(recipeSection, randomFrame)
+		local randomLayout = Instance.new("UIListLayout")
+		randomLayout.FillDirection = Enum.FillDirection.Horizontal
+		randomLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+		randomLayout.Padding = UDim.new(0, 6)
+		randomLayout.Parent = randomFrame
+
+		local function createRandomButton(text, onClick)
+			local btn = Instance.new("TextButton")
+			btn.Name = text
+			btn.BackgroundColor3 = Colors.TOGGLE_OFF
+			btn.BorderSizePixel = 0
+			btn.Text = text
+			btn.TextColor3 = Colors.TEXT
+			btn.Font = Enum.Font.GothamBold
+			btn.TextSize = 12
+			btn.Size = UDim2.new(0.5, -3, 1, 0)
+			btn.Parent = randomFrame
+			local corner = Instance.new("UICorner")
+			corner.CornerRadius = UDim.new(0, 6)
+			corner.Parent = btn
+			btn.MouseButton1Click:Connect(onClick)
+			return btn
+		end
+
+		createRandomButton("Random Fill", function()
+			local available = {}
+			for _, ingredient in ipairs(HARDCODED_INGREDIENTS) do
+				table.insert(available, ingredient.key)
+			end
+			if #available == 0 then return end
+			for i = 1, 4 do
+				setFruitSlot(i, available[math.random(#available)])
+			end
+		end)
+
+		createRandomButton("Clear Slots", function()
+			for i = 1, 4 do
+				setFruitSlot(i, "")
+			end
+		end)
+
+		refreshIngredientList()
+	end
+
+	-- ===== PREDICTOR LOGS SECTION =====
+	createDivider()
+	local incubatorPredictFrame
+	local cauldronPredictFrame
+	local fishCatchFrame
+	do
+		local predictorHeader, predictorSection = createCollapsibleHeader("Predictor Logs")
+
+		local incubatorPredictLabel = Instance.new("TextLabel")
+		incubatorPredictLabel.Name = "IncubatorPredictLabel"
+		incubatorPredictLabel.BackgroundTransparency = 1
+		incubatorPredictLabel.Text = "Incubator Pet Logs"
+		incubatorPredictLabel.TextColor3 = Colors.INCUBATOR_ACCENT
+		incubatorPredictLabel.Font = Enum.Font.GothamBold
+		incubatorPredictLabel.TextSize = 12
+		incubatorPredictLabel.Size = UDim2.new(1, 0, 0, 18)
+		incubatorPredictLabel.LayoutOrder = nextLayoutOrder()
+		incubatorPredictLabel.TextXAlignment = Enum.TextXAlignment.Left
+		incubatorPredictLabel.Parent = content
+
+		-- Sort by dropdown for Incubator Pet Logs
+		local incubatorSortFrame = Instance.new("Frame")
+		incubatorSortFrame.Name = "IncubatorSortFrame"
+		incubatorSortFrame.BackgroundTransparency = 1
+		incubatorSortFrame.Size = UDim2.new(1, 0, 0, 24)
+		incubatorSortFrame.LayoutOrder = nextLayoutOrder()
+		incubatorSortFrame.Parent = content
+		local incubatorSortLayout = Instance.new("UIListLayout")
+		incubatorSortLayout.FillDirection = Enum.FillDirection.Horizontal
+		incubatorSortLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		incubatorSortLayout.Padding = UDim.new(0, 4)
+		incubatorSortLayout.Parent = incubatorSortFrame
+
+		local incubatorSortLabel = Instance.new("TextLabel")
+		incubatorSortLabel.BackgroundTransparency = 1
+		incubatorSortLabel.Text = "Sort by:"
+		incubatorSortLabel.TextColor3 = Colors.TEXT_MUTED
+		incubatorSortLabel.Font = Enum.Font.GothamMedium
+		incubatorSortLabel.TextSize = 11
+		incubatorSortLabel.Size = UDim2.new(0, 50, 1, 0)
+		incubatorSortLabel.TextXAlignment = Enum.TextXAlignment.Left
+		incubatorSortLabel.Parent = incubatorSortFrame
+
+		incubatorSortMode = "Default"
+		local incubatorSortLabel2 = Instance.new("TextLabel")
+		incubatorSortLabel2.BackgroundTransparency = 1
+		incubatorSortLabel2.Text = "Default"
+		incubatorSortLabel2.TextColor3 = Colors.TOGGLE_ON
+		incubatorSortLabel2.Font = Enum.Font.GothamBold
+		incubatorSortLabel2.TextSize = 11
+		incubatorSortLabel2.Size = UDim2.new(0, 0, 1, 0)
+		incubatorSortLabel2.AutomaticSize = Enum.AutomaticSize.X
+		incubatorSortLabel2.Parent = incubatorSortFrame
+
+		local scanIncubatorsButton = Instance.new("TextButton")
+		scanIncubatorsButton.Name = "ScanIncubatorsButton"
+		scanIncubatorsButton.BackgroundColor3 = Colors.TOGGLE_OFF
+		scanIncubatorsButton.BorderSizePixel = 0
+		scanIncubatorsButton.Text = "Scan All Incubators"
+		scanIncubatorsButton.TextColor3 = Colors.TEXT
+		scanIncubatorsButton.Font = Enum.Font.GothamBold
+		scanIncubatorsButton.TextSize = 12
+		scanIncubatorsButton.Size = UDim2.new(1, 0, 0, 26)
+		scanIncubatorsButton.LayoutOrder = nextLayoutOrder()
+		scanIncubatorsButton.Parent = content
+		local scanCorner = Instance.new("UICorner")
+		scanCorner.CornerRadius = UDim.new(0, 6)
+		scanCorner.Parent = scanIncubatorsButton
+		scanIncubatorsButton.MouseButton1Click:Connect(function()
+			if scanAllIncubators then
+				scanAllIncubators()
+			end
+		end)
+
+		incubatorPredictFrame = Instance.new("ScrollingFrame")
+		incubatorPredictFrame.Name = "IncubatorPredictFrame"
+		incubatorPredictFrame.BackgroundColor3 = Colors.LOG_BG
+		incubatorPredictFrame.BorderSizePixel = 0
+		incubatorPredictFrame.Size = UDim2.new(1, 0, 0, 170)
+		incubatorPredictFrame.LayoutOrder = nextLayoutOrder()
+		incubatorPredictFrame.ScrollBarThickness = 4
+		incubatorPredictFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		incubatorPredictFrame.CanvasSize = UDim2.fromOffset(0, 0)
+		incubatorPredictFrame.Parent = content
+		local incubatorPredictCorner = Instance.new("UICorner")
+		incubatorPredictCorner.CornerRadius = UDim.new(0, 6)
+		incubatorPredictCorner.Parent = incubatorPredictFrame
+		local incubatorPredictLayout = Instance.new("UIListLayout")
+		incubatorPredictLayout.Padding = UDim.new(0, 2)
+		incubatorPredictLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		incubatorPredictLayout.Parent = incubatorPredictFrame
+		local incubatorPredictPadding = Instance.new("UIPadding")
+		incubatorPredictPadding.PaddingTop = UDim.new(0, 2)
+		incubatorPredictPadding.PaddingBottom = UDim.new(0, 2)
+		incubatorPredictPadding.PaddingLeft = UDim.new(0, 4)
+		incubatorPredictPadding.PaddingRight = UDim.new(0, 4)
+		incubatorPredictPadding.Parent = incubatorPredictFrame
+
+		local cauldronPredictLabel = Instance.new("TextLabel")
+		cauldronPredictLabel.Name = "CauldronPredictLabel"
+		cauldronPredictLabel.BackgroundTransparency = 1
+		cauldronPredictLabel.Text = "Cauldron Food Logs"
+		cauldronPredictLabel.TextColor3 = Colors.CAULDRON_ACCENT
+		cauldronPredictLabel.Font = Enum.Font.GothamBold
+		cauldronPredictLabel.TextSize = 12
+		cauldronPredictLabel.Size = UDim2.new(1, 0, 0, 18)
+		cauldronPredictLabel.LayoutOrder = nextLayoutOrder()
+		cauldronPredictLabel.TextXAlignment = Enum.TextXAlignment.Left
+		cauldronPredictLabel.Parent = content
+
+		-- Sort by dropdown for Cauldron Food Logs
+		local cauldronSortFrame = Instance.new("Frame")
+		cauldronSortFrame.Name = "CauldronSortFrame"
+		cauldronSortFrame.BackgroundTransparency = 1
+		cauldronSortFrame.Size = UDim2.new(1, 0, 0, 24)
+		cauldronSortFrame.LayoutOrder = nextLayoutOrder()
+		cauldronSortFrame.Parent = content
+		local cauldronSortLayout = Instance.new("UIListLayout")
+		cauldronSortLayout.FillDirection = Enum.FillDirection.Horizontal
+		cauldronSortLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+		cauldronSortLayout.Padding = UDim.new(0, 4)
+		cauldronSortLayout.Parent = cauldronSortFrame
+
+		local cauldronSortLabel = Instance.new("TextLabel")
+		cauldronSortLabel.BackgroundTransparency = 1
+		cauldronSortLabel.Text = "Sort by:"
+		cauldronSortLabel.TextColor3 = Colors.TEXT_MUTED
+		cauldronSortLabel.Font = Enum.Font.GothamMedium
+		cauldronSortLabel.TextSize = 11
+		cauldronSortLabel.Size = UDim2.new(0, 50, 1, 0)
+		cauldronSortLabel.TextXAlignment = Enum.TextXAlignment.Left
+		cauldronSortLabel.Parent = cauldronSortFrame
+
+		cauldronSortMode = "Default"
+		local cauldronSortLabel2 = Instance.new("TextLabel")
+		cauldronSortLabel2.BackgroundTransparency = 1
+		cauldronSortLabel2.Text = "Default"
+		cauldronSortLabel2.TextColor3 = Colors.TOGGLE_ON
+		cauldronSortLabel2.Font = Enum.Font.GothamBold
+		cauldronSortLabel2.TextSize = 11
+		cauldronSortLabel2.Size = UDim2.new(0, 0, 1, 0)
+		cauldronSortLabel2.AutomaticSize = Enum.AutomaticSize.X
+		cauldronSortLabel2.Parent = cauldronSortFrame
+
+		cauldronPredictFrame = Instance.new("ScrollingFrame")
+		cauldronPredictFrame.Name = "CauldronPredictFrame"
+		cauldronPredictFrame.BackgroundColor3 = Colors.LOG_BG
+		cauldronPredictFrame.BorderSizePixel = 0
+		cauldronPredictFrame.Size = UDim2.new(1, 0, 0, 170)
+		cauldronPredictFrame.LayoutOrder = nextLayoutOrder()
+		cauldronPredictFrame.ScrollBarThickness = 4
+		cauldronPredictFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		cauldronPredictFrame.CanvasSize = UDim2.fromOffset(0, 0)
+		cauldronPredictFrame.Parent = content
+		local cauldronPredictCorner = Instance.new("UICorner")
+		cauldronPredictCorner.CornerRadius = UDim.new(0, 6)
+		cauldronPredictCorner.Parent = cauldronPredictFrame
+		local cauldronPredictLayout = Instance.new("UIListLayout")
+		cauldronPredictLayout.Padding = UDim.new(0, 2)
+		cauldronPredictLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		cauldronPredictLayout.Parent = cauldronPredictFrame
+		local cauldronPredictPadding = Instance.new("UIPadding")
+		cauldronPredictPadding.PaddingTop = UDim.new(0, 2)
+		cauldronPredictPadding.PaddingBottom = UDim.new(0, 2)
+		cauldronPredictPadding.PaddingLeft = UDim.new(0, 4)
+		cauldronPredictPadding.PaddingRight = UDim.new(0, 4)
+		cauldronPredictPadding.Parent = cauldronPredictFrame
+
+		registerSectionElement(predictorSection, incubatorPredictLabel)
+		registerSectionElement(predictorSection, incubatorSortFrame)
+		registerSectionElement(predictorSection, scanIncubatorsButton)
+		registerSectionElement(predictorSection, incubatorPredictFrame)
+		registerSectionElement(predictorSection, cauldronPredictLabel)
+		registerSectionElement(predictorSection, cauldronSortFrame)
+		registerSectionElement(predictorSection, cauldronPredictFrame)
+	end
+
+
+	do
+		-- ===== SECTION 4: QUEST BOARD LOG =====
+		createDivider()
+		local questSectionHeader = Instance.new("TextButton")
+		questSectionHeader.Name = "QuestBoardLogsHeader"
+		questSectionHeader.BackgroundTransparency = 1
+		questSectionHeader.Text = "-  Quests Board Logs"
+		questSectionHeader.TextColor3 = Colors.ACCENT
+		questSectionHeader.Font = Enum.Font.GothamBold
+		questSectionHeader.TextSize = 14
+		questSectionHeader.Size = UDim2.new(1, 0, 0, 22)
+		questSectionHeader.LayoutOrder = nextLayoutOrder()
+		questSectionHeader.TextXAlignment = Enum.TextXAlignment.Left
+		questSectionHeader.Parent = content
+
+		-- Quests Board toggle (moved from Main Toggles to Quests Board Logs section)
+		local questBoardShowToggle = createToggle("QuestBoardShow", "Quests Board", nextLayoutOrder(), content)
+
+		local questBoardActions = Instance.new("Frame")
+		questBoardActions.Name = "QuestBoardActions"
+		questBoardActions.BackgroundTransparency = 1
+		questBoardActions.Size = UDim2.new(1, 0, 0, 76)
+		questBoardActions.LayoutOrder = nextLayoutOrder()
+		questBoardActions.Parent = content
+
+		local questActionsLayout = Instance.new("UIListLayout")
+		questActionsLayout.Padding = UDim.new(0, 6)
+		questActionsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		questActionsLayout.Parent = questBoardActions
+
+		local clearQuestLogButton = Instance.new("TextButton")
+		clearQuestLogButton.Name = "ClearQuestLogButton"
+		clearQuestLogButton.BackgroundColor3 = Colors.TOGGLE_OFF
+		clearQuestLogButton.BorderSizePixel = 0
+		clearQuestLogButton.Text = "Clear Logs"
+		clearQuestLogButton.TextColor3 = Colors.TEXT
+		clearQuestLogButton.Font = Enum.Font.GothamBold
+		clearQuestLogButton.TextSize = 12
+		clearQuestLogButton.Size = UDim2.new(1, 0, 0, 34)
+		clearQuestLogButton.Parent = questBoardActions
+
+		local questTpButton = Instance.new("TextButton")
+		questTpButton.Name = "QuestTpButton"
+		questTpButton.BackgroundColor3 = Colors.TOGGLE_OFF
+		questTpButton.BorderSizePixel = 0
+		questTpButton.Text = "Teleport to Quest Board"
+		questTpButton.TextColor3 = Colors.TEXT
+		questTpButton.Font = Enum.Font.GothamBold
+		questTpButton.TextSize = 12
+		questTpButton.Size = UDim2.new(1, 0, 0, 34)
+		questTpButton.Parent = questBoardActions
+		local questTpCorner2 = Instance.new("UICorner")
+		questTpCorner2.CornerRadius = UDim.new(0, 6)
+		questTpCorner2.Parent = questTpButton
+		local questBoardButtonStatus = Instance.new("TextLabel")
+		questBoardButtonStatus.Name = "QuestBoardButtonStatus"
+		questBoardButtonStatus.BackgroundTransparency = 1
+		questBoardButtonStatus.Text = ""
+		questBoardButtonStatus.TextColor3 = Colors.TEXT_MUTED
+		questBoardButtonStatus.Font = Enum.Font.Gotham
+		questBoardButtonStatus.TextSize = 11
+		questBoardButtonStatus.Size = UDim2.new(1, 0, 0, 18)
+		questBoardButtonStatus.Position = UDim2.fromOffset(0, 40)
+		questBoardButtonStatus.Parent = questBoardActions
+
+		questTpButton.MouseButton1Click:Connect(function()
+			questBoardButtonStatus.Text = "Teleporting to quest board..."
+			task.spawn(function()
+				local ok, msg = triggerQuestBoardPrompt()
+				questBoardButtonStatus.Text = ok and "Quest board opened" or ("Failed: " .. tostring(msg))
+			end)
+		end)
+
+		local clearQuestLogCorner = Instance.new("UICorner")
+		clearQuestLogCorner.CornerRadius = UDim.new(0, 6)
+		clearQuestLogCorner.Parent = clearQuestLogButton
+
+		local guideLabel = Instance.new("TextLabel")
+		guideLabel.Name = "InstructionsGuide"
+		guideLabel.BackgroundColor3 = Colors.LOG_BG
+		guideLabel.BackgroundTransparency = 0
+		guideLabel.BorderSizePixel = 0
+		guideLabel.Text = "."
+		guideLabel.TextColor3 = Colors.TEXT_MUTED
+		guideLabel.Font = Enum.Font.Gotham
+		guideLabel.TextSize = 11
+		guideLabel.TextWrapped = true
+		guideLabel.AutomaticSize = Enum.AutomaticSize.Y
+		guideLabel.Size = UDim2.new(1, 0, 0, 0)
+		guideLabel.LayoutOrder = -1
+		guideLabel.TextXAlignment = Enum.TextXAlignment.Left
+		guideLabel.Parent = content
+		local guidePadding = Instance.new("UIPadding")
+		guidePadding.PaddingLeft = UDim.new(0, 8)
+		guidePadding.PaddingRight = UDim.new(0, 8)
+		guidePadding.Parent = guideLabel
+		local guideCorner = Instance.new("UICorner")
+		guideCorner.CornerRadius = UDim.new(0, 6)
+		guideCorner.Parent = guideLabel
+
+		-- Fixed text scales: all logs at 100%
+		qs = function(size)
+			return math.floor(size * 1.0)
+		end
+		ps = function(size)
+			return math.floor(size * 1.0)
+		end
+
+		questLogFrame = Instance.new("ScrollingFrame")
+		questLogFrame.Name = "QuestLogFrame"
+		questLogFrame.BackgroundColor3 = Colors.LOG_BG
+		questLogFrame.BorderSizePixel = 0
+		questLogFrame.Size = UDim2.new(1, 0, 0, 240)
+		questLogFrame.ScrollBarImageColor3 = Colors.ACCENT
+		questLogFrame.ScrollingDirection = Enum.ScrollingDirection.Y
+		questLogFrame.LayoutOrder = nextLayoutOrder()
+		questLogFrame.ScrollBarThickness = 4
+		questLogFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		questLogFrame.CanvasSize = UDim2.fromOffset(0, 0)
+		questLogFrame.Parent = content
+
+		local questLogCorner = Instance.new("UICorner")
+		questLogCorner.CornerRadius = UDim.new(0, 6)
+		questLogCorner.Parent = questLogFrame
+
+		local questLogLayout = Instance.new("UIListLayout")
+		questLogLayout.Padding = UDim.new(0, 6)
+		questLogLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		questLogLayout.Parent = questLogFrame
+
+		local questLogPadding = Instance.new("UIPadding")
+		questLogPadding.PaddingTop = UDim.new(0, 4)
+		questLogPadding.PaddingBottom = UDim.new(0, 4)
+		questLogPadding.PaddingLeft = UDim.new(0, 6)
+		questLogPadding.PaddingRight = UDim.new(0, 6)
+		questLogPadding.Parent = questLogFrame
+
+		-- Forward declaration for updateQuestLog (defined later in Part 5)
+		questLogEntries = {}
+		guiSnapshotEntries = {}
+		questLogHistory = {}
+		questLogCleared = false
+
+		clearQuestLogEntries = function()
+			for _, entry in ipairs(questLogEntries) do
+				if entry and entry.Parent then
+					entry:Destroy()
+				end
+			end
+			questLogEntries = {}
+		end
+
+		clearQuestLogButton.MouseButton1Click:Connect(function()
+			questLogCleared = true
+			table.clear(questLogHistory)
+			clearQuestLogEntries()
+			questLogFrame.CanvasPosition = Vector2.zero
+		end)
+
+		local tooltipHost = Instance.new("Frame")
+		tooltipHost.Name = "TooltipHost"
+		tooltipHost.BackgroundTransparency = 1
+		tooltipHost.Size = UDim2.fromOffset(250, 0)
+		tooltipHost.AutomaticSize = Enum.AutomaticSize.Y
+		tooltipHost.AnchorPoint = Vector2.new(0, 0)
+		tooltipHost.Position = UDim2.new(0, 12, 0, 40)
+		tooltipHost.ZIndex = 100
+		tooltipHost.Visible = false
+		tooltipHost.Parent = screenGui
+
+		local tooltipLabel = Instance.new("TextLabel")
+		tooltipLabel.Name = "Tooltip"
+		tooltipLabel.BackgroundColor3 = Colors.BG
+		tooltipLabel.BackgroundTransparency = 0.05
+		tooltipLabel.BorderSizePixel = 0
+		tooltipLabel.TextColor3 = Colors.TEXT
+		tooltipLabel.Font = Enum.Font.Gotham
+		tooltipLabel.TextSize = 11
+		tooltipLabel.TextWrapped = true
+		tooltipLabel.AutomaticSize = Enum.AutomaticSize.Y
+		tooltipLabel.Size = UDim2.new(1, 0, 0, 0)
+		tooltipLabel.ZIndex = 101
+		tooltipLabel.Parent = tooltipHost
+		local tooltipCorner = Instance.new("UICorner")
+		tooltipCorner.CornerRadius = UDim.new(0, 6)
+		tooltipCorner.Parent = tooltipLabel
+		local tooltipPadding = Instance.new("UIPadding")
+		tooltipPadding.PaddingTop = UDim.new(0, 6)
+		tooltipPadding.PaddingBottom = UDim.new(0, 6)
+		tooltipPadding.PaddingLeft = UDim.new(0, 8)
+		tooltipPadding.PaddingRight = UDim.new(0, 8)
+		tooltipPadding.Parent = tooltipLabel
+
+		local tooltipTarget
+		local function addTooltip(button, text)
+			button.MouseEnter:Connect(function()
+				tooltipTarget = button
+				tooltipLabel.Text = text
+				tooltipHost.Visible = true
+				local absolutePosition = button.AbsolutePosition
+				local absoluteSize = button.AbsoluteSize
+				local viewport = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(800, 600)
+				local x = math.clamp(absolutePosition.X, 4, math.max(4, viewport.X - 254))
+				local y = absolutePosition.Y + absoluteSize.Y + 4
+				if y + 80 > viewport.Y then
+					y = math.max(4, absolutePosition.Y - 84)
+				end
+				tooltipHost.Position = UDim2.fromOffset(x, y)
+			end)
+			button.MouseLeave:Connect(function()
+				if tooltipTarget == button then
+					tooltipTarget = nil
+					tooltipHost.Visible = false
+				end
+			end)
+		end
+
+		for toggleName, toggleData in pairs(toggleButtons) do
+			addTooltip(toggleData.btn, "Toggle " .. toggleName .. " on or off.")
+		end
+
+		addTooltip(toggleButtons.MasterToggle.btn, "Start Farming is the master toggle. Enable it before any Auto Farm Egg, quest, or auto-equip toggle can run.")
+		addTooltip(toggleButtons.AutoEgg.btn, "Runs the incubator farming loop. Start Farming must also be ON.")
+		addTooltip(toggleButtons.AutoCookingCauldron.btn, "Automatically equips the selected fruit and triggers the CookingCauldron prompt. Start Farming must also be ON.")
+		addTooltip(toggleButtons.AutoClaim.btn, "Automatically claims completed quests. Start Farming must also be ON.")
+		for slotNumber, inputBox in ipairs(fruitSlotInputs) do
+			addTooltip(inputBox, "Fruit assigned to CookingCauldron slot " .. slotNumber .. ". Leave empty to skip this slot.")
+		end
+		addTooltip(cookingSlotCountInputBox, "Choose how many Fruit/Milk/Fish slots each CookingCauldron should fill, from 1 to 4 (max is 4).")
+		addTooltip(autoEquipCheckInventoryButton, "Checks Inventory for the configured egg and fruit items.")
+		addTooltip(autoEquipCheckHotbarButton, "Checks Hotbar for the configured egg and fruit items.")
+		addTooltip(toggleButtons.AutoRefresh.btn, "Automatically refreshes the quest board after all quests are completed and claimed. Start Farming must also be ON.")
+		addTooltip(autoEquipCheckInventoryButton, "Checks and equips configured eggs and fruits from Inventory.")
+		addTooltip(autoEquipCheckHotbarButton, "Checks and equips configured eggs and fruits from Hotbar.")
+
+		addTooltip(clearQuestLogButton, "Clears the visible quest history. New progress updates will be logged automatically.")
+		addTooltip(questSectionHeader, "Show or hide quest progress, status, rewards, and descriptions. Click the heading to minimize this log.")
+		addTooltip(minBtn, "Minimize or restore the entire Auto Farm Panel.")
+		addTooltip(closeBtn, "Hide the panel. Use the AF button to reopen it.")
+		addTooltip(destroyBtn, "Destroy this Auto Farm GUI permanently until the script runs again.")
+		addTooltip(eggInputBox, "Choose an egg by entering CowEgg or FoxEgg, then enable an Auto Equip option.")
+		addTooltip(guideLabel, "Follow every numbered instruction in this guide before enabling automation.")
+
+		questSectionHeader.MouseButton1Click:Connect(function()
+			questBoardActions.Visible = not questBoardActions.Visible
+			questBoardButtonStatus.Visible = questBoardActions.Visible
+			questLogFrame.Visible = questBoardActions.Visible
+			questBoardShowToggle.Visible = questBoardActions.Visible
+			questSectionHeader.Text = (questBoardActions.Visible and "-  " or "+  ") .. "Quests Board Logs"
+		end)
+
+
+		-- Dragging logic
+		local dragging = false
+		local dragStart
+		local panelStart
+		header.InputBegan:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				dragging = true
+				dragStart = input.Position
+				panelStart = mainPanel.Position
+				input.Changed:Connect(function()
+					if input.UserInputState == Enum.UserInputState.End then
+						dragging = false
+					end
+				end)
+			end
+		end)
+
+		UserInputService.InputChanged:Connect(function(input)
+			if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+				local delta = input.Position - dragStart
+				mainPanel.Position = UDim2.new(panelStart.X.Scale, panelStart.X.Offset + delta.X, panelStart.Y.Scale, panelStart.Y.Offset + delta.Y)
+			end
+		end)
+
+		-- Minimize logic
+		local minimized = false
+		minBtn.MouseButton1Click:Connect(function()
+			minimized = not minimized
+			if minimized then
+				mainPanel.Size = UDim2.fromOffset(380, 38)
+				minBtn.Text = "+"
+				content.Visible = false
+			else
+				mainPanel.Size = UDim2.fromOffset(380, 560)
+				minBtn.Text = "-"
+				content.Visible = true
+			end
+		end)
+
+		-- Close (hide) logic
+		closeBtn.MouseButton1Click:Connect(function()
+			mainPanel.Visible = false
+			reopenBtn.Visible = true
+		end)
+
+		reopenBtn.MouseButton1Click:Connect(function()
+			mainPanel.Visible = true
+			reopenBtn.Visible = false
+		end)
+
+		-- Destroy logic
+		destroyBtn.MouseButton1Click:Connect(function()
+			screenGui:Destroy()
+		end)
+
+
+
+		-- ===== QUEST LOG RENDERING =====
+
+		questLogEntries = {} -- reuse forward-declared local
+
+		-- Create a visual progress bar: green = completed, white/gray = remaining
+		local function makeQuestProgressBar(parent, current, goal)
+			local barContainer = Instance.new("Frame")
+			barContainer.Name = "ProgressBar"
+			barContainer.BackgroundTransparency = 1
+			barContainer.Size = UDim2.new(1, 0, 0, 10)
+			barContainer.LayoutOrder = 5
+			barContainer.Parent = parent
+
+			-- Background (white/gray = remaining)
+			local bgBar = Instance.new("Frame")
+			bgBar.Name = "BgBar"
+			bgBar.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
+			bgBar.BorderSizePixel = 0
+			bgBar.Size = UDim2.fromScale(1, 1)
+			bgBar.Parent = barContainer
+
+			local bgCorner = Instance.new("UICorner")
+			bgCorner.CornerRadius = UDim.new(1, 0)
+			bgCorner.Parent = bgBar
+
+			-- Fill (green = completed progress)
+			local ratio = 0
+			if goal and goal > 0 then
+				ratio = math.clamp(current / goal, 0, 1)
+			end
+
+			if ratio > 0 then
+				local fillBar = Instance.new("Frame")
+				fillBar.Name = "FillBar"
+				fillBar.BackgroundColor3 = Color3.fromRGB(80, 220, 100)
+				fillBar.BorderSizePixel = 0
+				fillBar.Size = UDim2.fromScale(ratio, 1)
+				fillBar.Parent = bgBar
+
+				local fillCorner = Instance.new("UICorner")
+				fillCorner.CornerRadius = UDim.new(1, 0)
+				fillCorner.Parent = fillBar
+			end
+
+			return barContainer
+		end
+
+		-- Format a number with thousands separators (e.g. 10000 -> 10,000)
+		local function formatNumber(n)
+			n = tonumber(n) or 0
+			local s = tostring(math.floor(n))
+			local formatted = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+			formatted = formatted:gsub("^,", "")
+			return formatted
+		end
+
+		-- Get reward text from quest data (deduplicated, no double reward)
+		local function getQuestRewardText(rewardPreview)
+			if type(rewardPreview) ~= "table" or #rewardPreview == 0 then
+				return "Reward: Unknown"
+			end
+			local parts = {}
+			local seen = {}
+			for _, reward in ipairs(rewardPreview) do
+				if type(reward) == "table" then
+					local name = reward.DisplayName or reward.RewardId or reward.ItemName or "Reward"
+					local amount = tonumber(reward.Amount or reward.Quantity) or 1
+					local key = tostring(name)
+					if not seen[key] then
+						seen[key] = true
+						if amount > 1 then
+							table.insert(parts, "x" .. formatNumber(amount) .. " " .. tostring(name))
+						else
+							table.insert(parts, tostring(name))
+						end
+					end
+				end
+			end
+			if #parts == 0 then return "Reward: Unknown" end
+			return "Reward: " .. table.concat(parts, ", ")
+		end
+
+		-- Update the quest board log with current quest state
+		renderQuestSummary = function(totalQuests, inProgress)
+			for _, entry in ipairs(questLogEntries) do
+				if entry and entry.Parent then
+					entry:Destroy()
+				end
+			end
+			questLogEntries = {}
+			for _, entry in ipairs(guiSnapshotEntries) do
+				if entry and entry.Parent then
+					entry:Destroy()
+				end
+			end
+			guiSnapshotEntries = {}
+
+			local existingSummary = questLogFrame:FindFirstChild("QuestSummary")
+			if existingSummary then
+				existingSummary:Destroy()
+			end
+
+			local summary = Instance.new("TextLabel")
+			summary.Name = "QuestSummary"
+			summary.BackgroundTransparency = 1
+			summary.TextColor3 = Colors.TEXT
+			summary.Font = Enum.Font.GothamBold
+			summary.TextSize = qs(12)
+			summary.Size = UDim2.new(1, 0, 0, 20)
+			summary.LayoutOrder = 0
+			summary.TextXAlignment = Enum.TextXAlignment.Left
+			summary.Text = string.format("ALL QUESTS %d | IN PROGRESS %d/%d", totalQuests, inProgress, totalQuests)
+			summary.Parent = questLogFrame
+			table.insert(questLogEntries, summary)
+		end
+
+		-- Render quest rows into the quest log frame, updating entries in place so the
+		-- log never disappears when the quest board GUI opens/closes.
+		renderQuestLog = function(rows)
+			if type(rows) ~= "table" then return end
+
+			-- Map existing entries by their key (stored as an attribute)
+			local existing = {}
+			for _, entry in ipairs(questLogEntries) do
+				if entry and entry.Parent then
+					existing[entry:GetAttribute("Key")] = entry
+				end
+			end
+
+			-- Remove entries whose key is no longer present
+			local newKeys = {}
+			for _, row in ipairs(rows) do
+				newKeys[row.key] = true
+			end
+			for key, entry in pairs(existing) do
+				if not newKeys[key] then
+					entry:Destroy()
+				end
+			end
+
+			-- Update or create entries in place
+			local newEntries = {}
+			for i, row in ipairs(rows) do
+				local entry = existing[row.key]
+				if not entry or not entry.Parent then
+					entry = Instance.new("Frame")
+					entry.BackgroundColor3 = Colors.LOG_ENTRY
+					entry.BorderSizePixel = 0
+					entry.Size = UDim2.new(1, 0, 0, 0)
+					entry.AutomaticSize = Enum.AutomaticSize.Y
+					entry.LayoutOrder = i
+					entry.Parent = questLogFrame
+					entry:SetAttribute("Key", row.key)
+					local corner = Instance.new("UICorner")
+					corner.CornerRadius = UDim.new(0, 6)
+					corner.Parent = entry
+					local pad = Instance.new("UIPadding")
+					pad.PaddingTop = UDim.new(0, 6)
+					pad.PaddingBottom = UDim.new(0, 6)
+					pad.PaddingLeft = UDim.new(0, 8)
+					pad.PaddingRight = UDim.new(0, 8)
+					pad.Parent = entry
+					local layout = Instance.new("UIListLayout")
+					layout.Padding = UDim.new(0, 3)
+					layout.SortOrder = Enum.SortOrder.LayoutOrder
+					layout.Parent = entry
+				end
+
+				-- Clear existing text children so we can rebuild them
+				for _, child in ipairs(entry:GetChildren()) do
+					if child:IsA("TextLabel") or child:IsA("Frame") then
+						child:Destroy()
+					end
+				end
+
+				-- Summary header row
+				if row.key == "summary" then
+					local title = Instance.new("TextLabel")
+					title.BackgroundTransparency = 1
+					title.Text = row.title
+					title.TextColor3 = Colors.TEXT
+					title.Font = Enum.Font.GothamBold
+					title.TextSize = qs(12)
+					title.Size = UDim2.new(1, 0, 0, 18)
+					title.TextXAlignment = Enum.TextXAlignment.Left
+					title.Parent = entry
+				else
+					-- Title + status row
+					local titleRow = Instance.new("Frame")
+					titleRow.BackgroundTransparency = 1
+					titleRow.Size = UDim2.new(1, 0, 0, 18)
+					titleRow.LayoutOrder = 1
+					titleRow.Parent = entry
+
+					local title = Instance.new("TextLabel")
+					title.BackgroundTransparency = 1
+					title.Text = row.title
+					title.TextColor3 = Colors.TEXT
+					title.Font = Enum.Font.GothamBold
+					title.TextSize = qs(11)
+					title.Size = UDim2.new(0.7, 0, 1, 0)
+					title.TextXAlignment = Enum.TextXAlignment.Left
+					title.Parent = titleRow
+
+					local status = Instance.new("TextLabel")
+					status.BackgroundTransparency = 1
+					status.Text = row.status
+					status.TextColor3 = row.statusColor or Colors.TEXT
+					status.Font = Enum.Font.GothamBold
+					status.TextSize = qs(11)
+					status.Size = UDim2.new(0.3, 0, 1, 0)
+					status.Position = UDim2.new(0.7, 0, 0, 0)
+					status.TextXAlignment = Enum.TextXAlignment.Right
+					status.Parent = titleRow
+
+					-- Description
+					if row.description and row.description ~= "" then
+						local desc = Instance.new("TextLabel")
+						desc.BackgroundTransparency = 1
+						desc.Text = row.description
+						desc.TextColor3 = Colors.TEXT_MUTED
+						desc.Font = Enum.Font.Gotham
+						desc.TextSize = qs(10)
+						desc.TextWrapped = true
+						desc.AutomaticSize = Enum.AutomaticSize.Y
+						desc.Size = UDim2.new(1, 0, 0, 0)
+						desc.TextXAlignment = Enum.TextXAlignment.Left
+						desc.LayoutOrder = 2
+						desc.Parent = entry
+					end
+
+					-- Reward
+					if row.reward and row.reward ~= "" then
+						local reward = Instance.new("TextLabel")
+						reward.BackgroundTransparency = 1
+						reward.Text = row.reward
+						reward.TextColor3 = Colors.ACCENT_2
+						reward.Font = Enum.Font.GothamMedium
+						reward.TextSize = qs(10)
+						reward.Size = UDim2.new(1, 0, 0, 16)
+						reward.TextXAlignment = Enum.TextXAlignment.Left
+						reward.LayoutOrder = 3
+						reward.Parent = entry
+					end
+
+					-- Progress text + bar
+					if row.progress and row.progress ~= "" then
+						local progress = Instance.new("TextLabel")
+						progress.BackgroundTransparency = 1
+						progress.Text = row.progress
+						progress.TextColor3 = Colors.TEXT
+						progress.Font = Enum.Font.Gotham
+						progress.TextSize = qs(10)
+						progress.Size = UDim2.new(1, 0, 0, 16)
+						progress.TextXAlignment = Enum.TextXAlignment.Left
+						progress.LayoutOrder = 4
+						progress.Parent = entry
+
+						if row.goal and row.goal > 0 then
+							makeQuestProgressBar(entry, row.progressValue or 0, row.goal)
+						end
+					end
+				end
+
+				table.insert(newEntries, entry)
+			end
+			questLogEntries = newEntries
+		end
+
+		updateQuestLog = function(questState)
+			local quests = questState and questState.Quests
+			if type(quests) ~= "table" then
+				return
+			end
+
+			local limitedQuests = {}
+			local seenQuestKeys = {}
+			for _, quest in ipairs(quests) do
+				local questKey = tostring(quest.QuestId or quest.DisplayName or quest.Description or "Quest")
+				if not seenQuestKeys[questKey] and #limitedQuests < 6 then
+					seenQuestKeys[questKey] = true
+					table.insert(limitedQuests, quest)
+				end
+			end
+			quests = limitedQuests
+
+			local totalQuests = #quests
+			local inProgress = 0
+			for _, quest in ipairs(quests) do
+				-- IN PROGRESS counts quests that are completed or claimed
+				if quest.Completed == true or quest.Claimed == true then
+					inProgress = inProgress + 1
+				end
+			end
+
+			-- Update report rows (updates in place, never wipes the log)
+			local rows = {}
+			table.insert(rows, {
+				key = "summary",
+				title = string.format("ALL QUESTS %d | IN PROGRESS %d/%d", totalQuests, inProgress, totalQuests),
+			})
+
+			for i, quest in ipairs(quests) do
+				local isCompleted = quest.Completed == true
+				local isClaimed = quest.Claimed == true
+
+				local statusText = "In Progress"
+				local statusColor = Color3.fromRGB(255, 200, 80)
+				if isClaimed then
+					statusText = "Claimed"
+					statusColor = Color3.fromRGB(150, 150, 160)
+				elseif isCompleted then
+					statusText = "Claim"
+					statusColor = Color3.fromRGB(100, 255, 100)
+				end
+
+				local goal = math.max(1, math.floor(tonumber(quest.Goal or quest.Target or quest.Required) or 1))
+				local progress = math.min(goal, math.max(0, math.floor(tonumber(quest.Progress or quest.CurrentProgress or quest.ProgressValue) or 0)))
+				local unit = tostring(quest.ProgressUnit or "")
+				local progressText
+				if unit == "" then
+					progressText = string.format("Progress: %d / %d", progress, goal)
+				else
+					progressText = string.format("Progress: %d / %d %s", progress, goal, unit)
+				end
+				local rewardText = getQuestRewardText(quest.RewardPreview)
+				if rewardText == "Reward: Unknown" then rewardText = "" end
+
+				table.insert(rows, {
+					key = tostring(quest.QuestId or quest.DisplayName or "Quest"),
+					title = tostring(quest.DisplayName or "Quest"),
+					status = statusText,
+					statusColor = statusColor,
+					description = tostring(quest.Description or ""),
+					reward = rewardText,
+					progress = progressText,
+					progressValue = progress,
+					goal = goal,
+				})
+			end
+
+			renderQuestLog(rows)
+		end
+	end
+
+	print("[AutoFarm] Part 3 loaded: GUI created")
+
+	do
+		findCookingCauldrons = function(plot)
+			local placedFurniture = plot and plot:FindFirstChild("PlacedFurniture")
+			if not placedFurniture then return {} end
+
+			local cauldrons = {}
+			for _, item in ipairs(placedFurniture:GetChildren()) do
+				local applianceId = item:GetAttribute("ApplianceId")
+				local applianceType = item:GetAttribute("ApplianceType")
+				local interactableType = item:GetAttribute("InteractableType")
+				local isCookingStation = applianceType == "CookingStation" or interactableType == "CookingStation"
+				local isCookingCauldron = applianceType == "CookingCauldron" or interactableType == "CookingCauldron"
+				if string.find(item.Name, "CookingCauldron")
+					or (type(applianceId) == "string" and string.find(applianceId, "CookingCauldron"))
+					or isCookingStation or isCookingCauldron
+					or item:GetAttribute("IsCookingStation") == true
+					or item:GetAttribute("IsCookingAppliance") == true
+				then
+					table.insert(cauldrons, item)
+				end
+			end
+			return cauldrons
+		end
+
+		findCookingPrompts = function(cauldron)
+			local prompts = {}
+			for _, descendant in ipairs(cauldron:GetDescendants()) do
+				if descendant:IsA("ProximityPrompt") then
+					table.insert(prompts, descendant)
+				end
+			end
+			return prompts
+		end
+
+		fireCookingPrompt = function(prompt)
+			if not prompt then
+				return false
+			end
+			if type(fireproximityprompt) == "function" then
+				local success = pcall(function()
+					fireproximityprompt(prompt)
+				end)
+				if success then
+					return true
+				end
+			end
+			return pressE(0.35)
+		end
+
+		cookingStates = {}
+		serverTimeOffset = 0 -- difference between server time and local os.time()
+
+		local function getServerNow()
+			return os.time() + serverTimeOffset
+		end
+
+		getCauldronPlacementId = function(cauldron)
+			local value = cauldron:GetAttribute("PlacementId") or cauldron:GetAttribute("RecordId")
+			return value and tostring(value) or ""
+		end
+
+		local function requestCauldronState(placementId)
+			if RequestCookingState and placementId ~= "" then
+				pcall(function()
+					RequestCookingState:FireServer(placementId)
+				end)
+			end
+		end
+
+		waitForCauldronState = function(placementId, timeout)
+			if placementId == "" then return nil end
+			local deadline = os.clock() + timeout
+			requestCauldronState(placementId)
+			while os.clock() < deadline do
+				local state = cookingStates[placementId]
+				if state then return state end
+				task.wait(0.08)
+				requestCauldronState(placementId)
+			end
+			return cookingStates[placementId]
+		end
+
+		cauldronHasStartedCooking = function(state)
+			return type(state) == "table" and type(state.CookingJob) == "table"
+		end
+
+		isCookingJobReady = function(state)
+			if type(state) ~= "table" then return false end
+			local job = state.CookingJob
+			if type(job) ~= "table" then return false end
+			local finishAt = tonumber(job.FinishAt)
+			return finishAt ~= nil and finishAt <= getServerNow()
+		end
+
+		triggerCookingCauldron = function(cauldron, fruitSlots, placementId, shouldStart)
+			local prompts = findCookingPrompts(cauldron)
+			local addPrompt = prompts[1]
+			local startPrompt = prompts[2] or addPrompt
+			local interactionPart = cauldron:FindFirstChild("InteractionPart", true)
+			if not interactionPart and addPrompt then
+				interactionPart = addPrompt.Parent
+			end
+			if not interactionPart or not interactionPart:IsA("BasePart") then
+				return false, "CookingCauldron interaction part not found"
+			end
+			if not addPrompt then
+				return false, "CookingCauldron ProximityPrompt not found"
+			end
+
+			-- Open the cooking appliance UI via remote
+			if OpenCookingApplianceUi then
+				pcall(function()
+					OpenCookingApplianceUi:FireServer(placementId)
+				end)
+			end
+
+			teleportToPart(interactionPart)
+			task.wait(0.2)
+
+			-- Add food to each slot by firing the proximity prompt
+			for _ = 1, math.clamp(fruitSlots, 1, 4) do
+				if not fireCookingPrompt(addPrompt) then
+					return false, "CookingCauldron add-food prompt could not be triggered"
+				end
+				task.wait(0.25)
+			end
+
+			if shouldStart == false then
+				return true, waitForCauldronState(placementId, 0.25)
+			end
+			-- Unequip food so the start cooking prompt can work
+			unequipFood()
+			task.wait(0.15)
+
+			-- Try RequestStartCooking remote first
+			if RequestStartCooking then
+				pcall(function()
+					RequestStartCooking:FireServer(placementId)
+				end)
+			end
+
+			local state = waitForCauldronState(placementId, 0.8)
+			if cauldronHasStartedCooking(state) and not isCookingJobReady(state) then
+				return true, state
+			end
+
+			-- Fallback: fire the start prompt directly
+			for attempt = 1, 4 do
+				teleportToPart(interactionPart)
+				task.wait(0.15)
+				fireCookingPrompt(startPrompt)
+				task.wait(0.35)
+				state = waitForCauldronState(placementId, 0.7)
+				if cauldronHasStartedCooking(state) and not isCookingJobReady(state) then
+					return true, state
+				end
+			end
+			return false, "CookingCauldron did not start after retrying the start prompt"
+		end
+
+		cookingBusy = false
+		local cookingLogEntries = {}
+
+		getCookingStateText = function(state, fruitName)
+			local ingredients = {}
+			local filledCount = 0
+			local configuredSlots = AutoFarm.fruitSlots or {"", "", "", ""}
+			if type(state) == "table" then
+				local source = state.PendingIngredients or state.Ingredients
+				if type(source) == "table" then
+					for i = 1, 4 do
+						local ingredient = source[i]
+						if type(ingredient) == "table" then
+							ingredient = ingredient.ItemName or ingredient.ItemTypeId or ingredient.Name
+						end
+						if ingredient ~= nil and tostring(ingredient) ~= "" then
+							filledCount += 1
+						end
+						ingredients[i] = tostring(ingredient or "")
+					end
+				end
+				filledCount = math.max(filledCount, tonumber(state.IngredientCount) or 0)
+			end
+			local job = type(state) == "table" and state.CookingJob or nil
+			local finishAt = type(job) == "table" and tonumber(job.FinishAt) or nil
+			local timer = finishAt and formatTime(math.max(0, finishAt - getServerNow())) or "-"
+			local result = type(job) == "table" and (job.OutputDisplayName or job.OutputItemName) or "-"
+			local status = "Hold food to add"
+			if type(job) == "table" then
+				status = finishAt and finishAt <= getServerNow() and "Ready" or "Cook"
+			elseif filledCount > 0 then
+				status = "Cook"
+			end
+			for i = 1, 4 do
+				if ingredients[i] == "" then
+					ingredients[i] = "Empty"
+				end
+			end
+
+			-- Fallback: read from CookingApplianceGui UI if state is incomplete
+			if type(state) ~= "table" or (not job and filledCount == 0) then
+				local cookingGui = PlayerGui:FindFirstChild("CookingApplianceGui")
+				if cookingGui and cookingGui.Enabled then
+					local cauldronFrame = cookingGui:FindFirstChild("CauldronFrame")
+					if cauldronFrame then
+						local statusLabel = cauldronFrame:FindFirstChild("StatusLabel")
+						local timerLabel = cauldronFrame:FindFirstChild("TimerLabel")
+						local resultLabel = cauldronFrame:FindFirstChild("ResultLabel")
+						if statusLabel and statusLabel:IsA("TextLabel") and statusLabel.Text ~= "" then
+							local uiStatus = statusLabel.Text
+							if string.find(uiStatus, "Ready") then
+								status = "Ready"
+								timer = "0s"
+							elseif string.find(uiStatus, "Cooking") then
+								status = "Cook"
+								timer = string.gsub(uiStatus, "Cooking%s*", "")
+								if timer == "" then timer = "-" end
+							elseif string.find(uiStatus, "Cook") then
+								status = "Cook"
+							elseif string.find(uiStatus, "Hold food") then
+								status = "Hold food to add"
+							end
+						end
+						if timerLabel and timerLabel:IsA("TextLabel") and timerLabel.Text ~= "" then
+							timer = timerLabel.Text
+						end
+						if resultLabel and resultLabel:IsA("TextLabel") and resultLabel.Text ~= "" then
+							result = resultLabel.Text
+						end
+					end
+				end
+			end
+			return ingredients, filledCount, timer, status, tostring(result)
+		end
+
+		-- ===== PET PREDICTION DATA =====
+		-- Predicts the most likely pet for each egg type based on hatch probabilities.
+		local PET_PREDICTION = {}
+		local function normalizeName(s)
+			return string.gsub(string.lower(tostring(s or "")), "%s+", "")
+		end
+		local function buildPetPrediction()
+			local cats = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("ItemDisplayDataCategories")
+			local petsRef = cats and cats:FindFirstChild("Pets")
+			if not petsRef then return end
+			local ok, petsModule = pcall(require, petsRef)
+			if not ok or type(petsModule) ~= "table" then return end
+
+			local eggs = {}
+			local pets = {}
+			for _, data in pairs(petsModule) do
+				if type(data) == "table" then
+					if data.ItemType == "PetEgg" and type(data.DisplayName) == "string" then
+						table.insert(eggs, data.DisplayName)
+					elseif data.ItemType == "Pet" and type(data.DisplayName) == "string" then
+						table.insert(pets, data.DisplayName)
+					end
+				end
+			end
+
+			for _, eggName in ipairs(eggs) do
+				local keyword = eggName
+				keyword = string.gsub(keyword, "Premium", "")
+				keyword = string.gsub(keyword, "Basic", "")
+				keyword = string.gsub(keyword, "Spotted", "")
+				keyword = string.gsub(keyword, "Pet", "")
+				keyword = string.gsub(keyword, "Egg", "")
+				keyword = string.gsub(keyword, "%s+", "")
+				local kw = normalizeName(keyword)
+				if kw == "" then
+					kw = normalizeName(string.gsub(eggName, "Egg", ""))
+				end
+
+				local matches = {}
+				for _, petName in ipairs(pets) do
+					if string.find(normalizeName(petName), kw) then
+						table.insert(matches, petName)
+					end
+				end
+				if #matches == 0 then
+					for i = 1, math.min(5, #pets) do
+						table.insert(matches, pets[i])
+					end
+				end
+
+				local prediction = {}
+				local chance = 100 / #matches
+				for _, petName in ipairs(matches) do
+					table.insert(prediction, { name = petName, chance = chance })
+				end
+				PET_PREDICTION[eggName] = prediction
+			end
+		end
+		buildPetPrediction()
+
+		-- ===== PET RARITY DATA (loaded from the game's Pets module) =====
+		-- Accurate rarity comes from ReplicatedStorage.Modules.ItemDisplayDataCategories.Pets.
+		-- This keeps the predictor in sync with the real game data instead of hardcoded values.
+		local PET_RARITIES = {}
+		local function loadPetRarity()
+			local cats = ReplicatedStorage:FindFirstChild("Modules") and ReplicatedStorage.Modules:FindFirstChild("ItemDisplayDataCategories")
+			local petsRef = cats and cats:FindFirstChild("Pets")
+			if not petsRef then return end
+			local ok, petsModule = pcall(require, petsRef)
+			if not ok or type(petsModule) ~= "table" then return end
+			for _, petData in pairs(petsModule) do
+				if type(petData) == "table" and petData.ItemType == "Pet" then
+					local displayName = petData.DisplayName
+					local rarity = petData.Rarity
+					if type(displayName) == "string" and type(rarity) == "string" then
+						PET_RARITIES[displayName] = rarity
+					end
+				end
+			end
+		end
+		loadPetRarity()
+
+		-- Return the most likely pet for a given egg name (case-insensitive).
+		local function predictPetFromEgg(eggName)
+			if not eggName or eggName == "" then return "No Egg" end
+			local lower = normalizeName(eggName)
+			for egg, pets in pairs(PET_PREDICTION) do
+				if normalizeName(egg) == lower then
+					local best = pets[1]
+					for _, p in ipairs(pets) do
+						if p.chance > best.chance then best = p end
+					end
+					return best.name
+				end
+			end
+			return "Unknown"
+		end
+
+		-- ===== PET PREDICTION LOOKUP =====
+		-- Return the best-pet prediction data (name + chance) for an egg.
+		local function getPredPetData(eggName)
+			local lower = normalizeName(eggName)
+			if lower == "" then return nil end
+			for egg, pets in pairs(PET_PREDICTION) do
+				if normalizeName(egg) == lower then
+					local best = pets[1]
+					for _, p in ipairs(pets) do
+						if p.chance > best.chance then best = p end
+					end
+					return best
+				end
+			end
+			for egg, pets in pairs(PET_PREDICTION) do
+				local eggNorm = normalizeName(egg)
+				if string.find(lower, eggNorm) or string.find(eggNorm, lower) then
+					local best = pets[1]
+					for _, p in ipairs(pets) do
+						if p.chance > best.chance then best = p end
+					end
+					return best
+				end
+			end
+			return nil
+		end
+
+		-- Predict the hatched pet from an egg name (returns the best pet name).
+		local function predictHatchedPet(eggName)
+			local best = getPredPetData(eggName)
+			return best and best.name or "Unknown"
+		end
+
+		-- ===== PREDICTOR LOGS RENDER =====
+		-- Log formatting helpers
+		local function formatPercent(v)
+			local n = tonumber(v) or 0
+			local rounded = math.floor(n * 10 + 0.5) / 10
+			if rounded == math.floor(rounded) then
+				return tostring(math.floor(rounded))
+			end
+			return string.format("%.1f", rounded)
+		end
+		local function makeLogEntry(frame, text, color)
+			local entry = Instance.new("TextLabel")
+			entry.BackgroundTransparency = 1
+			entry.Text = text
+			entry.TextColor3 = color or Colors.TEXT
+			entry.Font = Enum.Font.Gotham
+			entry.TextSize = ps(11)
+			entry.Size = UDim2.new(1, 0, 0, 18)
+			entry.TextXAlignment = Enum.TextXAlignment.Left
+			entry.TextYAlignment = Enum.TextYAlignment.Top
+			entry.TextWrapped = true
+			entry.AutomaticSize = Enum.AutomaticSize.Y
+			entry.Parent = frame
+			return entry
+		end
+		local incubatorPredictEntries = {}
+		updateIncubatorPredictorLog = function(incubatorDataList)
+			for _, entry in ipairs(incubatorPredictEntries) do
+				if entry and entry.Parent then entry:Destroy() end
+			end
+			incubatorPredictEntries = {}
+			if #incubatorDataList == 0 then
+				local empty = Instance.new("TextLabel")
+				empty.BackgroundTransparency = 1
+				empty.Text = "No incubators found"
+				empty.TextColor3 = Colors.TEXT_MUTED
+				empty.Font = Enum.Font.Gotham
+				empty.TextSize = ps(11)
+				empty.Size = UDim2.new(1, 0, 0, 18)
+				empty.TextXAlignment = Enum.TextXAlignment.Left
+				empty.Parent = incubatorPredictFrame
+				table.insert(incubatorPredictEntries, empty)
+				return
+			end
+			local shown = 0
+			-- Sort incubator data based on selected sort mode
+			local sortedList = {}
+			for _, data in ipairs(incubatorDataList) do
+				table.insert(sortedList, data)
+			end
+			for i, data in ipairs(sortedList) do
+				local eggName = tostring(data.eggItemName or "")
+				local incubatorType = "Basic Incubator"
+				if string.find(string.lower(tostring(data.name or "")), "fast") then
+					incubatorType = "Fast Incubator"
+				end
+				local entry
+				if eggName == "" or data.isEmpty then
+					-- Empty incubator: IncubatorType - Nil - Nil (in red)
+					entry = makeLogEntry(incubatorPredictFrame, string.format("%s - Nil - Nil", incubatorType), Colors.RED)
+				else
+					local timer = formatTime(data.remainingSeconds or 0)
+					local timerText = timer
+					local isDone = data.isDone or (data.remainingSeconds or 0) <= 0
+					if isDone then
+						timerText = "Done✅"
+					end
+					-- Format: IncubatorType - Timer/Done✅ - EggName
+					entry = makeLogEntry(incubatorPredictFrame, string.format("%s - %s - %s", incubatorType, timerText, eggName), isDone and Colors.TOGGLE_ON or Colors.TEXT)
+				end
+				table.insert(incubatorPredictEntries, entry)
+				shown += 1
+			end
+			if shown == 0 then
+				local empty = Instance.new("TextLabel")
+				empty.BackgroundTransparency = 1
+				empty.Text = "No active incubators"
+				empty.TextColor3 = Colors.TEXT_MUTED
+				empty.Font = Enum.Font.Gotham
+				empty.TextSize = ps(11)
+				empty.Size = UDim2.new(1, 0, 0, 18)
+				empty.TextXAlignment = Enum.TextXAlignment.Left
+				empty.Parent = incubatorPredictFrame
+				table.insert(incubatorPredictEntries, empty)
+			end
+		end
+
+		scanAllIncubators = function()
+			local plot = findPlayerPlot()
+			if not plot then
+				updateIncubatorPredictorLog({})
+				return
+			end
+			local incubators = findIncubators(plot)
+			local logData = {}
+			for i, incubator in ipairs(incubators) do
+				local status = getIncubatorStatus(incubator)
+				logData[i] = {
+					name = incubator.Name,
+					totalSeconds = status.totalSeconds or 0,
+					remainingSeconds = status.remainingSeconds or 0,
+					isDone = status.isDone,
+					isEmpty = status.isEmpty,
+					signText = status.signText,
+					eggItemName = status.eggItemName,
+				}
+			end
+			updateIncubatorPredictorLog(logData)
+		end
+
+		local cauldronPredictEntries = {}
+		local function updateCauldronPredictLog(logData)
+			for _, entry in ipairs(cauldronPredictEntries) do
+				if entry and entry.Parent then entry:Destroy() end
+			end
+			cauldronPredictEntries = {}
+			if #logData == 0 then
+				local empty = Instance.new("TextLabel")
+				empty.BackgroundTransparency = 1
+				empty.Text = "No CookingCauldrons found"
+				empty.TextColor3 = Colors.TEXT_MUTED
+				empty.Font = Enum.Font.Gotham
+				empty.TextSize = ps(11)
+				empty.Size = UDim2.new(1, 0, 0, 18)
+				empty.TextXAlignment = Enum.TextXAlignment.Left
+				empty.Parent = cauldronPredictFrame
+				table.insert(cauldronPredictEntries, empty)
+				return
+			end
+			-- Sort log data based on selected sort mode
+			local sortedLogData = {}
+			for _, data in ipairs(logData) do
+				table.insert(sortedLogData, data)
+			end
+			for i, data in ipairs(sortedLogData) do
+				local result = tostring(data.result or "")
+				if result == "" or result == "-" then result = "Nil" end
+				local timer = tostring(data.timer or "")
+				if timer == "" or timer == "-" then timer = "Nil" end
+				local isDone = tostring(data.status or "") == "Ready" or (result ~= "Nil" and timer == "0s")
+				local isClaimed = result == "Nil" and timer == "Nil"
+				local timerText
+				if isClaimed then
+					timerText = "Nil"
+				elseif isDone then
+					timerText = "Done✅"
+				else
+					timerText = timer
+				end
+				local slots = data.ingredients or {"Empty", "Empty", "Empty", "Empty"}
+				local slotParts = {}
+				for s = 1, 4 do
+					local name = tostring(slots[s] or "")
+					if name == "" or name == "-" then name = "Empty" end
+					table.insert(slotParts, name)
+				end
+				local entry
+				if isClaimed then
+					-- Claimed/empty: Cauldron - Nil - Nil - Empty - Empty - Empty - Empty (in red)
+					entry = makeLogEntry(cauldronPredictFrame, string.format("Cauldron - %s - %s - %s", result, timerText, table.concat(slotParts, " - ")), Colors.RED)
+				elseif isDone then
+					-- Done format: Cauldron - FoodName - Done✅ - Slot1 - Slot2 - Slot3 - Slot4
+					entry = makeLogEntry(cauldronPredictFrame, string.format("Cauldron - %s - %s - %s", result, timerText, table.concat(slotParts, " - ")), Colors.TOGGLE_ON)
+				else
+					-- In progress format: Cauldron - FoodName - Timer - Slot1 - Slot2 - Slot3 - Slot4
+					entry = makeLogEntry(cauldronPredictFrame, string.format("Cauldron - %s - %s - %s", result, timerText, table.concat(slotParts, " - ")), Colors.TEXT)
+				end
+				table.insert(cauldronPredictEntries, entry)
+			end
+		end
+
+		if CookingStateUpdated then
+			CookingStateUpdated.OnClientEvent:Connect(function(state)
+				if type(state) == "table" then
+					local placementId = state.PlacementId
+					if placementId ~= nil and tostring(placementId) ~= "" then
+						cookingStates[tostring(placementId)] = state
+					end
+					if typeof(state.ServerNow) == "number" then
+						serverTimeOffset = state.ServerNow - os.time()
+					end
+				end
+			end)
+		end
+
+		isSelectedFruitEquipped = function(fruitName)
+			local selectedLower = string.lower(fruitName or "")
+			if selectedLower == "" then return false end
+			local equippedType = LocalPlayer:GetAttribute("EquippedFoodType")
+			local equippedItemId = LocalPlayer:GetAttribute("EquippedFoodItemId")
+			if type(equippedType) == "string" and string.lower(equippedType) == selectedLower then return true end
+			if type(equippedItemId) == "string" and string.lower(equippedItemId) == selectedLower then return true end
+			return isItemHeld(fruitName)
+		end
+
+		local function collectCookingCauldronLogData(cauldrons, fruitName, requestState)
+			local logData = {}
+			for index, cauldron in ipairs(cauldrons) do
+				local placementId = getCauldronPlacementId(cauldron)
+				local state = requestState and waitForCauldronState(placementId, 0.25) or cookingStates[placementId]
+				local ingredients, filledSlots, timer, status, result = getCookingStateText(state, fruitName)
+
+				-- Fallback: read FoodName and ingredient info from the cauldron model attributes
+				if result == "-" or result == "" then
+					local foodName = cauldron:GetAttribute("FoodName") or cauldron:GetAttribute("OutputItemName") or cauldron:GetAttribute("OutputDisplayName")
+					if foodName and foodName ~= "" then
+						result = foodName
+					end
+				end
+				-- Fallback: read ingredient slots from cauldron attributes if state is incomplete
+				if filledSlots == 0 or (ingredients and ingredients[1] == "Empty" and ingredients[2] == "Empty") then
+					local attrIngredients = {}
+					local attrFilled = 0
+					for i = 1, 4 do
+						local ingName = cauldron:GetAttribute("Ingredient" .. i) or cauldron:GetAttribute("Slot" .. i .. "Item")
+						if ingName and tostring(ingName) ~= "" then
+							attrIngredients[i] = tostring(ingName)
+							attrFilled = attrFilled + 1
+						else
+							attrIngredients[i] = "Empty"
+						end
+					end
+					if attrFilled > 0 then
+						ingredients = attrIngredients
+						filledSlots = attrFilled
+						if status == "Hold food to add" then
+							status = "Cook"
+						end
+					end
+				end
+				-- Fallback: read cooking status from cauldron attributes
+				if status == "Hold food to add" then
+					local cauldronStatus = cauldron:GetAttribute("Status") or cauldron:GetAttribute("CookingStatus")
+					if cauldronStatus then
+						local statusLower = string.lower(tostring(cauldronStatus))
+						if string.find(statusLower, "ready") or string.find(statusLower, "done") then
+							status = "Ready"
+							timer = "0s"
+						elseif string.find(statusLower, "cook") then
+							status = "Cook"
+						end
+					end
+				end
+
+				logData[index] = {ingredients = ingredients, timer = timer, status = status, result = result}
+			end
+			return logData
+		end
+
+		refreshCookingCauldronLogs = function()
+			local plot = findPlayerPlot()
+			local cauldrons = findCookingCauldrons(plot)
+			if #cauldrons == 0 then
+				updateCauldronPredictLog({})
+				return
+			end
+			local logData = collectCookingCauldronLogData(cauldrons, AutoFarm.fruitSlots[1] or "", true)
+			updateCauldronPredictLog(logData)
+		end
+
+		processCookingCauldrons = function()
+			if cookingBusy then return end
+			local plot = findPlayerPlot()
+			local cauldrons = findCookingCauldrons(plot)
+			if #cauldrons == 0 then
+				updateCauldronPredictLog({})
+				return
+			end
+
+			local fruitName = AutoFarm.fruitSlots[1] or ""
+			if not AutoFarm.autoHeldFruitInventory and not AutoFarm.autoHeldFruitHotbar then
+				refreshCookingCauldronLogs()
+				return
+			end
+
+			cookingBusy = true
+
+			for _, cauldron in ipairs(cauldrons) do
+				local placementId = getCauldronPlacementId(cauldron)
+				local state = waitForCauldronState(placementId, 0.35)
+				local _, filledSlots, _, status = getCookingStateText(state, fruitName)
+				local targetFruit = AutoFarm.fruitSlots[math.min(filledSlots + 1, 4)] or ""
+
+				-- Override status if cooking job is ready (handles timing edge cases)
+				if isCookingJobReady(state) then
+					status = "Ready"
+				end
+
+				if status == "Ready" then
+					-- Claim the cooked food via remote
+					if RequestClaimCooking then
+						pcall(function()
+							RequestClaimCooking:FireServer(placementId)
+						end)
+					end
+					-- Also try firing the prompt as fallback
+					local prompts = findCookingPrompts(cauldron)
+					if prompts[1] then
+						local interactionPart = cauldron:FindFirstChild("InteractionPart", true)
+						if interactionPart then
+							teleportToPart(interactionPart)
+							task.wait(0.15)
+							fireCookingPrompt(prompts[1])
+						end
+					end
+					task.wait(0.3)
+					-- Clear the cached state so it refreshes
+					cookingStates[placementId] = nil
+					-- Re-request state to confirm claim went through
+					state = waitForCauldronState(placementId, 0.4)
+					-- If still showing ready, claim failed - skip this cauldron
+					if isCookingJobReady(state) then
+						continue
+					end
+					-- Claim succeeded - immediately fall through to add food
+					filledSlots = 0
+				end
+
+				-- If cooking is in progress, skip this cauldron
+				if cauldronHasStartedCooking(state) and not isCookingJobReady(state) then
+					continue
+				end
+
+				-- If all slots are filled but cooking hasn't started, start cooking
+				if filledSlots >= AutoFarm.autoCookingFruitSlots then
+					unequipFood()
+					task.wait(0.15)
+					if RequestStartCooking then
+						pcall(function()
+							RequestStartCooking:FireServer(placementId)
+						end)
+					end
+					-- Also try firing the start prompt as fallback
+					local prompts = findCookingPrompts(cauldron)
+					local startPrompt = prompts[2] or prompts[1]
+					if startPrompt then
+						local interactionPart = cauldron:FindFirstChild("InteractionPart", true)
+						if interactionPart then
+							teleportToPart(interactionPart)
+							task.wait(0.1)
+							fireCookingPrompt(startPrompt)
+						end
+					end
+					task.wait(0.3)
+				else
+					local slotsToFill = math.clamp(AutoFarm.autoCookingFruitSlots - filledSlots, 0, 4 - filledSlots)
+					-- Teleport to the cauldron ONCE before filling all needed slots
+					local interactionPart = cauldron:FindFirstChild("InteractionPart", true)
+					if interactionPart then
+						teleportToPart(interactionPart)
+						task.wait(0.2)
+					end
+					for slotOffset = 0, slotsToFill - 1 do
+						local targetFruitName = AutoFarm.fruitSlots[filledSlots + slotOffset + 1] or ""
+						if targetFruitName == "" then
+							break
+						end
+						-- Hold the specific fruit (checks inventory and hotbar)
+						if not isSelectedFruitEquipped(targetFruitName) then
+							holdFruitForCooking(targetFruitName)
+							task.wait(0.2)
+						end
+						if not isSelectedFruitEquipped(targetFruitName) then
+							break
+						end
+						-- Add fruit 1
+						local success, response = triggerCookingCauldron(cauldron, 1, placementId, false)
+						if not success then
+							break
+						end
+						cookingStates[placementId] = response or cookingStates[placementId]
+						-- Stop held fruit
+						unequipFood()
+						task.wait(0.15)
+					end
+					local refreshedState = waitForCauldronState(placementId, 0.35)
+					local _, refreshedFilled = getCookingStateText(refreshedState, fruitName)
+					if refreshedFilled >= AutoFarm.autoCookingFruitSlots then
+						unequipFood()
+						task.wait(0.1)
+						local prompts = findCookingPrompts(cauldron)
+						local startPrompt = prompts[2] or prompts[1]
+						local interactionPart = cauldron:FindFirstChild("InteractionPart", true)
+						if interactionPart and startPrompt then
+							teleportToPart(interactionPart)
+							task.wait(0.1)
+							fireCookingPrompt(startPrompt)
+						end
+						if RequestStartCooking then
+							pcall(function() RequestStartCooking:FireServer(placementId) end)
+						end
+					end
+				end
+			end
+
+			cookingBusy = false
+			refreshCookingCauldronLogs()
+		end
+	end
+end
+
+buildGui()
+
+-- Keep the panel log live even when automation is disabled or the fruit is not equipped.
+task.spawn(function()
+	while true do
+		task.wait(1)
+		pcall(refreshCookingCauldronLogs)
+	end
+end)
+
+-- ===== PART 4: INCUBATOR AUTO FARM LOGIC =====
+
+-- Track incubator countdowns independently
+local function trackIncubatorCountdown(incubator, status, index)
+	local key = tostring(incubator)
+	if status.hatchFinishAt and status.hatchStartAt and status.hatchFinishAt > 0 then
+		if not incubatorCountdowns[key] then
+			-- First time seeing this incubator with a timer
+			incubatorCountdowns[key] = {
+				finishAt = status.hatchFinishAt,
+				startAt = status.hatchStartAt,
+				totalSeconds = status.hatchFinishAt - status.hatchStartAt,
+				name = incubator.Name,
+				index = index,
+			}
+		else
+			-- Update with latest values
+			incubatorCountdowns[key].finishAt = status.hatchFinishAt
+			incubatorCountdowns[key].startAt = status.hatchStartAt
+			incubatorCountdowns[key].totalSeconds = status.hatchFinishAt - status.hatchStartAt
+		end
+	end
+
+	-- Check our own countdown for completion
+	local tracked = incubatorCountdowns[key]
+	if tracked then
+		local now = os.time()
+		if now >= tracked.finishAt then
+			-- Our countdown says it's done!
+			return true  -- should trigger collection
+		end
+		-- Update remaining in tracked data
+		tracked.remainingSeconds = math.max(0, tracked.finishAt - now)
+	end
+
+	return false
+end
+
+-- Main incubator check function
+local function processIncubators()
+	local plot = findPlayerPlot()
+	if not plot then return {} end
+
+	local incubators = findIncubators(plot)
+	local logData = {}
+
+	for i, incubator in ipairs(incubators) do
+		local status = getIncubatorStatus(incubator)
+
+		-- Build log data for this incubator
+		logData[i] = {
+			name = incubator.Name,
+			totalSeconds = status.totalSeconds or 0,
+			remainingSeconds = status.remainingSeconds or 0,
+			isDone = status.isDone,
+			isEmpty = status.isEmpty,
+			signText = status.signText,
+			eggItemName = status.eggItemName,
+		}
+
+		-- Track countdown independently
+		local ourCountdownSaysDone = trackIncubatorCountdown(incubator, status, i)
+
+		-- Determine action
+		local shouldTrigger = false
+
+		if status.isEmpty then
+			-- No egg in incubator - place one
+			shouldTrigger = true
+		elseif status.isDone or ourCountdownSaysDone then
+			-- Egg is ready - collect it
+			shouldTrigger = true
+		elseif status.hatchReady then
+			-- HatchReady attribute is true
+			shouldTrigger = true
+		end
+
+		if shouldTrigger and not isInteractingIncubator then
+			isInteractingIncubator = true
+
+			-- Teleport and trigger
+			triggerIncubator(incubator)
+
+			-- Wait a moment for the interaction to process
+			task.delay(0.15, function()
+				isInteractingIncubator = false
+				-- Clear the countdown tracker since we collected
+				local key = tostring(incubator)
+				incubatorCountdowns[key] = nil
+			end)
+
+			-- Update log to show action
+			if status.isEmpty then
+				logData[i].isEmpty = true
+			else
+				logData[i].isDone = true
+			end
+		end
+	end
+
+	return logData
+end
+
+-- Incubator main loop (runs every POLL_INTERVAL seconds)
+task.spawn(function()
+	while true do
+		task.wait(POLL_INTERVAL)
+		if AutoFarm.enabled and AutoFarm.autoEgg then
+			local success, err = pcall(function()
+				processIncubators()
+			end)
+			if not success then
+				warn("[AutoFarm] Incubator error: " .. tostring(err))
+			end
+		end
+	end
+end)
+
+-- Auto-held fruit loop: holds only ONE specific fruit at a time, with a cooldown,
+-- so it never spams re-holding the same slot. Fully disabled while cooking is active
+-- so it cannot interfere with the sequential slot-filling flow.
+local lastAutoHeldTime = 0
+local AUTO_HELD_COOLDOWN = 2 -- seconds between auto-hold attempts
+local autoHeldCooldownActive = false
+task.spawn(function()
+	while true do
+		task.wait(AUTO_EQUIP_INTERVAL)
+		-- Only run when cooking is OFF; the cooking flow manages its own holding.
+		if AutoFarm.enabled and AutoFarm.autoHeldFruitName ~= "" and not AutoFarm.autoCookingCauldron then
+			local enabled = AutoFarm.autoHeldFruitMode == "Hotbar" and AutoFarm.autoHeldFruitHotbar or AutoFarm.autoHeldFruitInventory
+			if enabled and not isSelectedFruitEquipped(AutoFarm.autoHeldFruitName) then
+				local now = os.clock()
+				if now - lastAutoHeldTime >= AUTO_HELD_COOLDOWN then
+					lastAutoHeldTime = now
+					local success, err = pcall(function()
+						if AutoFarm.autoHeldFruitMode == "Hotbar" then
+							return holdFruitFromHotbar(AutoFarm.autoHeldFruitName)
+						end
+						return holdFruitFromInventory(AutoFarm.autoHeldFruitName)
+					end)
+					if not success then
+						warn("[AutoFarm][AutoHeldFruit] " .. tostring(err))
+					end
+				end
+			end
+		end
+	end
+end)
+
+-- CookingCauldron auto farm loop
+task.spawn(function()
+	while true do
+		task.wait(COOKING_CAULDRON_INTERVAL)
+		if AutoFarm.enabled and AutoFarm.autoCookingCauldron and (AutoFarm.autoHeldFruitHotbar or AutoFarm.autoHeldFruitInventory) then
+			local success, err = pcall(processCookingCauldrons)
+			if not success then
+				cookingBusy = false
+				warn("[AutoFarm] CookingCauldron error: " .. tostring(err))
+			end
+		end
+	end
+end)
+
+
+
+-- Always-running incubator predictor log (works even when Auto Farm Egg is OFF)
+task.spawn(function()
+	while true do
+		task.wait(1)
+		pcall(function()
+			local plot = findPlayerPlot()
+			if plot then
+				local incubators = findIncubators(plot)
+				local logData = {}
+				for i, incubator in ipairs(incubators) do
+					local status = getIncubatorStatus(incubator)
+					logData[i] = {
+						name = incubator.Name,
+						totalSeconds = status.totalSeconds or 0,
+						remainingSeconds = status.remainingSeconds or 0,
+						isDone = status.isDone,
+						isEmpty = status.isEmpty,
+						signText = status.signText,
+						eggItemName = status.eggItemName,
+					}
+				end
+				updateIncubatorPredictorLog(logData)
+			end
+		end)
+	end
+end)
+
+print("[AutoFarm] Part 4 loaded: Incubator auto farm logic")
+
+-- ===== PART 5: QUEST AUTO CLAIM & REFRESH LOGIC =====
+
+-- Forward-declared flag: when the QuestBoardGui is open, GUI snapshot takes priority
+-- over remote polling for rendering the quest log
+local questBoardGuiIsOpen
+
+-- Check if all quests are completed (for refresh trigger)
+local function areAllQuestsCompleted(state)
+	if not state or type(state.Quests) ~= "table" or #state.Quests == 0 then
+		return false
+	end
+
+	for _, quest in ipairs(state.Quests) do
+		if quest.Completed ~= true or quest.Claimed ~= true then
+			return false
+		end
+	end
+	return true
+end
+
+-- Auto claim quest rewards
+local function autoClaimQuests()
+	if isClaimingQuest or isRefreshingQuests then return end
+
+	local state = getQuestState()
+	if not state or state.Success ~= true then return end
+	if type(state.Quests) ~= "table" then return end
+
+	updateQuestLog(state)
+
+	local claimedAny = false
+	for _, quest in ipairs(state.Quests) do
+		if quest.Completed == true and quest.Claimed ~= true then
+			local questId = tostring(quest.QuestId or "")
+			if questId ~= "" then
+				isClaimingQuest = true
+
+				local success, result = pcall(function()
+					return ClaimQuestReward:InvokeServer(questId)
+				end)
+
+				if success and type(result) == "table" then
+					if result.Success == true then
+						print("[AutoFarm] Claimed quest: " .. tostring(quest.DisplayName or questId))
+						if type(result.State) == "table" then
+							lastQuestState = result.State
+							updateQuestLog(result.State)
+						end
+						claimedAny = true
+					else
+						warn("[AutoFarm] Claim failed: " .. tostring(result.Message or "unknown"))
+					end
+				else
+					warn("[AutoFarm] Claim error: " .. tostring(result))
+				end
+
+				isClaimingQuest = false
+			end
+		end
+	end
+
+	isClaimingQuest = false
+
+	-- Re-fetch state after claiming to refresh the log
+	if claimedAny then
+		local freshState = getQuestState()
+		if freshState then
+			lastQuestState = freshState
+			updateQuestLog(freshState)
+		end
+	end
+end
+
+-- Auto refresh quest board when all quests completed and claimed
+local function autoRefreshQuests()
+	if isRefreshingQuests or isClaimingQuest then return end
+
+	local state = lastQuestState or getQuestState()
+	if not state or state.Success ~= true then return end
+
+	-- Check if all quests are completed and claimed
+	if not areAllQuestsCompleted(state) then return end
+
+	-- Check if refresh is available
+	local refresh = state.Refresh
+	if not refresh or refresh.CanRefresh ~= true then return end
+
+	isRefreshingQuests = true
+
+	local success, result = pcall(function()
+		return RefreshQuestBoard:InvokeServer()
+	end)
+
+	if success and type(result) == "table" then
+		if result.Success == true then
+			print("[AutoFarm] Quest board refreshed!")
+			if type(result.State) == "table" then
+				lastQuestState = result.State
+				updateQuestLog(result.State)
+			end
+		else
+			warn("[AutoFarm] Refresh failed: " .. tostring(result.Message or "unknown"))
+		end
+	else
+		warn("[AutoFarm] Refresh error: " .. tostring(result))
+	end
+
+	-- Re-fetch state after refresh to make sure log is current
+	local freshState = getQuestState()
+	if freshState then
+		lastQuestState = freshState
+		updateQuestLog(freshState)
+	end
+
+	isRefreshingQuests = false
+end
+
+-- Quest main loop
+local questPollTimer = 0
+local lastQuestFetchAt = 0
+task.spawn(function()
+	while true do
+		task.wait(QUEST_POLL_INTERVAL)
+		if AutoFarm.enabled then
+			-- Auto claim
+			if AutoFarm.autoClaim then
+				local success, err = pcall(autoClaimQuests)
+				if not success then
+					warn("[AutoFarm] Claim error: " .. tostring(err))
+				end
+			end
+
+			-- Auto refresh (only after claiming)
+			if AutoFarm.autoRefresh then
+				local success, err = pcall(autoRefreshQuests)
+				if not success then
+					warn("[AutoFarm] Refresh error: " .. tostring(err))
+				end
+			end
+		end
+	end
+end)
+
+-- Listen for quest board state updates
+local questStateUpdated = QuestBoardRemotes:FindFirstChild("QuestBoardStateUpdated")
+if questStateUpdated then
+	questStateUpdated.OnClientEvent:Connect(function(state)
+		if type(state) == "table" then
+			lastQuestState = state
+			-- Only update the quest log if the QuestBoardGui is not open;
+			-- when it's open, the GUI snapshot takes priority
+			if not questBoardGuiIsOpen then
+				updateQuestLog(state)
+			end
+		end
+	end)
+end
+
+print("[AutoFarm] Part 5 loaded: Quest auto claim & refresh")
+
+-- ===== PART 6: QUEST LOG POLLING =====
+
+-- Assign the forward-declared flag: when the QuestBoardGui is open,
+-- the GUI snapshot takes priority and the remote polling loop should NOT overwrite the quest log
+questBoardGuiIsOpen = false
+
+-- Periodically fetch quest state and update the quest log (always running)
+task.spawn(function()
+	while true do
+		task.wait(QUEST_POLL_INTERVAL)
+		-- Skip remote polling update when the QuestBoardGui is open;
+		-- the GUI snapshot monitoring loop handles rendering in that case
+		if not questBoardGuiIsOpen and os.clock() - lastQuestFetchAt >= QUEST_POLL_INTERVAL then
+			lastQuestFetchAt = os.clock()
+			local state = getQuestState()
+			if state then
+				lastQuestState = state
+				updateQuestLog(state)
+			end
+		end
+	end
+end)
+
+-- Initial quest log fetch
+task.spawn(function()
+	task.wait(2)
+	local state = getQuestState()
+	if state then
+		lastQuestState = state
+		updateQuestLog(state)
+	end
+end)
+
+print("[AutoFarm] Part 6 loaded: Quest log polling")
+
+-- ===== PART 6.5: QUEST BOARD GUI SNAPSHOT =====
+
+-- Snapshot quest card text from the QuestBoardGui when it's opened by the player
+-- When the GUI is open, this takes priority over remote polling for the quest log
+local function snapshotQuestBoardGui()
+	local questBoardGui = PlayerGui:FindFirstChild("QuestBoardGui")
+	if not questBoardGui or not questBoardGui.Enabled then return nil end
+
+	local shade = questBoardGui:FindFirstChild("Shade")
+	if not shade then return nil end
+	local panel = shade:FindFirstChild("Panel")
+	if not panel then return nil end
+	local questList = panel:FindFirstChild("QuestList")
+	if not questList then return nil end
+
+	local cards = {}
+	local seenCardKeys = {}
+	for _, child in ipairs(questList:GetChildren()) do
+		if #cards >= 6 then
+			break
+		end
+		if child:IsA("GuiObject") then
+			-- Find QuestCardContent (could be the child itself or a descendant)
+			local content = nil
+			if child.Name == "QuestCardContent" then
+				content = child
+			else
+				content = child:FindFirstChild("QuestCardContent")
+				if not content then
+					for _, desc in ipairs(child:GetDescendants()) do
+						if desc.Name == "QuestCardContent" then
+							content = desc
+							break
+						end
+					end
+				end
+			end
+
+			if content then
+				-- Find QuestTextColumn
+				local textColumn = content:FindFirstChild("QuestTextColumn")
+				if not textColumn then
+					for _, desc in ipairs(content:GetDescendants()) do
+						if desc.Name == "QuestTextColumn" then
+							textColumn = desc
+							break
+						end
+					end
+				end
+
+				local function findLabelText(parent, name)
+					local label = parent:FindFirstChild(name)
+					if label and label:IsA("TextLabel") then
+						return label.Text or ""
+					end
+					-- Search descendants as fallback
+					for _, desc in ipairs(parent:GetDescendants()) do
+						if desc.Name == name and desc:IsA("TextLabel") then
+							return desc.Text or ""
+						end
+					end
+					return ""
+				end
+
+				local title = ""
+				local description = ""
+				local progress = ""
+				local reward = ""
+
+				if textColumn then
+					title = findLabelText(textColumn, "QuestTitle")
+					description = findLabelText(textColumn, "QuestDescription")
+					progress = findLabelText(textColumn, "ProgressLabel")
+					reward = findLabelText(textColumn, "RewardLabel")
+				end
+
+				-- Also try reading from content directly if textColumn didn't have them
+				if title == "" then title = findLabelText(content, "QuestTitle") end
+				if description == "" then description = findLabelText(content, "QuestDescription") end
+				if progress == "" then progress = findLabelText(content, "ProgressLabel") end
+				if reward == "" then reward = findLabelText(content, "RewardLabel") end
+
+				-- Find status indicator: InProgressLabel, ClaimedLabel, or ClaimButton
+				local statusText = ""
+				local statusElement = content:FindFirstChild("InProgressLabel")
+				if not statusElement then
+					statusElement = content:FindFirstChild("ClaimedLabel")
+				end
+				if not statusElement then
+					-- ClaimButton is a TextButton (not TextLabel), check for it
+					for _, desc in ipairs(content:GetDescendants()) do
+						if desc.Name == "ClaimButton" and desc:IsA("TextButton") then
+							statusElement = desc
+							break
+						end
+					end
+				end
+				if statusElement and statusElement.Text then
+					statusText = statusElement.Text
+				end
+
+				-- Determine status from the element name and text
+				local displayStatus = "In Progress"
+				local statusColor = Color3.fromRGB(255, 200, 80)
+				if statusElement then
+					if statusElement.Name == "ClaimedLabel" then
+						displayStatus = "Claimed"
+						statusColor = Color3.fromRGB(150, 150, 160)
+					elseif statusElement.Name == "ClaimButton" then
+						displayStatus = "Claim"
+						statusColor = Color3.fromRGB(100, 255, 100)
+					elseif statusElement.Name == "InProgressLabel" then
+						displayStatus = statusText ~= "" and statusText or "In Progress"
+						statusColor = Color3.fromRGB(255, 200, 80)
+					elseif statusText ~= "" then
+						-- Fallback: parse text
+						local statusLower = string.lower(statusText)
+						if string.find(statusLower, "claim") and string.find(statusLower, "ed") then
+							displayStatus = "Claimed"
+							statusColor = Color3.fromRGB(150, 150, 160)
+						elseif string.find(statusLower, "claim") then
+							displayStatus = "Claim"
+							statusColor = Color3.fromRGB(100, 255, 100)
+						else
+							displayStatus = statusText
+						end
+					end
+				end
+
+				local cardKey = title ~= "" and title or (description ~= "" and description or tostring(child:GetFullName()))
+				if not seenCardKeys[cardKey] and #cards < 6 then
+					seenCardKeys[cardKey] = true
+					table.insert(cards, {
+						title = title,
+						description = description,
+						progress = progress,
+						reward = reward,
+						status = displayStatus,
+						statusColor = statusColor,
+					})
+				end
+			end
+		end
+	end
+
+	return #cards > 0 and cards or nil
+end
+
+-- Clean up duplicate reward text like "x10000 x10,000 Shimmers" -> "x10,000 Shimmers"
+local function cleanRewardText(text)
+	if type(text) ~= "string" or text == "" then return text or "" end
+	return text:gsub("x%d+%s+(x[%d,]+)", "%1")
+end
+
+-- Render GUI snapshot data to the quest log frame
+local function renderGuiSnapshotToLog(snapshot)
+	if not snapshot then
+		return false
+	end
+
+	local inProgress = 0
+	for _, card in ipairs(snapshot) do
+		local status = string.lower(card.status or "")
+		if string.find(status, "claim") then
+			inProgress = inProgress + 1
+		end
+	end
+
+	-- Build report rows (updates in place, never wipes the log)
+	local rows = {}
+	table.insert(rows, {
+		key = "summary",
+		title = string.format("ALL QUESTS %d | IN PROGRESS %d/%d", #snapshot, inProgress, #snapshot),
+	})
+
+	for i, card in ipairs(snapshot) do
+		local progressText = tostring(card.progress or "")
+		local progressValue = 0
+		local goal = 0
+		if progressText ~= "" then
+			local a, b = progressText:match("(%d+)[^%d]*(%d+)")
+			if a and b then
+				progressValue = tonumber(a) or 0
+				goal = tonumber(b) or 0
+			end
+		end
+		table.insert(rows, {
+			key = tostring(card.title ~= "" and card.title or "Quest"),
+			title = tostring(card.title ~= "" and card.title or "Quest"),
+			status = tostring(card.status or "In Progress"),
+			statusColor = card.statusColor or Colors.TEXT,
+			description = tostring(card.description or ""),
+			reward = cleanRewardText(tostring(card.reward or "")),
+			progress = progressText,
+			progressValue = progressValue,
+			goal = goal,
+		})
+	end
+
+	renderQuestLog(rows)
+	return true
+end
+
+-- Monitor QuestBoardGui: when the player opens it, snapshot its rendered quest cards
+-- and display them in the AutoFarm panel's Quests Board section
+-- While the GUI is open, the GUI snapshot takes priority over remote polling
+local lastGuiSnapshotTime = 0
+local guiWasOpen = false
+local lastQuestSnapshot = nil
+task.spawn(function()
+	while true do
+		task.wait(QUEST_GUI_SNAPSHOT_INTERVAL)
+		local questBoardGui = PlayerGui:FindFirstChild("QuestBoardGui")
+		local isOpen = questBoardGui and questBoardGui.Enabled or false
+
+		-- Update the shared flag so the Part 6 polling loop knows to yield
+		questBoardGuiIsOpen = isOpen
+
+		if isOpen then
+			-- GUI just opened or is open - snapshot it (debounced every 2s)
+			local now = os.clock()
+			if not guiWasOpen then
+				-- Just opened - wait a moment for rendering
+				task.wait(0.5)
+				guiWasOpen = true
+				lastGuiSnapshotTime = now
+				local snapshot = snapshotQuestBoardGui()
+				if snapshot then
+					lastQuestSnapshot = snapshot
+					renderGuiSnapshotToLog(snapshot)
+				elseif lastQuestState then
+					-- Snapshot failed, fall back to remote polling data
+					updateQuestLog(lastQuestState)
+				end
+			elseif now - lastGuiSnapshotTime >= QUEST_GUI_SNAPSHOT_INTERVAL then
+				-- Already open, refresh periodically
+				lastGuiSnapshotTime = now
+				local snapshot = snapshotQuestBoardGui()
+				if snapshot then
+					lastQuestSnapshot = snapshot
+					renderGuiSnapshotToLog(snapshot)
+				end
+			end
+		else
+			-- GUI just closed - restore remote polling data, or the last snapshot
+			if guiWasOpen then
+				guiWasOpen = false
+				if lastQuestState then
+					updateQuestLog(lastQuestState)
+				elseif lastQuestSnapshot then
+					renderGuiSnapshotToLog(lastQuestSnapshot)
+				end
+			end
+		end
+	end
+end)
+
+print("[AutoFarm] Part 6.5 loaded: Quest Board GUI snapshot")
+
+-- ===== PART 7: AUTO EQUIP / HOLD LOGIC =====
+
+local lastEquipTime = 0
+local EQUIP_COOLDOWN = 2 -- seconds between equip attempts
+
+task.spawn(function()
+	while true do
+		task.wait(AUTO_EQUIP_INTERVAL)
+		if AutoFarm.enabled and AutoFarm.autoEquipEggName ~= "" then
+			local eggName = AutoFarm.autoEquipEggName
+			local now = os.clock()
+
+			if now - lastEquipTime >= EQUIP_COOLDOWN then
+				if not isItemHeld(eggName) then
+					local equipped = false
+
+					-- Try hotbar first (doesn't need inventory open)
+					if AutoFarm.autoEquipHotbar then
+						equipped = autoEquipFromHotbar(eggName)
+					end
+
+					-- Try inventory (needs inventory to be open)
+					if not equipped and AutoFarm.autoEquipInv then
+						local inventoryGui = PlayerGui:FindFirstChild("InventoryGui")
+						if inventoryGui and inventoryGui.Enabled then
+							equipped = autoEquipFromInventory(eggName)
+						end
+					end
+
+					if equipped then
+						lastEquipTime = now
+						print("[AutoFarm] Auto equipped: " .. eggName)
+					end
+				end
+			end
+		end
+	end
+end)
+
+print("[AutoFarm] Part 7 loaded: Auto equip / hold logic")
+
+-- ===== AUTO ASSIGN HOTBAR SLOT =====
+-- When enabled, assigns the configured tools (from the Assign Hotbar Slot inputs) to hotbar slots 1-8.
+-- Also enables InventoryGui, clicks AllItemsButton, scrolls to end, and disables InventoryGui when done.
+local allItemsButtonClicked = true
+
+-- checkAndClick: simulates a real click or fires button methods reliably
+local lastClickTime = 0
+local clickInterval = 0.5 -- Click every 0.5 seconds
+
+local function checkAndClick()
+	-- Check if 0.5 seconds have passed since the last click
+	local currentTime = os.clock()
+	if currentTime - lastClickTime < clickInterval then
+		return false
+	end
+
+	local inventoryGui = PlayerGui:FindFirstChild("InventoryGui")
+	if not inventoryGui or not inventoryGui.Enabled then return false end
+
+	local mainFrame = inventoryGui:FindFirstChild("MainFrame")
+	if not mainFrame then return false end
+
+	local leftTabsFrame = mainFrame:FindFirstChild("LeftTabsFrame")
+	if not leftTabsFrame then return false end
+
+	local tabScrollFrame = leftTabsFrame:FindFirstChild("TabScrollFrame")
+	if not tabScrollFrame then return false end
+
+	local allItemsButton = tabScrollFrame:FindFirstChild("AllItemsButton")
+	if not allItemsButton or not allItemsButton:IsA("GuiButton") then return false end
+
+	local clicked = false
+
+	pcall(function()
+		allItemsButton:Activate()
+		clicked = true
+	end)
+
+	pcall(function()
+		for _, signalName in ipairs({"MouseButton1Click", "Activated", "MouseButton1Down"}) do
+			local s, connections = pcall(getconnections, allItemsButton[signalName])
+			if s and connections then
+				for _, conn in ipairs(connections) do
+					pcall(function()
+						conn:Fire()
+						clicked = true
+					end)
+				end
+			end
+		end
+	end)
+
+	pcall(function()
+		local vim = game:GetService("VirtualInputManager")
+		if vim then
+			local absPos = allItemsButton.AbsolutePosition
+			local absSize = allItemsButton.AbsoluteSize
+			if absSize.X > 0 and absSize.Y > 0 then
+				local x = absPos.X + (absSize.X / 2)
+				local y = absPos.Y + (absSize.Y / 2) + 36
+				vim:SendMouseButtonEvent(x, y, 0, true, game, 0)
+				task.wait(0.02)
+				vim:SendMouseButtonEvent(x, y, 0, false, game, 0)
+				clicked = true
+			end
+		end
+	end)
+
+	pcall(function()
+		for _, descendant in ipairs(allItemsButton:GetDescendants()) do
+			if descendant:IsA("RemoteEvent") then
+				descendant:FireServer()
+				clicked = true
+			end
+		end
+	end)
+
+	-- Update the timer if it successfully ran
+	if clicked then
+		lastClickTime = os.clock()
+	end
+
+	return clicked
+end
+-- Convert camelCase to spaced words (e.g., "BasicNet" -> "Basic Net", "OceanSeedPack" -> "Ocean Seed Pack")
+local function formatCamelCase(str)
+	if not str or str == "" then return str end
+	-- Insert space between lowercase letter followed by uppercase letter
+	local result = str:gsub("(%l)(%u)", "%1 %2")
+	-- Also handle sequences of uppercase letters followed by lowercase (e.g., "HTMLParser" -> "HTML Parser")
+	result = result:gsub("(%u)(%u%l)", "%1 %2")
+	return result
+end
+
+task.spawn(function()
+	while true do
+		task.wait(0.1)
+		if AutoFarm.autoAssignHotbarSlot then
+			-- Enable InventoryGui if not already enabled
+			local inventoryGui = PlayerGui:FindFirstChild("InventoryGui")
+			if inventoryGui and not inventoryGui.Enabled then
+				inventoryGui.Enabled = true
+			end
+
+			-- Always click AllItemsButton first to ensure "All Items" tab is active
+			checkAndClick()
+
+			-- Check if inventory TitleLabel shows "All Items" before searching
+			local titleIsAllItems = false
+			do
+				local invGui = PlayerGui:FindFirstChild("InventoryGui")
+				if invGui then
+					local mFrame = invGui:FindFirstChild("MainFrame")
+					if mFrame then
+						local hFrame = mFrame:FindFirstChild("HeaderFrame")
+						if hFrame then
+							local tLabel = hFrame:FindFirstChild("TitleLabel")
+							if tLabel and tLabel:IsA("TextLabel") and tLabel.Text == "All Items" then
+								titleIsAllItems = true
+							end
+						end
+					end
+				end
+			end
+
+			-- Search for an item in the inventory SearchBox to filter results for 100% accuracy
+			local function searchInventoryForItem(itemName)
+				local inventoryGui = PlayerGui:FindFirstChild("InventoryGui")
+				if not inventoryGui then return false end
+				local mainFrame = inventoryGui:FindFirstChild("MainFrame")
+				if not mainFrame then return false end
+				local headerFrame = mainFrame:FindFirstChild("HeaderFrame")
+				if not headerFrame then return false end
+				local searchContainer = headerFrame:FindFirstChild("SearchContainer")
+				if not searchContainer then return false end
+				local searchBox = searchContainer:FindFirstChild("SearchBox")
+				if not searchBox or not searchBox:IsA("TextBox") then return false end
+				-- Format camelCase item names to spaced words for better search matching
+				local formattedName = formatCamelCase(itemName)
+				pcall(function()
+					searchBox.Text = formattedName
+				end)
+				task.wait(0.15)
+				return true
+			end
+
+			-- Clear the search box
+			local function clearInventorySearch()
+				local inventoryGui = PlayerGui:FindFirstChild("InventoryGui")
+				if not inventoryGui then return end
+				local mainFrame = inventoryGui:FindFirstChild("MainFrame")
+				if not mainFrame then return end
+				local headerFrame = mainFrame:FindFirstChild("HeaderFrame")
+				if not headerFrame then return end
+				local searchContainer = headerFrame:FindFirstChild("SearchContainer")
+				if not searchContainer then return end
+				local searchBox = searchContainer:FindFirstChild("SearchBox")
+				if searchBox and searchBox:IsA("TextBox") then
+					pcall(function()
+						searchBox.Text = ""
+					end)
+				end
+			end
+
+			local function scrollInventoryToEnd()
+				local inventoryGui = PlayerGui:FindFirstChild("InventoryGui")
+				if not inventoryGui then return end
+				local mainFrame = inventoryGui:FindFirstChild("MainFrame")
+				if not mainFrame then return end
+				local itemsFrame = mainFrame:FindFirstChild("ItemsFrame")
+				if not itemsFrame or not itemsFrame:IsA("ScrollingFrame") then return end
+				pcall(function()
+					itemsFrame.CanvasPosition = Vector2.new(0, itemsFrame.CanvasSize.Y.Offset)
+				end)
+			end
+
+			local function checkAllSlotsCorrect()
+				for slotNumber = 1, 8 do
+					local itemName = AutoFarm.hotbarSlotItems[slotNumber]
+					if itemName and itemName ~= "" then
+						local currentName = getHotbarItemName(slotNumber)
+						if not currentName or string.lower(currentName) ~= string.lower(itemName) then
+							return false
+						end
+					end
+				end
+				return true
+			end
+
+
+			-- Only search and assign if TitleLabel shows "All Items"
+			if titleIsAllItems then
+				-- Assign slots that are incorrect using SearchBox for 100% accuracy
+				for slotNumber = 1, 8 do
+					local itemName = AutoFarm.hotbarSlotItems[slotNumber]
+					if itemName and itemName ~= "" then
+						local currentName = getHotbarItemName(slotNumber)
+						if not currentName or string.lower(currentName) ~= string.lower(itemName) then
+							-- Search for the item in the SearchBox to filter inventory
+							searchInventoryForItem(itemName)
+							local itemId = findInventoryItem(itemName)
+							if AssignHotbarSlot then
+								pcall(function()
+									AssignHotbarSlot:FireServer({
+										Slot = slotNumber,
+										ItemId = itemId or itemName,
+									})
+								end)
+							end
+						end
+					end
+				end
+				-- Clear search after assigning all slots
+				clearInventorySearch()
+			end
+		end
+	end
+end)
+
+-- ===== PART 8: INSTANT COOKING PURCHASE MODAL DISABLE & SELLING GUI =====
+
+-- Disable the game's InstantCookingPurchaseModalGui when Auto Farm CookingCauldron is ON
+task.spawn(function()
+	while true do
+		task.wait(0.1)
+		if AutoFarm.enabled and AutoFarm.autoCookingCauldron then
+			local modalGui = PlayerGui:FindFirstChild("InstantCookingPurchaseModalGui")
+			if modalGui and modalGui:IsA("ScreenGui") and modalGui.Enabled then
+				modalGui.Enabled = false
+			end
+		end
+	end
+end)
+
+-- Create the Selling Food Ingredients GUI
+function AutoFarmSell()
+	createDivider()
+	local sellFrame = Instance.new("Frame")
+	sellFrame.Name = "SellingFoodIngredients"
+	sellFrame.BackgroundColor3 = Colors.LOG_BG
+	sellFrame.BackgroundTransparency = 0.05
+	sellFrame.BorderSizePixel = 0
+	sellFrame.Size = UDim2.new(1, 0, 0, 0)
+	sellFrame.AutomaticSize = Enum.AutomaticSize.Y
+	sellFrame.LayoutOrder = nextLayoutOrder()
+	sellFrame.Parent = content
+
+	local sellCorner = Instance.new("UICorner")
+	sellCorner.CornerRadius = UDim.new(0, 8)
+	sellCorner.Parent = sellFrame
+
+	local sellLayout = Instance.new("UIListLayout")
+	sellLayout.Padding = UDim.new(0, 6)
+	sellLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	sellLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	sellLayout.Parent = sellFrame
+
+	local sellPadding = Instance.new("UIPadding")
+	sellPadding.PaddingTop = UDim.new(0, 8)
+	sellPadding.PaddingBottom = UDim.new(0, 8)
+	sellPadding.PaddingLeft = UDim.new(0, 10)
+	sellPadding.PaddingRight = UDim.new(0, 10)
+	sellPadding.Parent = sellFrame
+
+	-- Sell remote references
+	local SellRemotes = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Sell")
+	local SellAction = SellRemotes and SellRemotes:FindFirstChild("SellAction")
+
+	local SELL_NPC_PATH = {"Map", "MainIsland", "TownSquare", "NPCs", "Milky | Inn Keeper"}
+	local SELL_TP_POSITION = Vector3.new(1089, 43, -555)
+
+	local function getSellNpc()
+		local current = Workspace
+		for _, name in ipairs(SELL_NPC_PATH) do
+			current = current:FindFirstChild(name)
+			if not current then return nil end
+		end
+		return current
+	end
+
+	local function fireSellAction(actionType)
+		if not SellAction then
+			warn("[AutoFarm][Sell] SellAction remote not found")
+			return false
+		end
+		local npc = getSellNpc()
+		if not npc then
+			warn("[AutoFarm][Sell] Sell NPC not found")
+			return false
+		end
+		local args = {{
+			ClientAllowedSellCategories = "CookedFood,Ingredients",
+			ClientAllowedSellUseTypes = "",
+			Action = actionType,
+			Adornee = npc,
+			Seller = npc,
+			ClientAllowedSellItemTypes = "",
+			ClientSellerFeePercent = 0,
+			ClientSellPriceMultiplier = 1,
+			ClientSellerDialogueProfile = "InnKeeper",
+		}}
+		local success, err = pcall(function()
+			SellAction:FireServer(unpack(args))
+		end)
+		if not success then
+			warn("[AutoFarm][Sell] Failed to fire SellAction: " .. tostring(err))
+			return false
+		end
+		print("[AutoFarm][Sell] Fired SellAction: " .. actionType)
+		return true
+	end
+
+	local function teleportToPosition(position)
+		local character = LocalPlayer.Character
+		if not character then return false end
+		local hrp = character:FindFirstChild("HumanoidRootPart")
+		if not hrp then return false end
+		hrp.CFrame = CFrame.new(position)
+		return true
+	end
+
+	local function getOriginalPosition()
+		local character = LocalPlayer.Character
+		if not character then return nil end
+		local hrp = character:FindFirstChild("HumanoidRootPart")
+		if not hrp then return nil end
+		return hrp.CFrame
+	end
+
+	local function restorePosition(originalCFrame)
+		if not originalCFrame then return false end
+		local character = LocalPlayer.Character
+		if not character then return false end
+		local hrp = character:FindFirstChild("HumanoidRootPart")
+		if not hrp then return false end
+		hrp.CFrame = originalCFrame
+		return true
+	end
+
+	local isSellingBusy = false
+
+	local function performSellAction(actionType, shouldReturn)
+		if isSellingBusy then return end
+		isSellingBusy = true
+		local originalCFrame = getOriginalPosition()
+		teleportToPosition(SELL_TP_POSITION)
+		task.wait(actionType == "CheckHeldPrice" and 0.5 or 0.3)
+		if actionType == "CheckHeldPrice" then
+			pressE(0.25)
+			task.wait(0.1)
+		end
+		fireSellAction(actionType)
+		if shouldReturn then
+			task.wait(5)
+			restorePosition(originalCFrame)
+		end
+		isSellingBusy = false
+	end
+
+	local function createSellButton(text, actionType, shouldReturn, order)
+		local btn = Instance.new("TextButton")
+		btn.Name = text
+		btn.Text = text
+		btn.TextColor3 = Colors.TEXT
+		btn.Font = Enum.Font.GothamMedium
+		btn.TextSize = 13
+		btn.BackgroundColor3 = Colors.TOGGLE_OFF
+		btn.BorderSizePixel = 0
+		btn.Size = UDim2.new(1, 0, 0, 34)
+		btn.LayoutOrder = order
+		btn.Parent = sellFrame
+
+		local btnCorner = Instance.new("UICorner")
+		btnCorner.CornerRadius = UDim.new(0, 6)
+		btnCorner.Parent = btn
+
+		btn.MouseButton1Click:Connect(function()
+			btn.BackgroundColor3 = Colors.TOGGLE_ON
+			if sellStatusLabel then sellStatusLabel.Text = "Selling... (" .. actionType .. ")" end
+			task.spawn(function()
+				local ok, err = pcall(performSellAction, actionType, shouldReturn)
+				btn.BackgroundColor3 = Colors.TOGGLE_OFF
+				if sellStatusLabel then
+					sellStatusLabel.Text = ok and ("Done: " .. actionType) or ("Failed: " .. tostring(err))
+				end
+			end)
+		end)
+
+		return btn
+	end
+
+	createSellButton("Sell Held Food", "SellHeld", true, 1)
+	createSellButton("Sell All Food", "SellAll", true, 2)
+	createSellButton("Check Price Food", "CheckHeldPrice", false, 3)
+
+	-- Sell status label (global so the button handler can update it)
+	sellStatusLabel = Instance.new("TextLabel")
+	sellStatusLabel.Name = "SellStatusLabel"
+	sellStatusLabel.BackgroundTransparency = 1
+	sellStatusLabel.Text = "Sell actions teleport to the Inn Keeper, sell, then return."
+	sellStatusLabel.TextColor3 = Colors.TEXT_MUTED
+	sellStatusLabel.Font = Enum.Font.Gotham
+	sellStatusLabel.TextSize = 11
+	sellStatusLabel.TextWrapped = true
+	sellStatusLabel.Size = UDim2.new(1, 0, 0, 30)
+	sellStatusLabel.LayoutOrder = 4
+	sellStatusLabel.Parent = sellFrame
+
+	print("[AutoFarm] Part 8 loaded: Instant Cooking modal disable & selling controls in Auto Farm Panel")
+end
+AutoFarmSell()
+
+-- ===== NEW PREDICTOR FEATURES (Active Pets, Spin Wheel, Fish, Highlights) =====
+do
+	-- Highlight
+	local function isCauldronDone(cauldron)
+		local placementId = getCauldronPlacementId(cauldron)
+		local state = cookingStates[placementId]
+		if isCookingJobReady(state) then return true end
+		local _, _, timer, status = getCookingStateText(state, AutoFarm.fruitSlots[1] or "")
+		if status == "Ready" or timer == "0s" or timer == "0" then return true end
+		return false
+	end
+
+	local function addHighlightText(parent, text)
+		local billboard = Instance.new("BillboardGui")
+		billboard.AlwaysOnTop = true
+		billboard.Size = UDim2.fromOffset(260, 60)
+		billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+		billboard.Adornee = parent
+		local label = Instance.new("TextLabel")
+		label.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+		label.BackgroundTransparency = 1
+		label.Size = UDim2.fromScale(1, 1)
+		label.Text = text
+		label.TextColor3 = Color3.fromRGB(255, 255, 255)
+		label.Font = Enum.Font.GothamBold
+		label.TextSize = 14
+		label.TextWrapped = true
+		label.Parent = billboard
+		billboard.Parent = parent
+		return billboard
+	end
+
+	applyHighlights = function()
+		for _, hl in ipairs(activeHighlights) do
+			if hl and hl.Parent then hl:Destroy() end
+		end
+		activeHighlights = {}
+		if not highlightSettings.auto then return end
+		local plot = findPlayerPlot()
+		if not plot then return end
+		local blue = Color3.fromRGB(0, 150, 255)
+		local red = Color3.fromRGB(255, 0, 0)
+		if highlightSettings.incubator then
+			for _, inc in ipairs(findIncubators(plot)) do
+				local status = getIncubatorStatus(inc)
+				local done = status.isDone or (status.remainingSeconds or 0) <= 0
+				local hl = Instance.new("Highlight")
+				hl.FillColor = done and blue or red
+				hl.FillTransparency = 0.8
+				hl.OutlineColor = done and blue or red
+				hl.OutlineTransparency = 0
+				hl.Parent = inc
+				table.insert(activeHighlights, hl)
+				-- Timer text on every incubator
+				local timerText = done and "Done\"" or formatTime(status.remainingSeconds or 0)
+				table.insert(activeHighlights, addHighlightText(inc, "Incubator: " .. timerText))
+			end
+		end
+		if highlightSettings.cauldron then
+			for _, cauldron in ipairs(findCookingCauldrons(plot)) do
+				local done = isCauldronDone(cauldron)
+				local hl = Instance.new("Highlight")
+				hl.FillColor = done and blue or red
+				hl.FillTransparency = 0.8
+				hl.OutlineColor = done and blue or red
+				hl.OutlineTransparency = 0
+				hl.Parent = cauldron
+				table.insert(activeHighlights, hl)
+				local placementId = getCauldronPlacementId(cauldron)
+				local state = cookingStates[placementId]
+				local _, _, timer, status, foodName = getCookingStateText(state, AutoFarm.fruitSlots[1] or "")
+				if foodName == "-" or foodName == "" then foodName = "Cooking" end
+				local timerText = (status == "Ready" or timer == "0s" or timer == "0") and "Done\"" or timer
+				table.insert(activeHighlights, addHighlightText(cauldron, foodName .. "\n" .. timerText))
+			end
+		end
+	end
+
+	-- Polling loops
+	task.spawn(function()
+		while true do
+			task.wait(1)
+			applyHighlights()
+		end
+	end)
+end
+
+-- ===== AUTO CLEAR HOTBAR SLOT =====
+-- Sequential clearing: slot 1 → slot 2 → ... → slot 8 → slot 1 → ...
+-- Only clears slots that have text in NameLabel (have items assigned).
+-- Skips empty slots. When all 8 slots are empty, turns off Auto Assign Hotbar Slot.
+local nextSlotToClear = 1
+
+updateClearHotbarLog = function()
+	if not clearHotbarLogFrame then return end
+	for _, child in ipairs(clearHotbarLogFrame:GetChildren()) do
+		if child:IsA("TextLabel") and child ~= clearHotbarLogLabel then
+			child:Destroy()
+		end
+	end
+	local entries = clearHotbarLogHistory
+	if #entries == 0 then
+		entries = {"No cleared ItemName yet."}
+	end
+	for index, entryText in ipairs(entries) do
+		local entry = Instance.new("TextLabel")
+		entry.Name = "LogEntry" .. tostring(index)
+		entry.BackgroundTransparency = 1
+		entry.TextColor3 = Colors.TEXT
+		entry.Font = Enum.Font.Gotham
+		entry.TextSize = 11
+		entry.TextWrapped = false
+		entry.TextXAlignment = Enum.TextXAlignment.Left
+		entry.TextYAlignment = Enum.TextYAlignment.Top
+		entry.Size = UDim2.new(1, -16, 0, 18)
+		entry.LayoutOrder = index + 1
+		entry.Text = entryText
+		entry.Parent = clearHotbarLogFrame
+	end
+	clearHotbarLogFrame.CanvasPosition = Vector2.new(0, math.max(0, clearHotbarLogFrame.AbsoluteCanvasSize.Y))
+end
+
+local function appendClearHotbarLog(slotNumber, itemName)
+	local timestamp = os.date("%H:%M:%S")
+	local shownName = itemName and itemName ~= "" and itemName or "Empty"
+	table.insert(clearHotbarLogHistory, string.format("%s - Slot %d| %s", timestamp, slotNumber, shownName))
+	if #clearHotbarLogHistory > 200 then
+		table.remove(clearHotbarLogHistory, 1)
+	end
+	updateClearHotbarLog()
+end
+
+local function getSlotItemName(slotNumber)
+	local hotbarGui = PlayerGui:FindFirstChild("HotbarGui")
+	local mainFrame = hotbarGui and hotbarGui:FindFirstChild("MainFrame")
+	local slot = mainFrame and mainFrame:FindFirstChild("Slot" .. tostring(slotNumber))
+	if not slot then return "" end
+	local itemName = slot:GetAttribute("ItemName")
+	if type(itemName) == "string" and itemName ~= "" then return itemName end
+	local nameLabel = slot:FindFirstChild("NameLabel")
+	return nameLabel and nameLabel:IsA("TextLabel") and (nameLabel.Text or "") or ""
+end
+
+updateClearHotbarLog()
+
+local function isSlotNameLabelEmpty(slotNumber)
+	local hotbarGui = PlayerGui:FindFirstChild("HotbarGui")
+	if not hotbarGui then return true end
+	local mainFrame = hotbarGui:FindFirstChild("MainFrame")
+	if not mainFrame then return true end
+	local slot = mainFrame:FindFirstChild("Slot" .. tostring(slotNumber))
+	if not slot then return true end
+	local nameLabel = slot:FindFirstChild("NameLabel")
+	if not nameLabel or not nameLabel:IsA("TextLabel") then return true end
+	return (nameLabel.Text or "") == ""
+end
+
+task.spawn(function()
+	while true do
+		task.wait(0.5)
+		if AutoFarm.autoClearHotbarSlot then
+			-- Find the next enabled slot that HAS text in NameLabel (skip empty slots)
+			local foundSlot = nil
+			for i = 0, 7 do
+				local slot = ((nextSlotToClear - 1 + i) % 8) + 1
+				if AutoFarm.autoClearSlots[slot] and not isSlotNameLabelEmpty(slot) then
+					foundSlot = slot
+					break
+				end
+			end
+			if foundSlot then
+				local clearedItemName = getSlotItemName(foundSlot)
+				local remote = ClearHotbarSlot
+				if not remote then
+					local mi = Remotes and Remotes:FindFirstChild("MainInventory")
+					if mi then
+						remote = mi:FindFirstChild("ClearHotbarSlot")
+						ClearHotbarSlot = remote
+					end
+				end
+				if remote then
+					local fired = pcall(function()
+						remote:FireServer(foundSlot)
+					end)
+					if fired then
+						clearHotbarLogEntries[foundSlot] = clearedItemName
+						appendClearHotbarLog(foundSlot, clearedItemName)
+					end
+				end
+				-- Advance to the next slot for the next iteration
+				nextSlotToClear = (foundSlot % 8) + 1
+			else
+				-- No enabled slot has text - check if ALL 8 slots are empty
+				local allEmpty = true
+				for i = 1, 8 do
+					if not isSlotNameLabelEmpty(i) then
+						allEmpty = false
+						break
+					end
+				end
+				-- If all slots are empty, turn off Auto Assign Hotbar Slot
+				if allEmpty and AutoFarm.autoAssignHotbarSlot then
+					AutoFarm.autoAssignHotbarSlot = false
+					if setToggleState then
+						setToggleState("AutoAssignHotbarSlot", false)
+					end
+				end
+			end
+		end
+	end
+end)
+
+-- ===== QUEST BOARD TOGGLE =====
+-- When QuestBoardShow is toggled ON, enable QuestBoardGui.
+-- When toggled OFF, disable QuestBoardGui.
+task.spawn(function()
+	local lastQuestBoardVisible = false
+	while true do
+		task.wait(0.2)
+		if AutoFarm.questBoardVisible ~= lastQuestBoardVisible then
+			lastQuestBoardVisible = AutoFarm.questBoardVisible
+			local questBoardGui = PlayerGui:FindFirstChild("QuestBoardGui")
+			if questBoardGui and questBoardGui:IsA("ScreenGui") then
+				questBoardGui.Enabled = AutoFarm.questBoardVisible
+			end
+		end
+	end
+end)
