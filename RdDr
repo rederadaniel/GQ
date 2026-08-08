@@ -14,15 +14,21 @@ local Character = Player.Character
 local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
 local PlayerGui = Player:WaitForChild("PlayerGui")
 local Player = game.Players.LocalPlayer
-local source = game:HttpGet("https://raw.githubusercontent.com/rederadaniel/GQ/refs/heads/main/Farming")
-local source = game:HttpGet("https://raw.githubusercontent.com/rederadaniel/GQ/refs/heads/main/Farming")
-
--- Edit/remove the loops here before executing.
--- (This only works if you know what patterns you're removing.)
-
-local fn = loadstring(source)
-if fn then
-    fn()
+for _, url in ipairs({
+    "https://raw.githubusercontent.com/rederadaniel/GQ/refs/heads/main/AutoFarmPanel",
+    "https://raw.githubusercontent.com/rederadaniel/GQ/refs/heads/main/Farming"
+}) do
+    local success, content = pcall(game.HttpGet, game, url)
+    if success and content then
+        local fn, err = loadstring(content)
+        if fn then
+            task.spawn(fn)
+        else
+            warn("Loadstring error for " .. url .. ": " .. tostring(err))
+        end
+    else
+        warn("Failed to fetch: " .. url)
+    end
 end
 -- --- HIGH-SPEED UI VISIBILITY OVERRIDE MATRIX ---
 RunService.RenderStepped:Connect(function()
@@ -5495,6 +5501,6 @@ task.spawn(function()
             end
         end
 
-        task.wait(0.1) -- Set loop delay to avoid rate limits
+        task.wait(0.5) -- Set loop delay to avoid rate limits
     end
 end)
