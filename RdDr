@@ -5495,6 +5495,6 @@ task.spawn(function()
             end
         end
 
-        task.wait(1) -- Set loop delay to avoid rate limits
+        task.wait(0.1) -- Set loop delay to avoid rate limits
     end
 end)
