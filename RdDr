@@ -16,7 +16,8 @@ local PlayerGui = Player:WaitForChild("PlayerGui")
 local Player = game.Players.LocalPlayer
 for _, url in ipairs({
     "https://raw.githubusercontent.com/rederadaniel/GQ/refs/heads/main/AutoFarmPanel",
-    "https://raw.githubusercontent.com/rederadaniel/GQ/refs/heads/main/Farming"
+    "https://raw.githubusercontent.com/rederadaniel/GQ/refs/heads/main/Farming",
+    "https://raw.githubusercontent.com/rederadaniel/GQ/refs/heads/main/Auto%20Farm%20Guild%20Points"
 }) do
     local success, content = pcall(game.HttpGet, game, url)
     if success and content then
@@ -5480,8 +5481,9 @@ end
 
 local spinRemote = Remotes:WaitForChild("SpinningWheel", 5):WaitForChild("RequestSpinningWheelSpin", 5)
 local claimRemote = Remotes:WaitForChild("DailyRewards", 5):WaitForChild("ClaimPlaytimeReward", 5)
+local dailyRewardRemote = Remotes:WaitForChild("DailyRewards", 5):WaitForChild("ClaimDailyReward", 5)
 
-print("Ready Auto Claim Spin And Playtime!")
+print("Ready Auto Claim Spin (every 1s), Playtime (every 1s), And Daily Rewards!")
 
 task.spawn(function()
     while true do
@@ -5491,16 +5493,28 @@ task.spawn(function()
                 spinRemote:InvokeServer()
             end)
         end
+        task.wait(1)
 
-        -- Auto Claim Playtime Rewards
+        -- Auto Claim Playtime Rewards (every 1s per minute interval)
         if claimRemote then
             for mins = 10, 120, 10 do
                 pcall(function()
                     claimRemote:InvokeServer("Playtime" .. mins .. "Minutes")
                 end)
+                task.wait(1)
             end
         end
 
-        task.wait(0.5) -- Set loop delay to avoid rate limits
+        -- Auto Claim Daily Rewards (1-7)
+        if dailyRewardRemote then
+            for day = 1, 7 do
+                pcall(function()
+                    dailyRewardRemote:InvokeServer(day)
+                end)
+                task.wait(1)
+            end
+        else
+            task.wait(1)
+        end
     end
 end)
