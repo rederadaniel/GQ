@@ -1,5 +1,5 @@
 local Players = game:GetService("Players") -- ASSET NAV TAB Plank FISHQUEST |Bug Catch Settings| NO ALL | FISH_RARITY |  UI VISIBILITY | SOURCE | Garden Seeds Shop | INSTANT AUTO SPIN & AUTO
--- HAPPY1MONTH GardenSeedShop
+-- HAPPY1MONTH GardenSeedShop local ShopSelectFrame 💰 PAGE SELL & TRADE HUB local Scan Inventory
 local HttpService = game:GetService("HttpService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
@@ -13,114 +13,95 @@ local Player = Players.LocalPlayer
 local Character = Player.Character
 local Humanoid = Character and Character:FindFirstChildOfClass("Humanoid")
 local PlayerGui = Player:WaitForChild("PlayerGui")
-local Player = game.Players.LocalPlayer
-for _, url in ipairs({
-    "https://raw.githubusercontent.com/rederadaniel/GQ/refs/heads/main/AutoFarmPanel",
-    "https://raw.githubusercontent.com/rederadaniel/GQ/refs/heads/main/Farming",
-    "https://raw.githubusercontent.com/rederadaniel/GQ/refs/heads/main/Auto%20Farm%20Guild%20Points"
-}) do
-    local success, content = pcall(game.HttpGet, game, url)
-    if success and content then
-        local fn, err = loadstring(content)
-        if fn then
-            task.spawn(fn)
-        else
-            warn("Loadstring error for " .. url .. ": " .. tostring(err))
-        end
-    else
-        warn("Failed to fetch: " .. url)
-    end
-end
--- --- HIGH-SPEED UI VISIBILITY OVERRIDE MATRIX ---
-RunService.RenderStepped:Connect(function()
-    -- 1. Obliterate the Teleport UI instantly if it exists
-    local teleportGui = PlayerGui:FindFirstChild("TeleportTransitionGui")
-    if teleportGui then
-        if teleportGui.Enabled then teleportGui.Enabled = false end
-        
-        local overlay = teleportGui:FindFirstChild("Overlay")
-        if overlay then
-            if overlay.Visible then overlay.Visible = false end
-            
-            local bg = overlay:FindFirstChild("IslandTransitionBackground")
-            if bg and bg.Visible then bg.Visible = false end
-            
-            local icon = overlay:FindFirstChild("TransitionIcon")
-            if icon and icon.Visible then icon.Visible = false end
-        end
-    end
+local GQ_REPO_API = "https://api.github.com/repos/rederadaniel/GQ/contents/"
+local GQ_RAW_BASE = "https://raw.githubusercontent.com/rederadaniel/GQ/refs/heads/main/"
+local _rsAccum = 0
+local _rsConn = RunService.RenderStepped:Connect(function(dt)
+	_rsAccum = _rsAccum + (dt or 0)
+	if _rsAccum < 0.25 then return end
+	_rsAccum = 0
+	-- 1. Obliterate the Teleport UI instantly if it exists
+	local teleportGui = PlayerGui:FindFirstChild("TeleportTransitionGui")
+	if teleportGui then
+		if teleportGui.Enabled then teleportGui.Enabled = false end
 
-    -- 2. Force HotbarGui to always be visible
-    local hotbar = PlayerGui:FindFirstChild("HotbarGui")
-    if hotbar then
-        if hotbar:IsA("ScreenGui") and not hotbar.Enabled then
-            hotbar.Enabled = true
-        elseif not hotbar:IsA("ScreenGui") and not hotbar.Visible then
-            hotbar.Visible = true
-        end
-    end
+		local overlay = teleportGui:FindFirstChild("Overlay")
+		if overlay then
+			if overlay.Visible then overlay.Visible = false end
+
+			local bg = overlay:FindFirstChild("IslandTransitionBackground")
+			if bg and bg.Visible then bg.Visible = false end
+
+			local icon = overlay:FindFirstChild("TransitionIcon")
+			if icon and icon.Visible then icon.Visible = false end
+		end
+	end
+
+	-- 2. Force HotbarGui to always be visible
+	local hotbar = PlayerGui:FindFirstChild("HotbarGui")
+	if hotbar then
+		if hotbar:IsA("ScreenGui") and not hotbar.Enabled then
+			hotbar.Enabled = true
+		elseif not hotbar:IsA("ScreenGui") and not hotbar.Visible then
+			hotbar.Visible = true
+		end
+	end
 end)
 
-local playerGui = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+local playerGui = PlayerGui
 -- 2. FORCE HOTBAR AND INVENTORY TO STAY VISIBLE ALWAYS
 local function lockGuiVisible(guiName)
-    local gui = playerGui:WaitForChild(guiName, 5)
-    if gui then
-        -- Force it visible right now
-        if gui:IsA("ScreenGui") then gui.Enabled = true else gui.Visible = true end
-        
-        -- Prevent the game from turning it off later
-        gui:GetPropertyChangedSignal(gui:IsA("ScreenGui") and "Enabled" or "Visible"):Connect(function()
-            if gui:IsA("ScreenGui") and not gui.Enabled then
-                gui.Enabled = true
-            elseif not gui:IsA("ScreenGui") and not gui.Visible then
-                gui.Visible = true
-            end
-        end)
-    end
+	local gui = PlayerGui:FindFirstChild(guiName)
+	if not gui then return end
+	if gui:IsA("ScreenGui") then gui.Enabled = true else gui.Visible = true end
+	gui:GetPropertyChangedSignal(gui:IsA("ScreenGui") and "Enabled" or "Visible"):Connect(function()
+		if gui:IsA("ScreenGui") and not gui.Enabled then
+			gui.Enabled = true
+		elseif not gui:IsA("ScreenGui") and not gui.Visible then
+			gui.Visible = true
+		end
+	end)
 end
-
--- Run the lock function for both GUIs
 lockGuiVisible("HotbarGui")
 
 -- ==========================================================
--- ALWAYS ON INSTANT TEXT ENGINE (NO TASK.WAIT LOOP NEEDED)
+-- INSTANT TEXT ENGINE (throttled, no per-object connections)
 -- ==========================================================
 local trackedTextObjects = {}
 
 local function forceInstantText(textObject)
-    if textObject:IsA("TextLabel") or textObject:IsA("TextButton") or textObject:IsA("TextBox") then
-        textObject.MaxVisibleGraphemes = -1
-        trackedTextObjects[textObject] = true
-        
-        textObject:GetPropertyChangedSignal("MaxVisibleGraphemes"):Connect(function()
-            if textObject.MaxVisibleGraphemes ~= -1 then
-                textObject.MaxVisibleGraphemes = -1
-            end
-        end)
-    end
+	if textObject:IsA("TextLabel") or textObject:IsA("TextButton") or textObject:IsA("TextBox") then
+		textObject.MaxVisibleGraphemes = -1
+		trackedTextObjects[textObject] = true
+	end
 end
 
 for _, descendant in ipairs(PlayerGui:GetDescendants()) do
-    forceInstantText(descendant)
+	forceInstantText(descendant)
 end
 
 PlayerGui.DescendantAdded:Connect(function(descendant)
-    forceInstantText(descendant)
+	forceInstantText(descendant)
 end)
 
 PlayerGui.DescendantRemoving:Connect(function(descendant)
-    if trackedTextObjects[descendant] then
-        trackedTextObjects[descendant] = nil
-    end
+	if trackedTextObjects[descendant] then
+		trackedTextObjects[descendant] = nil
+	end
 end)
 
-RunService.Heartbeat:Connect(function()
-    for textObject in pairs(trackedTextObjects) do
-        if textObject and textObject.Parent and textObject.MaxVisibleGraphemes ~= -1 then
-            textObject.MaxVisibleGraphemes = -1
-        end
-    end
+local _hbAccum = 0
+local _hbConn = RunService.Heartbeat:Connect(function(dt)
+	_hbAccum = _hbAccum + (dt or 0)
+	if _hbAccum < 2 then return end
+	_hbAccum = 0
+	for textObject in pairs(trackedTextObjects) do
+		if textObject and textObject.Parent and textObject.MaxVisibleGraphemes ~= -1 then
+			textObject.MaxVisibleGraphemes = -1
+		elseif not textObject or not textObject.Parent then
+			trackedTextObjects[textObject] = nil
+		end
+	end
 end)
 -- ==========================================================
 
@@ -153,8 +134,8 @@ local RDR_InventoryListenersSetup = false
 local function RDR_GetResyncRemote()
 	if RDR_ResyncRemote then return RDR_ResyncRemote end
 	pcall(function()
-		-- Correct path: ReplicatedStorage.Remote (not Remotes)
-		local remoteFolder = ReplicatedStorage:FindFirstChild("Remote")
+		-- Correct path: ReplicatedStorage.Remotes
+		local remoteFolder = ReplicatedStorage:FindFirstChild("Remotes")
 		if remoteFolder then
 			local mainInv = remoteFolder:FindFirstChild("MainInventory")
 			if mainInv then
@@ -172,7 +153,7 @@ end
 local function RDR_SetupInventoryListeners()
 	if RDR_InventoryListenersSetup then return end
 
-	local remoteFolder = ReplicatedStorage:FindFirstChild("Remote")
+	local remoteFolder = ReplicatedStorage:FindFirstChild("Remotes")
 	if not remoteFolder then return end
 	local mainInv = remoteFolder:FindFirstChild("MainInventory")
 	if not mainInv then return end
@@ -243,14 +224,12 @@ local function RDR_CountCritters(catName)
 	end
 	return c
 end
-local Players = game:GetService("Players")
 local GuiService = game:GetService("GuiService")
-local Player = Players.LocalPlayer
 GuiService:SetGameplayPausedNotificationEnabled(false)
 local function forceUnpause()
 	if Player.GameplayPaused then
 		print("Gameplay pause detected! Automatically removing...")
-		Player:ClearRequirementForReplication() 
+		pcall(function() Player:ClearRequirementForReplication() end)
 	end
 end
 Player:GetPropertyChangedSignal("GameplayPaused"):Connect(forceUnpause)
@@ -263,15 +242,16 @@ local function RDR_DisplayNameOf(item)
 	if meta and meta.DisplayName then return meta.DisplayName end
 	return nm
 end
-local autoHarvestActive = false
-local autoHarvestThread = nil
-local sellWithHarvestActive = false
-local sellWithHarvestThread = nil
 local _sellInProgress = false
 local instantFishEnabled = false
 local isTPBugHunting = false
 local fishTrackConnection = nil
 local bugTrackConnection = nil
+local fishHandsFreeThread = nil
+local antiAfkActive = false
+local antiAfkThread = nil
+local autoRedeemCodes = false
+local autoRedeemThread = nil
 local safeModeActive = false
 local SAFE_MODE_RADIUS = 60
 local RDR_TOGGLES = {}
@@ -382,22 +362,13 @@ MainFrame.Draggable = true
 MainFrame.Parent = ScreenGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
 ToggleButton.MouseButton1Click:Connect(function() MainFrame.Visible = not MainFrame.Visible end)
-UserInputService.InputBegan:Connect(function(input, processed)
+local keybindConnection
+keybindConnection = UserInputService.InputBegan:Connect(function(input, processed)
+	if _G.RDR_DESTROYED then if keybindConnection then keybindConnection:Disconnect() end return end
 	if processed then return end
 	if input.KeyCode == Enum.KeyCode.K then MainFrame.Visible = not MainFrame.Visible end
 end)
 
--- Auto-Planting Keybinds (U = ON, P = OFF)
-UserInputService.InputBegan:Connect(function(input, processed)
-	if processed then return end
-	if input.KeyCode == Enum.KeyCode.U then
-		autoPlantActive = true
-		showToast("🌱 Auto-Plant ENABLED", Color3.fromRGB(0, 210, 255), 2)
-	elseif input.KeyCode == Enum.KeyCode.P then
-		autoPlantActive = false
-		showToast("🌱 Auto-Plant DISABLED", Color3.fromRGB(200, 100, 100), 2)
-	end
-end)
 local LaserBar = Instance.new("Frame")
 LaserBar.Size = UDim2.new(1, 0, 0, 4)
 LaserBar.BackgroundColor3 = Color3.fromRGB(0, 210, 255)
@@ -459,29 +430,49 @@ MinBtn.BackgroundTransparency = 1
 MinBtn.Parent = MainFrame
 MinBtn.MouseButton1Click:Connect(function() MainFrame.Visible = false end)
 local function CleanupScriptState()
-	autoHarvestActive = false
+	-- Mark as destroyed so keybind stops working
+	_G.RDR_DESTROYED = true
+	-- Turn off ALL toggles
+	for label, setter in pairs(RDR_TOGGLES) do
+		pcall(setter, false)
+	end
+	-- Turn off all feature flags
 	instantFishEnabled = false
 	isTPBugHunting = false
-	autoPlantActive = false
-	plantMethod = "Instant"
 	autoBuyActive = false
 	autoHatchActive = false
 	autoWaterNGActive = false
 	autoWaterAllActive = false
+	antiAfkActive = false
+	autoRedeemCodes = false
+	catchScanEnabled = false
+	safeModeActive = false
+	-- Turn off _G flags used by anonymous loops
+	_G.AutoChests = false
+	_G.AutoDigSites = false
+	_G.AutoMagicOrbs = false
+	_G.AutoFishEnabled = false
+	-- Disconnect all connections
+	if _rsConn then _rsConn:Disconnect() _rsConn = nil end
+	if _hbConn then _hbConn:Disconnect() _hbConn = nil end
 	if fishTrackConnection then fishTrackConnection:Disconnect() fishTrackConnection = nil end
 	if bugTrackConnection then bugTrackConnection:Disconnect() bugTrackConnection = nil end
-	if autoHarvestThread then task.cancel(autoHarvestThread) autoHarvestThread = nil end
-	if sellWithHarvestThread then task.cancel(sellWithHarvestThread) sellWithHarvestThread = nil end
-	if autoPlantThread then task.cancel(autoPlantThread) autoPlantThread = nil end
+	if bugWinConn then bugWinConn:Disconnect() bugWinConn = nil end
+	if keybindConnection then keybindConnection:Disconnect() keybindConnection = nil end
+	-- Cancel all threads
 	if autoBuyThread then task.cancel(autoBuyThread) autoBuyThread = nil end
 	if autoHatchThread then task.cancel(autoHatchThread) autoHatchThread = nil end
 	if autoWaterNGThread then task.cancel(autoWaterNGThread) autoWaterNGThread = nil end
 	if autoWaterAllThread then task.cancel(autoWaterAllThread) autoWaterAllThread = nil end
+	if antiAfkThread then task.cancel(antiAfkThread) antiAfkThread = nil end
+	if autoRedeemThread then task.cancel(autoRedeemThread) autoRedeemThread = nil end
+	if fishHandsFreeThread then task.cancel(fishHandsFreeThread) fishHandsFreeThread = nil end
 	pcall(function() VirtualUser:Button1Up(Vector2.new(0, 0)) end)
 	ScreenGui:Destroy()
 end
 Close.MouseButton1Click:Connect(CleanupScriptState)
 local BUILD_OK, BUILD_ERR = pcall(function()
+	if not _G.RDR_DEBUG then _G.RDR_DEBUG = {} end
 	local RARITY_ORDER={"Common","Uncommon","Rare","Epic","Legendary","Mythical","Ethereal"}
 	local HubTitle = Instance.new("TextLabel")
 	HubTitle.Size = UDim2.new(0, 250, 0, 35)
@@ -615,56 +606,8 @@ local BUILD_OK, BUILD_ERR = pcall(function()
 		RDR_TOGGLES[label] = setter
 		return setter
 	end
-	
-	-- ==========================================
-	-- AUTO PLANTING SETUP
-	-- ==========================================
-	
-	-- BACKGROUND LOOP (Max Speed - Tracking Character Position)
-	task.spawn(function()
-		local RS = ReplicatedStorage
-		local Event = nil
-		local FallbackTarget = nil
-		
-		-- Safely get the PlantSeed remote
-		pcall(function()
-			Event = RS:WaitForChild("Remotes", 5):WaitForChild("Farming", 5):WaitForChild("PlantSeed", 5)
-		end)
-		
-		-- Safely get the fallback target
-		pcall(function()
-			FallbackTarget = workspace:WaitForChild("Map", 5)
-				:WaitForChild("MainIsland", 5)
-				:WaitForChild("PlayerGardens", 5)
-				:WaitForChild("Plots", 5)
-				:WaitForChild("Plot1", 5)
-				:WaitForChild("InvisibleFloor", 5)
-		end)
-		
-		while true do
-			if autoPlantActive then
-				local character = Player.Character
-				if character and character:FindFirstChild("HumanoidRootPart") and Event then
-					local playerPos = character.HumanoidRootPart.Position
-					
-					-- Fast-fire the remote execution
-					task.spawn(function()
-						pcall(function()
-							Event:FireServer({
-								TargetPart = FallbackTarget,
-								WorldPosition = playerPos,
-								MethodType = plantMethod
-							})
-						end)
-					end)
-				end
-				task.wait() -- Executes as fast as your engine frames can push data
-			else
-				task.wait(0.5) -- Saves device resources while toggled OFF
-			end
-		end
-	end)
-	
+
+
 	local function saveRDRConfig(profile)
 		local fname = profile and ("RdDrConfig_" .. tostring(profile) .. ".json") or "RdDrConfig.json"
 		local cfg = { version = 1, toggles = {}, lists = {} }
@@ -685,6 +628,9 @@ local BUILD_OK, BUILD_ERR = pcall(function()
 			end
 		end)
 		if not saved then _G["RDR_CFG" .. (profile and ("_" .. tostring(profile)) or "")] = json end
+		-- Track saved profile names for dropdown
+		_G.RDR_SAVED_PROFILES = _G.RDR_SAVED_PROFILES or {}
+		if profile and profile ~= "" then _G.RDR_SAVED_PROFILES[tostring(profile)] = true end
 		return saved and "file" or "memory"
 	end
 	local function loadRDRConfig(profile)
@@ -847,53 +793,53 @@ local BUILD_OK, BUILD_ERR = pcall(function()
 		return nil
 	end
 
-local FISH_RARITY = {
-	Ethereal = {
-		shadow_devil_whale_shark = { DisplayName = "Shadow Devil Whale Shark" }, radioactive_great_hammerhead_shark = { DisplayName = "Radioactive Great Hammerhead Shark" }, megalodon = { DisplayName = "Megalodon" }, golden_megalodon = { DisplayName = "Golden Megalodon" }, shadow_tiger_shark = { DisplayName = "Shadow Tiger Shark" }, king_manta_ray = { DisplayName = "King Manta Ray" },
-	},
-	Mythical = {
-		angelic_whale_shark = { DisplayName = "Angelic Whale Shark" }, golden_whale_shark = { DisplayName = "Golden Whale Shark" }, shadow_devil_monkfish = { DisplayName = "Shadow Devil Monkfish" }, rainbow_narwhal = { DisplayName = "Rainbow Narwhal" }, golden_bull_shark = { DisplayName = "Golden Bull Shark" }, golden_great_hammerhead_shark = { DisplayName = "Golden Great Hammerhead Shark" }, radioactive_hammerhead_shark = { DisplayName = "Radioactive Hammerhead Shark" }, angelic_manta_ray = { DisplayName = "Angelic Manta Ray" }, golden_tiger_shark = { DisplayName = "Golden Tiger Shark" }, shadowfin_tuna = { DisplayName = "Shadowfin Tuna" }, moonlight_marlin = { DisplayName = "Moonlight Marlin" }, golden_great_white_shark = { DisplayName = "Golden Great White Shark" }, gray_whale = { DisplayName = "Gray Whale" },
-	},
-	Legendary = {
-		moonlight_jellyfish = { DisplayName = "Moonlight Jellyfish" }, golden_monkfish = { DisplayName = "Golden Monkfish" }, golden_hammerhead_shark = { DisplayName = "Golden Hammerhead Shark" }, hammerhead_shark = { DisplayName = "Hammerhead Shark" }, great_hammerhead_shark = { DisplayName = "Great Hammerhead Shark" }, whale_shark = { DisplayName = "Whale Shark" }, mako_shark = { DisplayName = "Mako Shark" }, golden_mako_shark = { DisplayName = "Golden Mako Shark" }, tiger_shark = { DisplayName = "Tiger Shark" }, bull_shark = { DisplayName = "Bull Shark" }, rainbow_tilapia = { DisplayName = "Rainbow Tilapia" }, rainbow_salmon = { DisplayName = "Rainbow Salmon" }, bluefin_tuna = { DisplayName = "Bluefin Tuna" }, golden_marlin = { DisplayName = "Golden Marlin" }, great_white_shark = { DisplayName = "Great White Shark" }, basking_shark = { DisplayName = "Basking Shark" }, rainbow_clownfish = { DisplayName = "Rainbow Clownfish" }, golden_orca = { DisplayName = "Golden Orca" },
-	},
-	Epic = {
-		narwhal = { DisplayName = "Narwhal" }, golden_pangasius = { DisplayName = "Golden Pangasius" }, devil_manta_ray = { DisplayName = "Devil Manta Ray" }, golden_tilapia = { DisplayName = "Golden Tilapia" }, golden_sardine = { DisplayName = "Golden Sardine" }, golden_salmon = { DisplayName = "Golden Salmon" }, golden_jellyfish = { DisplayName = "Golden Jellyfish" }, golden_sturgeon = { DisplayName = "Golden Sturgeon" }, golden_catfish = { DisplayName = "Golden Catfish" }, pacific_shark = { DisplayName = "Pacific Shark" }, golden_anglerfish = { DisplayName = "Golden Anglerfish" }, golden_eagle_ray = { DisplayName = "Golden Eagle Ray" }, glistening_hammerhead_shark = { DisplayName = "Glistening Hammerhead Shark" }, beluga_whale = { DisplayName = "Beluga Whale" }, golden_beluga_whale = { DisplayName = "Golden Beluga Whale" }, golden_oarfish = { DisplayName = "Golden Oarfish" }, pink_hammerhead_shark = { DisplayName = "Pink HammerHead Shark" }, enchanted_basking_shark = { DisplayName = "Enchanted Basking Shark" }, enchanted_oarfish = { DisplayName = "Enchanted Oarfish" }, green_basking_shark = { DisplayName = "Green Basking Shark" }, green_oarfish = { DisplayName = "Green Oarfish" }, enchanted_manta_ray = { DisplayName = "Enchanted Manta Ray" }, glistening_orca = { DisplayName = "Glistening Orca" }, harmonic_manta_ray = { DisplayName = "Harmonic Manta Ray" }, pink_orca = { DisplayName = "Pink Orca" }, pink_oarfish = { DisplayName = "Pink Oarfish" }, harmonic_orca = { DisplayName = "Harmonic Orca" }, orca = { DisplayName = "Orca" }, harmonic_whale_shark = { DisplayName = "Harmonic Whale Shark" }, yang_eagle_stingray = { DisplayName = "Yang Eagle Stingray" }, greenfin_tuna = { DisplayName = "Greenfin Tuna" }, enchanted_greenfin_tuna = { DisplayName = "Enchanted Greenfin Tuna" }, pinkfin_tuna = { DisplayName = "Pinkfin Tuna" }, pink_eastern_ray = { DisplayName = "Pink Eastern Ray" }, yin_eagle_stingray = { DisplayName = "Yin Eagle Stingray" }, green_manta_ray = { DisplayName = "Green Manta Ray" }, glistening_seahorse = { DisplayName = "Glistening Seahorse" }, green_seahorse = { DisplayName = "Green Seahorse" }, glistening_sailfish = { DisplayName = "Glistening Sailfish" }, pink_seahorse = { DisplayName = "Pink Seahorse" }, yin_seahorse = { DisplayName = "Yin Seahorse" }, yang_seahorse = { DisplayName = "Yang Seahorse" }, green_chinook_salmon = { DisplayName = "Green Chinook Salmon" }, magic_salmon = { DisplayName = "Magic Salmon" }, harmonic_koi = { DisplayName = "Harmonic Koi" }, yin_speckled_tilapia = { DisplayName = "Yin Speckled Tilapia" }, yang_speckled_tilapia = { DisplayName = "Yang Speckled Tilapia" }, yin_koi = { DisplayName = "Yin Koi" }, yang_koi = { DisplayName = "Yang Koi" }, yin_marlin = { DisplayName = "Yin Marlin" }, yang_marlin = { DisplayName = "Yang Marlin" }, pink_sailfish = { DisplayName = "Pink Sailfish" }, green_sailfish = { DisplayName = "Green Sailfish" }, yang_sockeye_salmon = { DisplayName = "Yang Sockeye Salmon" }, yin_sockeye_salmon = { DisplayName = "Yin Sockeye Salmon" },
-	},
-	Rare = {
-		electric_eel = { DisplayName = "Electric Eel" }, black_manta_ray = { DisplayName = "Black Manta Ray" }, mandarin_fish = { DisplayName = "Mandarin Fish" }, skeleton_fish = { DisplayName = "Skeleton Fish" }, flame_angelfish = { DisplayName = "Flame Angelfish" }, sailfish = { DisplayName = "Sailfish" }, monkfish = { DisplayName = "Monkfish" }, sockeye_salmon = { DisplayName = "Sockeye Salmon" }, pink_salmon = { DisplayName = "Pink Salmon" }, red_herring = { DisplayName = "Red Herring" }, common_koi = { DisplayName = "Common Koi" }, catfish = { DisplayName = "Catfish" }, pink_snapper = { DisplayName = "Pink Snapper" }, marlin = { DisplayName = "Marlin" }, lumina_glowfish = { DisplayName = "Lumina Glowfish" }, sea_turtle = { DisplayName = "Sea Turtle" }, black_seadevil = { DisplayName = "Black Seadevil" }, crystal_glowfish = { DisplayName = "Crystal Glowfish" }, needlefish = { DisplayName = "Needlefish" }, neon_angelfish = { DisplayName = "Neon Angelfish" },
-	},
-	Uncommon = {
-		atlantic_sturgeon = { DisplayName = "Atlantic Sturgeon" }, white_sturgeon = { DisplayName = "White Sturgeon" }, yellow_angelfish = { DisplayName = "Yellow Angelfish" }, red_saltwater_angelfish = { DisplayName = "Red Saltwater Angelfish" }, yellow_saltwater_angelfish = { DisplayName = "Yellow Saltwater Angelfish" }, sorbet_fairy_wrasses = { DisplayName = "Sorbet Fairy Wrasses" }, magic_fairy_wrasses = { DisplayName = "Magic Fairy Wrasses" }, aqua_fairy_wrasses = { DisplayName = "Aqua Fairy Wrasses" }, sunset_fairy_wrasses = { DisplayName = "Sunset Fairy Wrasses" }, cod = { DisplayName = "Cod" }, blue_jellyfish = { DisplayName = "Blue Jellyfish" }, carp = { DisplayName = "Carp" }, silver_carp = { DisplayName = "Silver Carp" }, chinook_salmon = { DisplayName = "Chinook Salmon" }, blue_tilapia = { DisplayName = "Blue Tilapia" }, nile_tilapia = { DisplayName = "Nile Tilapia" }, speckled_tilapia = { DisplayName = "Speckled Tilapia" }, mango_tilapia = { DisplayName = "Mango Tilapia" }, red_snapper = { DisplayName = "Red Snapper" }, swordfish = { DisplayName = "Swordfish" }, mackerel = { DisplayName = "Mackerel" }, blackfin_tuna = { DisplayName = "Blackfin Tuna" }, blue_seahorse = { DisplayName = "Blue Seahorse" }, eagle_stingray = { DisplayName = "Eagle Stingray" },
-	},
-	Common = {
-		goldfish = { DisplayName = "Goldfish" }, bluegill = { DisplayName = "Bluegill" }, bass = { DisplayName = "Bass" }, pacific_sardine = { DisplayName = "Pacific Sardine" }, blue_pangasius = { DisplayName = "Blue Pangasius" }, anchovy = { DisplayName = "Anchovy" }, green_jellyfish = { DisplayName = "Green Jellyfish" }, sturgeon = { DisplayName = "Sturgeon" }, green_sturgeon = { DisplayName = "Green Sturgeon" }, blue_manta_ray = { DisplayName = "Blue Manta Ray" }, sardine = { DisplayName = "Sardine" }, herring = { DisplayName = "Herring" }, red_tilapia = { DisplayName = "Red Tilapia" }, minnow = { DisplayName = "Minnow" }, yellow_tang = { DisplayName = "Yellow Tang" }, yellowfin_tuna = { DisplayName = "Yellowfin Tuna" }, pangasius = { DisplayName = "Pangasius" }, yellow_seahorse = { DisplayName = "Yellow Seahorse" }, southern_stingray = { DisplayName = "Southern Stingray" }, starfish = { DisplayName = "Starfish" }, blue_tang = { DisplayName = "Blue Tang" },
-	},
-}
+	local FISH_RARITY = {
+		Ethereal = {
+			shadow_devil_whale_shark = { DisplayName = "Shadow Devil Whale Shark" }, radioactive_great_hammerhead_shark = { DisplayName = "Radioactive Great Hammerhead Shark" }, megalodon = { DisplayName = "Megalodon" }, golden_megalodon = { DisplayName = "Golden Megalodon" }, shadow_tiger_shark = { DisplayName = "Shadow Tiger Shark" }, king_manta_ray = { DisplayName = "King Manta Ray" },
+		},
+		Mythical = {
+			angelic_whale_shark = { DisplayName = "Angelic Whale Shark" }, golden_whale_shark = { DisplayName = "Golden Whale Shark" }, shadow_devil_monkfish = { DisplayName = "Shadow Devil Monkfish" }, rainbow_narwhal = { DisplayName = "Rainbow Narwhal" }, golden_bull_shark = { DisplayName = "Golden Bull Shark" }, golden_great_hammerhead_shark = { DisplayName = "Golden Great Hammerhead Shark" }, radioactive_hammerhead_shark = { DisplayName = "Radioactive Hammerhead Shark" }, angelic_manta_ray = { DisplayName = "Angelic Manta Ray" }, golden_tiger_shark = { DisplayName = "Golden Tiger Shark" }, shadowfin_tuna = { DisplayName = "Shadowfin Tuna" }, moonlight_marlin = { DisplayName = "Moonlight Marlin" }, golden_great_white_shark = { DisplayName = "Golden Great White Shark" }, gray_whale = { DisplayName = "Gray Whale" },
+		},
+		Legendary = {
+			moonlight_jellyfish = { DisplayName = "Moonlight Jellyfish" }, golden_monkfish = { DisplayName = "Golden Monkfish" }, golden_hammerhead_shark = { DisplayName = "Golden Hammerhead Shark" }, hammerhead_shark = { DisplayName = "Hammerhead Shark" }, great_hammerhead_shark = { DisplayName = "Great Hammerhead Shark" }, whale_shark = { DisplayName = "Whale Shark" }, mako_shark = { DisplayName = "Mako Shark" }, golden_mako_shark = { DisplayName = "Golden Mako Shark" }, tiger_shark = { DisplayName = "Tiger Shark" }, bull_shark = { DisplayName = "Bull Shark" }, rainbow_tilapia = { DisplayName = "Rainbow Tilapia" }, rainbow_salmon = { DisplayName = "Rainbow Salmon" }, bluefin_tuna = { DisplayName = "Bluefin Tuna" }, golden_marlin = { DisplayName = "Golden Marlin" }, great_white_shark = { DisplayName = "Great White Shark" }, basking_shark = { DisplayName = "Basking Shark" }, rainbow_clownfish = { DisplayName = "Rainbow Clownfish" }, golden_orca = { DisplayName = "Golden Orca" },
+		},
+		Epic = {
+			narwhal = { DisplayName = "Narwhal" }, golden_pangasius = { DisplayName = "Golden Pangasius" }, devil_manta_ray = { DisplayName = "Devil Manta Ray" }, golden_tilapia = { DisplayName = "Golden Tilapia" }, golden_sardine = { DisplayName = "Golden Sardine" }, golden_salmon = { DisplayName = "Golden Salmon" }, golden_jellyfish = { DisplayName = "Golden Jellyfish" }, golden_sturgeon = { DisplayName = "Golden Sturgeon" }, golden_catfish = { DisplayName = "Golden Catfish" }, pacific_shark = { DisplayName = "Pacific Shark" }, golden_anglerfish = { DisplayName = "Golden Anglerfish" }, golden_eagle_ray = { DisplayName = "Golden Eagle Ray" }, glistening_hammerhead_shark = { DisplayName = "Glistening Hammerhead Shark" }, beluga_whale = { DisplayName = "Beluga Whale" }, golden_beluga_whale = { DisplayName = "Golden Beluga Whale" }, golden_oarfish = { DisplayName = "Golden Oarfish" }, pink_hammerhead_shark = { DisplayName = "Pink HammerHead Shark" }, enchanted_basking_shark = { DisplayName = "Enchanted Basking Shark" }, enchanted_oarfish = { DisplayName = "Enchanted Oarfish" }, green_basking_shark = { DisplayName = "Green Basking Shark" }, green_oarfish = { DisplayName = "Green Oarfish" }, enchanted_manta_ray = { DisplayName = "Enchanted Manta Ray" }, glistening_orca = { DisplayName = "Glistening Orca" }, harmonic_manta_ray = { DisplayName = "Harmonic Manta Ray" }, pink_orca = { DisplayName = "Pink Orca" }, pink_oarfish = { DisplayName = "Pink Oarfish" }, harmonic_orca = { DisplayName = "Harmonic Orca" }, orca = { DisplayName = "Orca" }, harmonic_whale_shark = { DisplayName = "Harmonic Whale Shark" }, yang_eagle_stingray = { DisplayName = "Yang Eagle Stingray" }, greenfin_tuna = { DisplayName = "Greenfin Tuna" }, enchanted_greenfin_tuna = { DisplayName = "Enchanted Greenfin Tuna" }, pinkfin_tuna = { DisplayName = "Pinkfin Tuna" }, pink_eastern_ray = { DisplayName = "Pink Eastern Ray" }, yin_eagle_stingray = { DisplayName = "Yin Eagle Stingray" }, green_manta_ray = { DisplayName = "Green Manta Ray" }, glistening_seahorse = { DisplayName = "Glistening Seahorse" }, green_seahorse = { DisplayName = "Green Seahorse" }, glistening_sailfish = { DisplayName = "Glistening Sailfish" }, pink_seahorse = { DisplayName = "Pink Seahorse" }, yin_seahorse = { DisplayName = "Yin Seahorse" }, yang_seahorse = { DisplayName = "Yang Seahorse" }, green_chinook_salmon = { DisplayName = "Green Chinook Salmon" }, magic_salmon = { DisplayName = "Magic Salmon" }, harmonic_koi = { DisplayName = "Harmonic Koi" }, yin_speckled_tilapia = { DisplayName = "Yin Speckled Tilapia" }, yang_speckled_tilapia = { DisplayName = "Yang Speckled Tilapia" }, yin_koi = { DisplayName = "Yin Koi" }, yang_koi = { DisplayName = "Yang Koi" }, yin_marlin = { DisplayName = "Yin Marlin" }, yang_marlin = { DisplayName = "Yang Marlin" }, pink_sailfish = { DisplayName = "Pink Sailfish" }, green_sailfish = { DisplayName = "Green Sailfish" }, yang_sockeye_salmon = { DisplayName = "Yang Sockeye Salmon" }, yin_sockeye_salmon = { DisplayName = "Yin Sockeye Salmon" },
+		},
+		Rare = {
+			electric_eel = { DisplayName = "Electric Eel" }, black_manta_ray = { DisplayName = "Black Manta Ray" }, mandarin_fish = { DisplayName = "Mandarin Fish" }, skeleton_fish = { DisplayName = "Skeleton Fish" }, flame_angelfish = { DisplayName = "Flame Angelfish" }, sailfish = { DisplayName = "Sailfish" }, monkfish = { DisplayName = "Monkfish" }, sockeye_salmon = { DisplayName = "Sockeye Salmon" }, pink_salmon = { DisplayName = "Pink Salmon" }, red_herring = { DisplayName = "Red Herring" }, common_koi = { DisplayName = "Common Koi" }, catfish = { DisplayName = "Catfish" }, pink_snapper = { DisplayName = "Pink Snapper" }, marlin = { DisplayName = "Marlin" }, lumina_glowfish = { DisplayName = "Lumina Glowfish" }, sea_turtle = { DisplayName = "Sea Turtle" }, black_seadevil = { DisplayName = "Black Seadevil" }, crystal_glowfish = { DisplayName = "Crystal Glowfish" }, needlefish = { DisplayName = "Needlefish" }, neon_angelfish = { DisplayName = "Neon Angelfish" },
+		},
+		Uncommon = {
+			atlantic_sturgeon = { DisplayName = "Atlantic Sturgeon" }, white_sturgeon = { DisplayName = "White Sturgeon" }, yellow_angelfish = { DisplayName = "Yellow Angelfish" }, red_saltwater_angelfish = { DisplayName = "Red Saltwater Angelfish" }, yellow_saltwater_angelfish = { DisplayName = "Yellow Saltwater Angelfish" }, sorbet_fairy_wrasses = { DisplayName = "Sorbet Fairy Wrasses" }, magic_fairy_wrasses = { DisplayName = "Magic Fairy Wrasses" }, aqua_fairy_wrasses = { DisplayName = "Aqua Fairy Wrasses" }, sunset_fairy_wrasses = { DisplayName = "Sunset Fairy Wrasses" }, cod = { DisplayName = "Cod" }, blue_jellyfish = { DisplayName = "Blue Jellyfish" }, carp = { DisplayName = "Carp" }, silver_carp = { DisplayName = "Silver Carp" }, chinook_salmon = { DisplayName = "Chinook Salmon" }, blue_tilapia = { DisplayName = "Blue Tilapia" }, nile_tilapia = { DisplayName = "Nile Tilapia" }, speckled_tilapia = { DisplayName = "Speckled Tilapia" }, mango_tilapia = { DisplayName = "Mango Tilapia" }, red_snapper = { DisplayName = "Red Snapper" }, swordfish = { DisplayName = "Swordfish" }, mackerel = { DisplayName = "Mackerel" }, blackfin_tuna = { DisplayName = "Blackfin Tuna" }, blue_seahorse = { DisplayName = "Blue Seahorse" }, eagle_stingray = { DisplayName = "Eagle Stingray" },
+		},
+		Common = {
+			goldfish = { DisplayName = "Goldfish" }, bluegill = { DisplayName = "Bluegill" }, bass = { DisplayName = "Bass" }, pacific_sardine = { DisplayName = "Pacific Sardine" }, blue_pangasius = { DisplayName = "Blue Pangasius" }, anchovy = { DisplayName = "Anchovy" }, green_jellyfish = { DisplayName = "Green Jellyfish" }, sturgeon = { DisplayName = "Sturgeon" }, green_sturgeon = { DisplayName = "Green Sturgeon" }, blue_manta_ray = { DisplayName = "Blue Manta Ray" }, sardine = { DisplayName = "Sardine" }, herring = { DisplayName = "Herring" }, red_tilapia = { DisplayName = "Red Tilapia" }, minnow = { DisplayName = "Minnow" }, yellow_tang = { DisplayName = "Yellow Tang" }, yellowfin_tuna = { DisplayName = "Yellowfin Tuna" }, pangasius = { DisplayName = "Pangasius" }, yellow_seahorse = { DisplayName = "Yellow Seahorse" }, southern_stingray = { DisplayName = "Southern Stingray" }, starfish = { DisplayName = "Starfish" }, blue_tang = { DisplayName = "Blue Tang" },
+		},
+	}
 
-local BUG_RARITY = {
-	Ethereal = {
-		crimson_centipede = { DisplayName = "Crimson Centipede" }, rainbow_caterpillar = { DisplayName = "Rainbow Caterpillar" }, shadow_onyx_beetle = { DisplayName = "Shadow Onyx Beetle" }, shadow_monarch_butterfly = { DisplayName = "Shadow Monarch Butterfly" }, king_mushroom_monster = { DisplayName = "King Mushroom Monster" },
-	},
-	Mythical = {
-		golden_stick_bug = { DisplayName = "Golden Stick Bug" }, golden_mantis = { DisplayName = "Golden Mantis" }, golden_rhino_beetle = { DisplayName = "Golden Rhino Beetle" }, queen_mushroom_monster = { DisplayName = "Queen Mushroom Monster" },
-	},
-	Legendary = {
-		crystal_beetle_amethyst = { DisplayName = "Amethyst Crystal Beetle" }, blue_crab = { DisplayName = "Blue Crab" }, luminescent_grasshopper = { DisplayName = "Luminescent Grasshopper" }, crystal_beetle_ruby = { DisplayName = "Ruby Crystal Beetle" }, golden_scorpion = { DisplayName = "Golden Scorpion" }, evil_mushroom_monster = { DisplayName = "Evil Mushroom Monster" },
-	},
-	Epic = {
-		black_scorpion = { DisplayName = "Black Scorpion" }, emerald_butterfly = { DisplayName = "Emerald Butterfly" }, crystal_beetle_emerald = { DisplayName = "Emerald Crystal Beetle" }, floritefly = { DisplayName = "Floritefly" }, firefly = { DisplayName = "Firefly" }, red_dragonfly = { DisplayName = "Red Dragonfly" }, rhino_beetle = { DisplayName = "Rhino Beetle" }, scolopendra_centipede = { DisplayName = "Scolopendra Centipede" }, stoplight_butterfly = { DisplayName = "Stoplight Butterfly" }, red_mega_mushroom_monster = { DisplayName = "Red Mega Mushroom Monster" }, princess_mushroom_monster = { DisplayName = "Princess Mushroom Monster" },
-	},
-	Rare = {
-		crystal_beetle_amber = { DisplayName = "Amber Crystal Beetle" }, blue_butterfly = { DisplayName = "Blue Butterfly" }, slug = { DisplayName = "Slug" }, brown_stick_bug = { DisplayName = "Brown Stick Bug" }, centipede = { DisplayName = "Centipede" }, crab = { DisplayName = "Crab" }, dragonfly = { DisplayName = "Dragonfly" }, grasshopper = { DisplayName = "Grasshopper" }, green_stick_bug = { DisplayName = "Green Stick Bug" }, mantis = { DisplayName = "Mantis" }, crystal_beetle_sapphire = { DisplayName = "Sapphire Crystal Beetle" }, scorpion = { DisplayName = "Scorpion" }, stag_beetle = { DisplayName = "Stag Beetle" }, orange_mushroom_bug = { DisplayName = "Orange Mushroom Bug" }, red_grasshopper = { DisplayName = "Red Grasshopper" }, red_mushroom_monster = { DisplayName = "Red Mushroom Monster" }, orange_mushroom_monster = { DisplayName = "Orange Mushroom Monster" }, yellow_mushroom_monster = { DisplayName = "Yellow Mushroom Monster" }, green_mushroom_monster = { DisplayName = "Green Mushroom Monster" }, blue_mushroom_monster = { DisplayName = "Blue Mushroom Monster" }, purple_mushroom_monster = { DisplayName = "Purple Mushroom Monster" }, pink_mushroom_monster = { DisplayName = "Pink Mushroom Monster" },
-	},
-	Uncommon = {
-		bee = { DisplayName = "Bee" }, cricket = { DisplayName = "Cricket" }, orange_butterfly = { DisplayName = "Orange Butterfly" }, snail = { DisplayName = "Snail" }, stink_bug = { DisplayName = "Stink Bug" }, crystal_beetle_topaz = { DisplayName = "Topaz Crystal Beetle" }, yellow_butterfly = { DisplayName = "Yellow Butterfly" }, pink_firefly = { DisplayName = "Pink Firefly" }, orange_ladybug = { DisplayName = "Orange Ladybug" },
-	},
-	Common = {
-		ant = { DisplayName = "Ant" }, fire_ant = { DisplayName = "Fire Ant" }, caterpillar = { DisplayName = "Caterpillar" }, cockroach = { DisplayName = "Cockroach" }, ladybug = { DisplayName = "Ladybug" }, purple_butterfly = { DisplayName = "Purple Butterfly" }, lime_grasshopper = { DisplayName = "Lime Grasshopper" }, blue_ladybug = { DisplayName = "Blue Ladybug" },
-	},
-}
+	local BUG_RARITY = {
+		Ethereal = {
+			crimson_centipede = { DisplayName = "Crimson Centipede" }, rainbow_caterpillar = { DisplayName = "Rainbow Caterpillar" }, shadow_onyx_beetle = { DisplayName = "Shadow Onyx Beetle" }, shadow_monarch_butterfly = { DisplayName = "Shadow Monarch Butterfly" }, king_mushroom_monster = { DisplayName = "King Mushroom Monster" },
+		},
+		Mythical = {
+			golden_stick_bug = { DisplayName = "Golden Stick Bug" }, golden_mantis = { DisplayName = "Golden Mantis" }, golden_rhino_beetle = { DisplayName = "Golden Rhino Beetle" }, queen_mushroom_monster = { DisplayName = "Queen Mushroom Monster" },
+		},
+		Legendary = {
+			crystal_beetle_amethyst = { DisplayName = "Amethyst Crystal Beetle" }, blue_crab = { DisplayName = "Blue Crab" }, luminescent_grasshopper = { DisplayName = "Luminescent Grasshopper" }, crystal_beetle_ruby = { DisplayName = "Ruby Crystal Beetle" }, golden_scorpion = { DisplayName = "Golden Scorpion" }, evil_mushroom_monster = { DisplayName = "Evil Mushroom Monster" },
+		},
+		Epic = {
+			black_scorpion = { DisplayName = "Black Scorpion" }, emerald_butterfly = { DisplayName = "Emerald Butterfly" }, crystal_beetle_emerald = { DisplayName = "Emerald Crystal Beetle" }, floritefly = { DisplayName = "Floritefly" }, firefly = { DisplayName = "Firefly" }, red_dragonfly = { DisplayName = "Red Dragonfly" }, rhino_beetle = { DisplayName = "Rhino Beetle" }, scolopendra_centipede = { DisplayName = "Scolopendra Centipede" }, stoplight_butterfly = { DisplayName = "Stoplight Butterfly" }, red_mega_mushroom_monster = { DisplayName = "Red Mega Mushroom Monster" }, princess_mushroom_monster = { DisplayName = "Princess Mushroom Monster" },
+		},
+		Rare = {
+			crystal_beetle_amber = { DisplayName = "Amber Crystal Beetle" }, blue_butterfly = { DisplayName = "Blue Butterfly" }, slug = { DisplayName = "Slug" }, brown_stick_bug = { DisplayName = "Brown Stick Bug" }, centipede = { DisplayName = "Centipede" }, crab = { DisplayName = "Crab" }, dragonfly = { DisplayName = "Dragonfly" }, grasshopper = { DisplayName = "Grasshopper" }, green_stick_bug = { DisplayName = "Green Stick Bug" }, mantis = { DisplayName = "Mantis" }, crystal_beetle_sapphire = { DisplayName = "Sapphire Crystal Beetle" }, scorpion = { DisplayName = "Scorpion" }, stag_beetle = { DisplayName = "Stag Beetle" }, orange_mushroom_bug = { DisplayName = "Orange Mushroom Bug" }, red_grasshopper = { DisplayName = "Red Grasshopper" }, red_mushroom_monster = { DisplayName = "Red Mushroom Monster" }, orange_mushroom_monster = { DisplayName = "Orange Mushroom Monster" }, yellow_mushroom_monster = { DisplayName = "Yellow Mushroom Monster" }, green_mushroom_monster = { DisplayName = "Green Mushroom Monster" }, blue_mushroom_monster = { DisplayName = "Blue Mushroom Monster" }, purple_mushroom_monster = { DisplayName = "Purple Mushroom Monster" }, pink_mushroom_monster = { DisplayName = "Pink Mushroom Monster" },
+		},
+		Uncommon = {
+			bee = { DisplayName = "Bee" }, cricket = { DisplayName = "Cricket" }, orange_butterfly = { DisplayName = "Orange Butterfly" }, snail = { DisplayName = "Snail" }, stink_bug = { DisplayName = "Stink Bug" }, crystal_beetle_topaz = { DisplayName = "Topaz Crystal Beetle" }, yellow_butterfly = { DisplayName = "Yellow Butterfly" }, pink_firefly = { DisplayName = "Pink Firefly" }, orange_ladybug = { DisplayName = "Orange Ladybug" },
+		},
+		Common = {
+			ant = { DisplayName = "Ant" }, fire_ant = { DisplayName = "Fire Ant" }, caterpillar = { DisplayName = "Caterpillar" }, cockroach = { DisplayName = "Cockroach" }, ladybug = { DisplayName = "Ladybug" }, purple_butterfly = { DisplayName = "Purple Butterfly" }, lime_grasshopper = { DisplayName = "Lime Grasshopper" }, blue_ladybug = { DisplayName = "Blue Ladybug" },
+		},
+	}
 	local RARITY_BY_NAME = {}
 	local function indexRarities(tbl)
 		for rarity, list in pairs(tbl) do
@@ -1223,47 +1169,300 @@ local BUG_RARITY = {
 	end
 	local Page1 = createPage("Main", "🏠 Main")
 	local PageTP = createPage("TP", "✈️ TP")
-	local PageAuto = createPage("Automatic", "🛒 Automatic")
 	local PageOthers = createPage("Others", "🚀 Others")
-	local Page2 = createPage("Tab", "🌾 Harvest")
 	local Page3 = createPage("FishTab", "🎣 Fish")
 	local Page4 = createPage("BugHunt", "🐞 Bug")
 	local PageSellHub = createPage("SellTab", "💰 Sell & Trade Hub")
 	local PageTreasure = createPage("TreasureTab", "💎 Treasures")
 	local Page10 = createPage("FishTPTab", "🗺️ Fishing and Bugs Spots")
+	local PageLoad = createPage("LoadTab", "📂 Load")
+	do
+		-- Modern decorative top bar
+		local TopBar = Instance.new("Frame")
+		TopBar.Size = UDim2.new(1, -20, 0, 4)
+		TopBar.Position = UDim2.new(0, 10, 0, 6)
+		TopBar.BackgroundColor3 = Color3.fromRGB(0, 210, 255)
+		TopBar.BorderSizePixel = 0
+		TopBar.Parent = PageLoad
+		Instance.new("UICorner", TopBar).CornerRadius = UDim.new(1, 0)
+
+		local loadY = 16
+
+		-- Title
+		local LoadTitle = Instance.new("TextLabel")
+		LoadTitle.Size = UDim2.new(1, -20, 0, 28)
+		LoadTitle.Position = UDim2.new(0, 10, 0, loadY)
+		LoadTitle.Text = "⚡ Dynamic Script Loader"
+		LoadTitle.TextColor3 = Color3.fromRGB(0, 210, 255)
+		LoadTitle.Font = Enum.Font.SourceSansBold
+		LoadTitle.TextSize = 16
+		LoadTitle.TextXAlignment = Enum.TextXAlignment.Left
+		LoadTitle.BackgroundTransparency = 1
+		LoadTitle.Parent = PageLoad
+		loadY = loadY + 34
+
+		-- Info card with instructions
+		local InfoCard = Instance.new("Frame")
+		InfoCard.Size = UDim2.new(1, -20, 0, 88)
+		InfoCard.Position = UDim2.new(0, 10, 0, loadY)
+		InfoCard.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
+		InfoCard.BackgroundTransparency = 0.15
+		InfoCard.BorderSizePixel = 0
+		InfoCard.Parent = PageLoad
+		Instance.new("UICorner", InfoCard).CornerRadius = UDim.new(0, 8)
+		local InfoStroke = Instance.new("UIStroke")
+		InfoStroke.Color = Color3.fromRGB(0, 210, 255)
+		InfoStroke.Transparency = 0.6
+		InfoStroke.Thickness = 1
+		InfoStroke.Parent = InfoCard
+
+		local InfoText = Instance.new("TextLabel")
+		InfoText.Size = UDim2.new(1, -16, 1, -8)
+		InfoText.Position = UDim2.new(0, 8, 0, 4)
+		InfoText.Text = "📋 How to use:\n• Click a file button below to load it from GitHub\n• Use 🔄 Refresh to reload the file list\n• Files have a 2s cooldown after clicking\n• A toast will appear when a file loads successfully"
+		InfoText.TextColor3 = Color3.fromRGB(180, 185, 200)
+		InfoText.Font = Enum.Font.SourceSans
+		InfoText.TextSize = 12
+		InfoText.TextWrapped = true
+		InfoText.TextXAlignment = Enum.TextXAlignment.Left
+		InfoText.TextYAlignment = Enum.TextYAlignment.Top
+		InfoText.BackgroundTransparency = 1
+		InfoText.Parent = InfoCard
+		loadY = loadY + 98
+
+		-- Refresh button
+		local RefreshBtn = Instance.new("TextButton")
+		RefreshBtn.Size = UDim2.new(0, 120, 0, 30)
+		RefreshBtn.Position = UDim2.new(1, -130, 0, loadY)
+		RefreshBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 200)
+		RefreshBtn.Text = "🔄 Refresh"
+		RefreshBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		RefreshBtn.Font = Enum.Font.SourceSansBold
+		RefreshBtn.TextSize = 12
+		RefreshBtn.Parent = PageLoad
+		Instance.new("UICorner", RefreshBtn).CornerRadius = UDim.new(0, 6)
+		applyButtonEffects(RefreshBtn, Color3.fromRGB(0, 120, 200), Color3.fromRGB(0, 150, 230))
+
+		-- Status label
+		local LoadStatus = Instance.new("TextLabel")
+		LoadStatus.Size = UDim2.new(1, -150, 0, 30)
+		LoadStatus.Position = UDim2.new(0, 10, 0, loadY)
+		LoadStatus.Text = "Fetching file list from GitHub..."
+		LoadStatus.TextColor3 = Color3.fromRGB(170, 175, 190)
+		LoadStatus.Font = Enum.Font.SourceSansItalic
+		LoadStatus.TextSize = 12
+		LoadStatus.TextXAlignment = Enum.TextXAlignment.Left
+		LoadStatus.BackgroundTransparency = 1
+		LoadStatus.Parent = PageLoad
+		loadY = loadY + 40
+
+		-- Container for file buttons
+		local FileBtnContainer = Instance.new("Frame")
+		FileBtnContainer.Size = UDim2.new(1, 0, 0, 300)
+		FileBtnContainer.Position = UDim2.new(0, 0, 0, loadY)
+		FileBtnContainer.BackgroundTransparency = 1
+		FileBtnContainer.Parent = PageLoad
+
+		-- Load Logs Section
+		local logsStartY = loadY + 310
+		local LogsHeader = Instance.new("TextLabel")
+		LogsHeader.Size = UDim2.new(1, -20, 0, 24)
+		LogsHeader.Position = UDim2.new(0, 10, 0, logsStartY)
+		LogsHeader.Text = "📋 Load Logs"
+		LogsHeader.TextColor3 = Color3.fromRGB(0, 210, 255)
+		LogsHeader.Font = Enum.Font.SourceSansBold
+		LogsHeader.TextSize = 14
+		LogsHeader.TextXAlignment = Enum.TextXAlignment.Left
+		LogsHeader.BackgroundTransparency = 1
+		LogsHeader.Parent = PageLoad
+		local LogsFrame = Instance.new("ScrollingFrame")
+		LogsFrame.Size = UDim2.new(1, -20, 0, 120)
+		LogsFrame.Position = UDim2.new(0, 10, 0, logsStartY + 28)
+		LogsFrame.BackgroundColor3 = Color3.fromRGB(18, 20, 28)
+		LogsFrame.BorderSizePixel = 0
+		LogsFrame.ScrollBarThickness = 3
+		LogsFrame.Parent = PageLoad
+		Instance.new("UICorner", LogsFrame).CornerRadius = UDim.new(0, 6)
+		local LogsStroke = Instance.new("UIStroke")
+		LogsStroke.Color = Color3.fromRGB(0, 210, 255)
+		LogsStroke.Transparency = 0.7
+		LogsStroke.Thickness = 1
+		LogsStroke.Parent = LogsFrame
+		local LogsLayout = Instance.new("UIListLayout")
+		LogsLayout.Parent = LogsFrame
+		LogsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+		LogsLayout.Padding = UDim.new(0, 2)
+		local logEntryCount = 0
+		local function addLoadLog(msg, color)
+			logEntryCount = logEntryCount + 1
+			local entry = Instance.new("TextLabel")
+			entry.Size = UDim2.new(1, -8, 0, 20)
+			entry.Text = "  " .. os.date("%H:%M:%S") .. " — " .. msg
+			entry.TextColor3 = color or Color3.fromRGB(200, 205, 215)
+			entry.Font = Enum.Font.SourceSans
+			entry.TextSize = 11
+			entry.TextXAlignment = Enum.TextXAlignment.Left
+			entry.BackgroundTransparency = 1
+			entry.Parent = LogsFrame
+			LogsFrame.CanvasSize = UDim2.new(0, 0, 0, logEntryCount * 22)
+			task.spawn(function()
+				task.wait(0.05)
+				LogsFrame.CanvasPosition = Vector2.new(0, math.max(0, logEntryCount * 22 - 120))
+			end)
+		end
+		addLoadLog("Logs initialized — waiting for file operations.", Color3.fromRGB(150, 155, 170))
+
+		local fileCooldowns = {}
+		local currentBtnY = 0
+
+		local function fetchAndDisplayFiles()
+			for _, child in ipairs(FileBtnContainer:GetChildren()) do
+				child:Destroy()
+			end
+			fileCooldowns = {}
+			currentBtnY = 0
+			LoadStatus.Text = "Fetching file list from GitHub..."
+			LoadStatus.TextColor3 = Color3.fromRGB(170, 175, 190)
+
+			task.spawn(function()
+				local success, response = pcall(game.HttpGet, game, GQ_REPO_API)
+				if not success or not response then
+					LoadStatus.Text = "❌ Failed to fetch file list from GitHub."
+					LoadStatus.TextColor3 = Color3.fromRGB(255, 120, 120)
+					showToast("❌ Failed to fetch file list", Color3.fromRGB(255, 120, 120), 3)
+					addLoadLog("❌ File list not found — failed to fetch from GitHub", Color3.fromRGB(255, 120, 120))
+					return
+				end
+				local okParse, files = pcall(function()
+					return HttpService:JSONDecode(response)
+				end)
+				if not okParse or type(files) ~= "table" then
+					LoadStatus.Text = "❌ Failed to parse file list."
+					LoadStatus.TextColor3 = Color3.fromRGB(255, 120, 120)
+					showToast("❌ Failed to parse file list", Color3.fromRGB(255, 120, 120), 3)
+					addLoadLog("❌ File list parse error — could not read GitHub response", Color3.fromRGB(255, 120, 120))
+					return
+				end
+				LoadStatus.TextColor3 = Color3.fromRGB(170, 175, 190)
+				local fileCount = 0
+				for _, file in ipairs(files) do
+					if file.type == "file" then
+						local fileName = file.name
+						local FileBtn = Instance.new("TextButton")
+						FileBtn.Size = UDim2.new(1, -20, 0, 36)
+						FileBtn.Position = UDim2.new(0, 10, 0, currentBtnY)
+						FileBtn.BackgroundColor3 = Color3.fromRGB(28, 30, 42)
+						FileBtn.Text = "  📥 " .. fileName
+						FileBtn.TextColor3 = Color3.fromRGB(235, 235, 245)
+						FileBtn.Font = Enum.Font.SourceSansBold
+						FileBtn.TextSize = 12
+						FileBtn.TextXAlignment = Enum.TextXAlignment.Left
+						FileBtn.Parent = FileBtnContainer
+						Instance.new("UICorner", FileBtn).CornerRadius = UDim.new(0, 6)
+						local AccentBar = Instance.new("Frame")
+						AccentBar.Size = UDim2.new(0, 3, 1, -6)
+						AccentBar.Position = UDim2.new(0, 0, 0, 3)
+						AccentBar.BackgroundColor3 = Color3.fromRGB(0, 210, 255)
+						AccentBar.BorderSizePixel = 0
+						AccentBar.Parent = FileBtn
+						Instance.new("UICorner", AccentBar).CornerRadius = UDim.new(1, 0)
+						applyButtonEffects(FileBtn, Color3.fromRGB(28, 30, 42), Color3.fromRGB(38, 42, 58))
+						FileBtn.MouseButton1Click:Connect(function()
+							if fileCooldowns[fileName] then
+								showToast("⏳ Cooldown active for " .. fileName, Color3.fromRGB(255, 170, 90), 1.5)
+								return
+							end
+							fileCooldowns[fileName] = true
+							FileBtn.BackgroundColor3 = Color3.fromRGB(40, 35, 50)
+							FileBtn.Text = "  ⏳ Loading " .. fileName .. "..."
+							task.spawn(function()
+								local url = GQ_RAW_BASE .. HttpService:UrlEncode(fileName)
+								local s, content = pcall(game.HttpGet, game, url)
+								if s and content then
+									local fn, err = loadstring(content)
+									if fn then
+										task.spawn(fn)
+										showToast("✅ Load File successfully: " .. fileName, Color3.fromRGB(120, 220, 130), 3)
+							-- Calculate file stats
+							local lineCount = select(2, content:gsub("\n", "")) + 1
+							local charCount = #content
+							local spaceCount = select(2, content:gsub(" ", ""))
+							addLoadLog("✅ Loaded: " .. fileName .. " | Lines: " .. lineCount .. " | Chars: " .. charCount .. " | Spaces: " .. spaceCount .. " | Errors: 0", Color3.fromRGB(120, 220, 130))
+									else
+										warn("Loadstring error for " .. fileName .. ": " .. tostring(err))
+										showToast("❌ Failed to compile: " .. fileName, Color3.fromRGB(255, 120, 120), 3)
+							local lineCount = select(2, content:gsub("\n", "")) + 1
+							local charCount = #content
+							local spaceCount = select(2, content:gsub(" ", ""))
+							addLoadLog("❌ Compile error: " .. fileName .. " | Lines: " .. lineCount .. " | Chars: " .. charCount .. " | Spaces: " .. spaceCount .. " | Errors: 1", Color3.fromRGB(255, 120, 120))
+									end
+								else
+									warn("Failed to fetch: " .. fileName)
+									showToast("❌ Failed to fetch: " .. fileName, Color3.fromRGB(255, 120, 120), 3)
+						addLoadLog("❌ Fetch failed: " .. fileName .. " | Errors: 1", Color3.fromRGB(255, 120, 120))
+								end
+								task.wait(2)
+								fileCooldowns[fileName] = nil
+								FileBtn.BackgroundColor3 = Color3.fromRGB(28, 30, 42)
+								FileBtn.Text = "  📥 " .. fileName
+							end)
+						end)
+						currentBtnY = currentBtnY + 42
+						fileCount = fileCount + 1
+					end
+				end
+				LoadStatus.Text = "Found " .. fileCount .. " files. Click to load."
+				showToast("📂 Loaded " .. fileCount .. " files from GitHub", Color3.fromRGB(0, 210, 255), 2)
+				addLoadLog("📂 Found " .. fileCount .. " files from GitHub — ready to load", Color3.fromRGB(0, 210, 255))
+				PageLoad.CanvasSize = UDim2.new(0, 0, 0, math.max(loadY + currentBtnY + 20, logsStartY + 200))
+			end)
+		end
+
+		RefreshBtn.MouseButton1Click:Connect(function()
+			showToast("🔄 Refreshing file list...", Color3.fromRGB(0, 210, 255), 2)
+			fetchAndDisplayFiles()
+		end)
+
+		-- GitHub link button
+		local GitHubBtn = Instance.new("TextButton")
+		GitHubBtn.Size = UDim2.new(0, 160, 0, 30)
+		GitHubBtn.Position = UDim2.new(0, 10, 0, logsStartY + 158)
+		GitHubBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+		GitHubBtn.Text = "🔗 Open GitHub Repo"
+		GitHubBtn.TextColor3 = Color3.fromRGB(0, 210, 255)
+		GitHubBtn.Font = Enum.Font.SourceSansBold
+		GitHubBtn.TextSize = 12
+		GitHubBtn.Parent = PageLoad
+		Instance.new("UICorner", GitHubBtn).CornerRadius = UDim.new(0, 6)
+		local GitHubStroke = Instance.new("UIStroke")
+		GitHubStroke.Color = Color3.fromRGB(0, 210, 255)
+		GitHubStroke.Transparency = 0.5
+		GitHubStroke.Thickness = 1
+		GitHubStroke.Parent = GitHubBtn
+		applyButtonEffects(GitHubBtn, Color3.fromRGB(30, 30, 38), Color3.fromRGB(40, 44, 58))
+		GitHubBtn.MouseButton1Click:Connect(function()
+			local url = "https://github.com/rederadaniel/GQ"
+			if setclipboard then
+				pcall(setclipboard, url)
+				showToast("🔗 GitHub URL copied to clipboard! Paste in browser.", Color3.fromRGB(0, 210, 255), 4)
+				addLoadLog("🔗 GitHub URL copied to clipboard: " .. url, Color3.fromRGB(0, 210, 255))
+			else
+				showToast("🔗 GitHub URL: " .. url, Color3.fromRGB(0, 210, 255), 5)
+				addLoadLog("🔗 GitHub URL displayed: " .. url, Color3.fromRGB(0, 210, 255))
+			end
+		end)
+
+		fetchAndDisplayFiles()
+		PageLoad.CanvasSize = UDim2.new(0, 0, 0, logsStartY + 200)
+	end
 	local _sellAllCropsFn
 	local onlyFishingMode, y2, flySpeed, noclipActive, flyActive, infJumpActive, syncAntiAfk
 	do 
-		local buyRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Shops") and ReplicatedStorage.Remotes.Shops:FindFirstChild("BuyShopItem")
 		local sellActionRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Sell") and ReplicatedStorage.Remotes.Sell:FindFirstChild("SellAction")
 		local tradeActionRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Exchanges") and ReplicatedStorage.Remotes.Exchanges:FindFirstChild("RewardExchangeAction")
 		InventoryAction = (ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("MainInventory") and ReplicatedStorage.Remotes.MainInventory:FindFirstChild("InventoryAction")) or InventoryAction
 		local islandList = {"SeaSaltHarbor", "PointNemo", "TropicalIsland", "MagicForest"}
-		local raw = [[
-Garden Seeds Shop|GardenSeedShop|CarrotSeed,StrawberrySeed,TomatoSeed,WheatSeed,CornSeed,TurnipSeed,AppleSeed,LeekSeed,EggplantSeed,DragonFruitSeed,WatermelonSeed,PumpkinSeed,GrapeSeed,MaplePearSeed,PeachSeed,GiantPeanutSeed,WisteriaSeed,PrinceCabbageSeed,GlowshroomSpireSeed
-Cabbage Seeds Shop|CabbageSeedShop|CabbageSeed,PurpleCabbageSeed,RedCabbageSeed,SpikyCabbageSeed,CabbageBloomSeed,KingCabbageSeed
-Tropical Seeds Shop|TropicalSeedShop|CoconutSeed,BananaSeed,StoneHeadSeed,YellowDragonfruitSeed,GreatPineappleSeed
-Magic Seeds Shop|MagicSeedShop|HeartGrassSeed,DangoRootSeed,MonsteraDeliciosaSeed,CherryTreeSeed,WhimsicalWisteriaSeed
-Bug Nets Shop|MainBugShop|BasicNet,BlueNet
-Brother Seeds Shop|BrotherSeedShop|RedCarrotSeed,YellowTomatoSeed,GreenGrapeSeed,GreenPearSeed,GrandWhitePumpkinSeed
-Mushroom Seed Shop|MushroomSeedShop|PinkJumboMushroomSeed,BlueJumboMushroomSeed,RedJumboMushroomSeed,PurpleJumboMushroomSeed,GreenJumboMushroomSeed,BlackJumboMushroomSeed,CandyshroomSpireSeed
-Mushroom Pet Shop|MushroomPetShop|RedMushroom,LuckyMushroom,SpaceMushroom,LoveMushroom,PrinceMushroom,MightyMushroom
-Gear Shop|MainGearShop|WateringCan,EventScroll,RustySprinkler,StandardSprinkler,Trowel,MoonWand,ExpertSprinkler,FavoriteWand,UltimateSprinkler,Scythe,Retriever,NeptunesSprinkler
-Witch Potions Shop|WitchShop|PotionOfSpeed,PotionOfLeaping,PotionOfSnail,PotionOfShrinking,PotionOfSuperSnail,PotionOfGrowing,PotionOfInvisibility,PotionOfBugCatching,PotionOfFishing,PotionOfHarvesting
-Pet Shop|MainPetShop|BasicIncubator,CowEgg,FoxEgg,CatEgg,FastIncubator,SmallPetTreat,MediumPetTreat
-Special Event Shop|SpecialEventShop|SpottedCat,BlueAlienCat,CatEgg,CosmicWillowSeed,PlanetSeedPack,EventScroll,WhitePlankLong,WhitePlankSquare,WhitePlankWide,WhiteMediumStairs,GreyMediumStairs,BrownMediumStairs,WhiteArch,LongArchedWindow,MeadowLongArchedWindow,BlueGalaxyRoomDivider,GreenGalaxyRoomDivider,OrangeGalaxyRoomDivider,PinkGalaxyRoomDivider,PurpleGalaxyRoomDivider
-Main Mount Shop|MainMountShop|WalnutHorseMount,WinterlandHorseMount,SilvermaneHorseMount,OakrunnerHorseMount,NightchargerHorseMount,FlameveilRunnerHorseMount,TimberheadTrotterHorseMount,MaelstromMoondancerHorseMount,MidnightStallionHorseMount
-Space Mount Shop|SpaceMountShop|Catstroneer,SpikyMushroomMount,EvilMushroomMount
-Main Appliance Shop|MainApplianceShop|CookingCauldron
-Main Furniture Shop|MainFurnitureShop|Nil
-Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
-]]
-		local shops={} for l in raw:gmatch("[^\n]+") do local n,i,t=l:match("([^|]+)|([^|]+)|(.+)") table.insert(shops,{name=n,id=i,items=t:split(",")}) end
-		local selectedItems = {}
-		for _, s in ipairs(shops) do
-			selectedItems[s.id] = {}
-			for _, item in ipairs(s.items) do selectedItems[s.id][item] = false end
-		end
+		--GardenSeedShop GardenSeedShop GardenSeedShop GardenSeedShop GardenSeedShop GardenSeedShop loccal raw
 		local autoSellFishActive, autoTradeFishActive, autoSellPetsActive = false, false, false
 		local isAutoBuying = false
 		onlyFishingMode = false
@@ -1271,8 +1470,8 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 		_G.AutoDigSites = false
 		_G.AutoMagicOrbs = false
 
-				-- ==========================================================
-		-- 💰 PAGE SELL & TRADE HUB local
+		-- ==========================================================
+		--💰 PAGE SELL & TRADE HUB local
 		-- ==========================================================
 		local function executeSellAllCrops()
 			if not sellActionRemote then return end
@@ -1381,6 +1580,8 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 			box.FocusLost:Connect(function() inputCb(tonumber(box.Text) or defaultAmt) end)
 		end
 
+		local sellCropsAmt = 1
+		local sellFishAmt = 1
 		makeOneTapBtnWithInput("⚡ One Tap Sell Crops", UDim2.new(0, 10, 0, y5), sellCropsAmt, PageSellHub, function()
 			local hrp = Character:FindFirstChild("HumanoidRootPart")
 			if hrp then
@@ -1492,12 +1693,12 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 				local old = hrp.CFrame
 				hrp.CFrame = CFrame.new(-1088.27, 37.39, -80.23)
 				task.wait(1) executeTradeAllFish() 
-					pcall(function() VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game) end) task.wait(0.1)
-					pcall(function() VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game) end)
-					executeTradeAllFish() task.wait(6)
-					pcall(function() VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game) end) task.wait(0.1)
-					pcall(function() VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game) end)
-					executeTradeAllFish() hrp.CFrame = old
+				pcall(function() VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game) end) task.wait(0.1)
+				pcall(function() VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game) end)
+				executeTradeAllFish() task.wait(6)
+				pcall(function() VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game) end) task.wait(0.1)
+				pcall(function() VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game) end)
+				executeTradeAllFish() hrp.CFrame = old
 			end
 		end)
 
@@ -1527,7 +1728,53 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 				task.wait(1) executeSellAllCrops() task.wait(6) executeSellAllCrops() hrp.CFrame = old
 			end
 		end)
+		local ReplicatedStorage = game:GetService("ReplicatedStorage")
+		local Remotes = ReplicatedStorage:WaitForChild("Remotes", 10)
 
+		if not Remotes then
+			warn("[Auto-Farm] Could not find Remotes folder.")
+			return
+		end
+
+		local spinRemote = Remotes:WaitForChild("SpinningWheel", 5):WaitForChild("RequestSpinningWheelSpin", 5)
+		local claimRemote = Remotes:WaitForChild("DailyRewards", 5):WaitForChild("ClaimPlaytimeReward", 5)
+		local dailyRewardRemote = Remotes:WaitForChild("DailyRewards", 5):WaitForChild("ClaimDailyReward", 5)
+
+		print("Ready Auto Claim Spin (every 1s), Playtime (every 1s), And Daily Rewards!")
+
+		task.spawn(function()
+			while true do
+				-- Auto Spin
+				if spinRemote then
+					pcall(function()
+						spinRemote:InvokeServer()
+					end)
+				end
+				task.wait(1)
+
+				-- Auto Claim Playtime Rewards (every 1s per minute interval)
+				if claimRemote then
+					for mins = 10, 120, 10 do
+						pcall(function()
+							claimRemote:InvokeServer("Playtime" .. mins .. "Minutes")
+						end)
+						task.wait(1)
+					end
+				end
+
+				-- Auto Claim Daily Rewards (1-7)
+				if dailyRewardRemote then
+					for day = 1, 7 do
+						pcall(function()
+							dailyRewardRemote:InvokeServer(day)
+						end)
+						task.wait(1)
+					end
+				else
+					task.wait(1)
+				end
+			end
+		end)
 		y2 = AddSectionHeader(PageTP, "World Map Island Travel Vector", 10)
 		y2 = AddNavInstructionText(PageTP, "Click any location to trigger world map island jumps instantly.", y2)
 		for _, island in ipairs(islandList) do
@@ -1546,359 +1793,7 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 				pcall(function() ReplicatedStorage.Remotes.IslandTravel.RequestIslandTravel:InvokeServer(island) end)
 			end)
 		end
-		local ShopSelectFrame = Instance.new("ScrollingFrame")
-		ShopSelectFrame.Size = UDim2.new(0, 140, 1, -115)
-		ShopSelectFrame.Position = UDim2.new(0, 5, 0, 35)
-		ShopSelectFrame.BackgroundTransparency = 1
-		ShopSelectFrame.CanvasSize = UDim2.new(0, 0, 0, 360)
-		ShopSelectFrame.ScrollBarThickness = 2
-		ShopSelectFrame.Parent = PageAuto
-		local ShopSelectLayout = Instance.new("UIListLayout")
-		ShopSelectLayout.Padding = UDim.new(0, 4)
-		ShopSelectLayout.Parent = ShopSelectFrame
-		local ItemsDisplayFrame = Instance.new("Frame")
-		ItemsDisplayFrame.Size = UDim2.new(1, -155, 1, -115)
-		ItemsDisplayFrame.Position = UDim2.new(0, 150, 0, 35)
-		ItemsDisplayFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
-		ItemsDisplayFrame.Parent = PageAuto
-		Instance.new("UICorner", ItemsDisplayFrame).CornerRadius = UDim.new(0, 6)
-		AddNavInstructionText(PageAuto, "Select shop tab, check desired items, specify input amount, and toggle loop.", 5)
-		local activeShopPage = nil
-		local activeShopId = nil
-		local checkUIReferences = {}
-		local selectAllBtn = Instance.new("TextButton")
-		selectAllBtn.Size = UDim2.new(0.66, -10, 0, 28)
-		selectAllBtn.Position = UDim2.new(0, 165, 0, 50)
-		selectAllBtn.BackgroundColor3 = Color3.fromRGB(60, 90, 130)
-		selectAllBtn.Text = "Select All (in current shop)"
-		selectAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-		selectAllBtn.Font = Enum.Font.SourceSansBold
-		selectAllBtn.TextSize = 12
-		selectAllBtn.Parent = ViewContainer
-		Instance.new("UICorner", selectAllBtn).CornerRadius = UDim.new(0, 4)
-		applyButtonEffects(selectAllBtn, Color3.fromRGB(60, 90, 130), Color3.fromRGB(80, 120, 170))
-		PageAuto:GetPropertyChangedSignal("Visible"):Connect(function()
-			selectAllBtn.Visible = PageAuto.Visible
-		end)
-		selectAllBtn.Visible = PageAuto.Visible
-		local function refreshSelectAllLabel()
-			local labelName = "current shop"
-			local allOn = true
-			local anyOn = false
-			for _, sData in ipairs(shops) do
-				if sData.id == activeShopId then
-					labelName = sData.name
-					for _, item in ipairs(sData.items) do
-						if selectedItems[sData.id][item] then anyOn = true else allOn = false end
-					end
-					break
-				end
-			end
-			if allOn and anyOn then
-				selectAllBtn.Text = "✗ Deselect All (" .. labelName .. ")"
-				selectAllBtn.BackgroundColor3 = Color3.fromRGB(40, 130, 95)
-			else
-				selectAllBtn.Text = "Select All (" .. labelName .. ")"
-				selectAllBtn.BackgroundColor3 = Color3.fromRGB(60, 90, 130)
-			end
-		end
-		refreshSelectAllLabel()
-		for idx, sData in ipairs(shops) do
-			local SPage = Instance.new("ScrollingFrame")
-			SPage.Size = UDim2.new(1, -10, 1, -45)
-			SPage.Position = UDim2.new(0, 5, 0, 38)
-			SPage.BackgroundTransparency = 1
-			SPage.CanvasSize = UDim2.new(0, 0, 0, #sData.items * 34)
-			SPage.Visible = (idx == 1)
-			SPage.ScrollBarThickness = 3
-			SPage.Parent = ItemsDisplayFrame
-			if idx == 1 then
-				activeShopPage = SPage
-				activeShopId = sData.id
-				refreshSelectAllLabel()
-			end
-			local STab = Instance.new("TextButton")
-			STab.Size = UDim2.new(1, -4, 0, 30)
-			STab.BackgroundColor3 = (idx == 1) and Color3.fromRGB(0, 210, 255) or Color3.fromRGB(24, 24, 30)
-			STab.Text = sData.name
-			STab.TextColor3 = (idx == 1) and Color3.fromRGB(10, 10, 14) or Color3.fromRGB(200, 200, 205)
-			STab.Font = Enum.Font.SourceSansBold
-			STab.TextSize = 12
-			STab.Parent = ShopSelectFrame
-			Instance.new("UICorner", STab).CornerRadius = UDim.new(0, 4)
-			STab.MouseButton1Click:Connect(function()
-				if activeShopPage then activeShopPage.Visible = false end
-				for _, child in ipairs(ShopSelectFrame:GetChildren()) do
-					if child:IsA("TextButton") then
-						child.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
-						child.TextColor3 = Color3.fromRGB(200, 200, 205)
-					end
-				end
-				STab.BackgroundColor3 = Color3.fromRGB(0, 210, 255)
-				STab.TextColor3 = Color3.fromRGB(10, 10, 14)
-				SPage.Visible = true
-				activeShopPage = SPage
-				activeShopId = sData.id
-				refreshSelectAllLabel()
-			end)
-			local SLayout = Instance.new("UIListLayout")
-			SLayout.Padding = UDim.new(0, 4)
-			SLayout.Parent = SPage
-			for _, item in ipairs(sData.items) do
-				local Row = Instance.new("Frame")
-				Row.Size = UDim2.new(1, -6, 0, 30)
-				Row.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
-				Row.Parent = SPage
-				Instance.new("UICorner", Row).CornerRadius = UDim.new(0, 4)
-				local Lbl = Instance.new("TextLabel")
-				Lbl.Size = UDim2.new(1, -45, 1, 0)
-				Lbl.Position = UDim2.new(0, 10, 0, 0)
-				Lbl.Text = item
-				Lbl.TextColor3 = Color3.fromRGB(210, 210, 215)
-				Lbl.Font = Enum.Font.SourceSans
-				Lbl.TextSize = 14
-				Lbl.TextXAlignment = Enum.TextXAlignment.Left
-				Lbl.BackgroundTransparency = 1
-				Lbl.Parent = Row
-				local Box = Instance.new("TextButton")
-				Box.Size = UDim2.new(0, 20, 0, 20)
-				Box.Position = UDim2.new(1, -28, 0.5, -10)
-				Box.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
-				Box.Text = ""
-				Box.Parent = Row
-				Instance.new("UICorner", Box).CornerRadius = UDim.new(0, 4)
-				local function updateVisualState(val)
-					selectedItems[sData.id][item] = val
-					Box.BackgroundColor3 = val and Color3.fromRGB(0, 210, 255) or Color3.fromRGB(40, 40, 48)
-					Box.Text = val and "✓" or ""
-					Box.TextColor3 = val and Color3.fromRGB(10, 10, 14) or Color3.fromRGB(255, 255, 255)
-				end
-				Box.MouseButton1Click:Connect(function()
-					updateVisualState(not selectedItems[sData.id][item])
-					refreshSelectAllLabel()
-				end)
-				checkUIReferences[sData.id .. "_" .. item] = updateVisualState
-			end
-		end
-		selectAllBtn.MouseButton1Click:Connect(function()
-			local target = false
-			for _, sData in ipairs(shops) do
-				if sData.id == activeShopId then
-					for _, item in ipairs(sData.items) do
-						if not selectedItems[sData.id][item] then
-							target = true
-						end
-					end
-					break
-				end
-			end
-			for _, sData in ipairs(shops) do
-				if sData.id == activeShopId then
-					for _, item in ipairs(sData.items) do
-						local ref = checkUIReferences[sData.id .. "_" .. item]
-						if ref then ref(target) end
-					end
-					break
-				end
-			end
-			refreshSelectAllLabel()
-		end)
-		local CtrlBar = Instance.new("Frame")
-		CtrlBar.Size = UDim2.new(1, -155, 0, 140)
-		CtrlBar.Position = UDim2.new(0, 150, 1, -105)
-		CtrlBar.BackgroundTransparency = 1
-		CtrlBar.Parent = PageAuto
-		local AmtInput = Instance.new("TextBox")
-		AmtInput.Size = UDim2.new(0, 60, 0, 34)
-		AmtInput.Position = UDim2.new(0, 5, 0, 15)
-		AmtInput.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
-		AmtInput.Text = "1"
-		AmtInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-		AmtInput.Font = Enum.Font.SourceSansBold
-		AmtInput.TextSize = 14
-		AmtInput.Parent = CtrlBar
-		Instance.new("UICorner", AmtInput).CornerRadius = UDim.new(0, 4)
-		local SingleBuy = Instance.new("TextButton")
-		SingleBuy.Size = UDim2.new(0, 120, 0, 34)
-		SingleBuy.Position = UDim2.new(0, 75, 0, 15)
-		SingleBuy.BackgroundColor3 = Color3.fromRGB(0, 210, 255)
-		SingleBuy.Text = "Purchase Selected"
-		SingleBuy.TextColor3 = Color3.fromRGB(10, 10, 14)
-		SingleBuy.Font = Enum.Font.SourceSansBold
-		SingleBuy.TextSize = 13
-		SingleBuy.Parent = CtrlBar
-		Instance.new("UICorner", SingleBuy).CornerRadius = UDim.new(0, 4)
-		local LoopBuy = Instance.new("TextButton")
-		LoopBuy.Size = UDim2.new(0, 140, 0, 34)
-		LoopBuy.Position = UDim2.new(1, -145, 0, 15)
-		LoopBuy.BackgroundColor3 = Color3.fromRGB(0, 200, 120)
-		LoopBuy.Text = "Auto Loop [ON]"
-		LoopBuy.TextColor3 = Color3.fromRGB(255, 255, 255)
-		LoopBuy.Font = Enum.Font.SourceSansBold
-		LoopBuy.TextSize = 13
-		LoopBuy.Parent = CtrlBar
-		Instance.new("UICorner", LoopBuy).CornerRadius = UDim.new(0, 4)
-		local function pcallPurchaseEngine()
-			local amt = tonumber(AmtInput.Text) or 1
-			if not buyRemote then return end
-			for _, sData in ipairs(shops) do
-				local sId = sData.id
-				for _, item in ipairs(sData.items) do
-					if selectedItems[sId] and selectedItems[sId][item] then
-						buyRemote:FireServer(sId, item, amt)
-						task.wait(0.12)
-					end
-				end
-			end
-		end
-		local function setAutoBuyState(state)
-			isAutoBuying = state
-			if isAutoBuying then
-				LoopBuy.Text = "Auto Loop [ON]"
-				LoopBuy.BackgroundColor3 = Color3.fromRGB(0, 200, 120)
-				task.spawn(function()
-					while isAutoBuying do
-						pcallPurchaseEngine()
-						task.wait(1)
-					end
-				end)
-			else
-				LoopBuy.Text = "Auto Loop [OFF]"
-				LoopBuy.BackgroundColor3 = Color3.fromRGB(240, 70, 70)
-			end
-		end
-		SingleBuy.MouseButton1Click:Connect(pcallPurchaseEngine)
-		LoopBuy.MouseButton1Click:Connect(function() setAutoBuyState(not isAutoBuying) end)
-		isAutoBuying = true
-		task.spawn(function()
-			while isAutoBuying do
-				pcallPurchaseEngine()
-				task.wait(1)
-			end
-		end)
-		local AutoBuyPremiumBtn = Instance.new("TextButton")
-		AutoBuyPremiumBtn.Size = UDim2.new(1, -10, 0, 34)
-		AutoBuyPremiumBtn.Position = UDim2.new(0, 5, 0, 55)
-		AutoBuyPremiumBtn.BackgroundColor3 = Color3.fromRGB(130, 80, 200)
-		AutoBuyPremiumBtn.Text = "⭐ Select All Good Items"
-		AutoBuyPremiumBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-		AutoBuyPremiumBtn.Font = Enum.Font.SourceSansBold
-		AutoBuyPremiumBtn.TextSize = 13
-		AutoBuyPremiumBtn.Parent = CtrlBar
-		Instance.new("UICorner", AutoBuyPremiumBtn).CornerRadius = UDim.new(0, 4)
-		applyButtonEffects(AutoBuyPremiumBtn, Color3.fromRGB(130, 80, 200), Color3.fromRGB(165, 105, 240))
-		local premiumItems = {
-			GardenSeedShop = { "DragonFruitSeed", "WatermelonSeed", "PumpkinSeed", "GrapeSeed", "MaplePearSeed", "PeachSeed", "GiantPeanutSeed", "WisteriaSeed", "PrinceCabbage" },
-			CabbageSeedShop = { "CabbageBloomSeed", "KingCabbage" },
-			TropicalSeedShop = { "StoneHeadSeed", "YellowDragonfruitSeed", "GreatPineappleSeed" },
-			MagicSeedShop = { "MonsteraDeliciosaSeed", "CherryTreeSeed", "WhimsicalWisteriaSeed" },
-			BrotherSeedShop = { "GreenGrapeSeed", "GreenPearSeed", "GrandWhitePumpkinSeed" },
-			MainPetShop = { "FoxEgg", "FastIncubator", "SmallPetTreat", "MediumPetTreat" },
-		}
-		AutoBuyPremiumBtn.MouseButton1Click:Connect(function()
-			for _, sData in ipairs(shops) do
-				for _, item in ipairs(sData.items) do
-					local ref = checkUIReferences[sData.id .. "_" .. item]
-					if ref then ref(false) end
-				end
-			end
-			local count = 0
-			for shopId, itemList in pairs(premiumItems) do
-				for _, item in ipairs(itemList) do
-					local ref = checkUIReferences[shopId .. "_" .. item]
-					if ref then
-						ref(true)
-						count = count + 1
-					end
-				end
-			end
-			refreshSelectAllLabel()
-			showToast("⭐ Selected " .. count .. " Good items Selected across 6 shops!", Color3.fromRGB(130, 80, 200), 3)
-		end)
-		local RemoveAllBtn = Instance.new("TextButton")
-		RemoveAllBtn.Size = UDim2.new(1, -10, 0, 34)
-		RemoveAllBtn.Position = UDim2.new(0, 5, 0, 94)
-		RemoveAllBtn.BackgroundColor3 = Color3.fromRGB(200, 70, 70)
-		RemoveAllBtn.Text = "✖ Remove All Selected Items"
-		RemoveAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-		RemoveAllBtn.Font = Enum.Font.SourceSansBold
-		RemoveAllBtn.TextSize = 13
-		RemoveAllBtn.Parent = CtrlBar
-		Instance.new("UICorner", RemoveAllBtn).CornerRadius = UDim.new(0, 4)
-		applyButtonEffects(RemoveAllBtn, Color3.fromRGB(200, 70, 70), Color3.fromRGB(240, 100, 100))
-		RemoveAllBtn.MouseButton1Click:Connect(function()
-			local count = 0
-			for _, sData in ipairs(shops) do
-				for _, item in ipairs(sData.items) do
-					local ref = checkUIReferences[sData.id .. "_" .. item]
-					if ref then
-						ref(false)
-						count = count + 1
-					end
-				end
-			end
-			refreshSelectAllLabel()
-			showToast("✖ Deselected " .. count .. " items across all shops!", Color3.fromRGB(240, 100, 100), 3)
-		end)
-		RDR_CONFIG_DATA.getShopSelections = function()
-			local out = {}
-			for shopId, items in pairs(selectedItems) do
-				out[shopId] = {}
-				for item, selected in pairs(items) do
-					if selected then out[shopId][item] = true end
-				end
-			end
-			return out
-		end
-		RDR_CONFIG_DATA.applyShopSelections = function(data)
-			if not data then return end
-			for _, sData in ipairs(shops) do
-				for _, item in ipairs(sData.items) do
-					local ref = checkUIReferences[sData.id .. "_" .. item]
-					if ref then ref(false) end
-				end
-			end
-			for shopId, items in pairs(data) do
-				for item, selected in pairs(items) do
-					if selected then
-						local ref = checkUIReferences[shopId .. "_" .. item]
-						if ref then ref(true) end
-					end
-				end
-			end
-			refreshSelectAllLabel()
-		end
-
-		RDR_CONFIG_DATA.getShopSelections = function()
-			local out = {}
-			for shopId, items in pairs(selectedItems) do
-				out[shopId] = {}
-				for item, selected in pairs(items) do
-					if selected then out[shopId][item] = true end
-				end
-			end
-			return out
-		end
-		RDR_CONFIG_DATA.applyShopSelections = function(data)
-			if not data then return end
-			for _, sData in ipairs(shops) do
-				for _, item in ipairs(sData.items) do
-					local ref = checkUIReferences[sData.id .. "_" .. item]
-					if ref then ref(false) end
-				end
-			end
-			for shopId, items in pairs(data) do
-				for item, selected in pairs(items) do
-					if selected then
-						local ref = checkUIReferences[shopId .. "_" .. item]
-						if ref then ref(true) end
-					end
-				end
-			end
-			refreshSelectAllLabel()
-		end
-		RDR_CONFIG_DATA.getIsAutoBuying = function() return isAutoBuying end
-		RDR_CONFIG_DATA.setIsAutoBuying = function(state) if isAutoBuying ~= state then setAutoBuyState(state) end end
+		-- local ShopSelectFrame local ShopSelectFrame local ShopSelectFrame local ShopSelectFrame
 		local speedVal, jumpVal = 16, 50
 		flySpeed = 50
 		noclipActive, flyActive, infJumpActive = false, false, false
@@ -1966,12 +1861,16 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 		end)
 	end
 	do
-		local syncNoclip = makeToggle("Phase State (No-Clip)", UDim2.new(0, 10, 0, 165), PageOthers, function(state) noclipActive = state end)
-		RunService.Stepped:Connect(function()
-			if noclipActive and Character then
-				for _, part in ipairs(Character:GetDescendants()) do
-					if part:IsA("BasePart") then part.CanCollide = false end
-				end
+		local noclipConn = nil
+		local syncNoclip = makeToggle("Phase State (No-Clip)", UDim2.new(0, 10, 0, 165), PageOthers, function(state)
+			noclipActive = state
+			if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+			if state and Character then
+				noclipConn = RunService.Stepped:Connect(function()
+					for _, part in ipairs(Character:GetDescendants()) do
+						if part:IsA("BasePart") then part.CanCollide = false end
+					end
+				end)
 			end
 		end)
 		local syncInfJump = makeToggle("Chain Lift (Infinite Jump)", UDim2.new(0, 10, 0, 210), PageOthers, function(state) infJumpActive = state end)
@@ -2273,73 +2172,6 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 			task.wait(1.5)
 			if syncAntiAfk then pcall(function() syncAntiAfk(true) end) end
 		end)
-		local lastMaxNotify = 0
-		local lastMaxSell = 0
-		local isAutoSelling = false
-		local pausedForSell = false
-		task.spawn(function()
-			while true do
-				task.wait(0.5)
-				pcall(function()
-					local foundMax = false
-					for _, gui in ipairs(PlayerGui:GetDescendants()) do
-						if gui:IsA("TextLabel") and gui.Text and gui.Text:find("Max crops in inventory") then
-							foundMax = true
-							local now = os.clock()
-							local onlyHarvOn = RDR_TOGGLES and RDR_TOGGLES["ONLY AUTO HARVEST"]
-							local onlyHarv = onlyHarvOn and onlyHarvOn.get()
-							local sellCropOn = RDR_TOGGLES and RDR_TOGGLES["SELL CROPS + AUTO HARVEST"]
-							local sellCrop = sellCropOn and sellCropOn.get()
-							if onlyHarv then
-								if OnlyHarvFullLabel then OnlyHarvFullLabel.Visible = true end
-								if HarvestStatusLabel then HarvestStatusLabel.Visible = false end
-							end
-							if now - lastMaxNotify > 1 then
-								lastMaxNotify = now
-								if onlyHarv then
-									lastMaxSell = now
-									if showToast then
-										showToast("🍎 Max Inventory — harvest only (auto-sell disabled)!", Color3.fromRGB(255, 165, 60), 4)
-									end
-								elseif sellCrop and now - lastMaxSell > 1 and not isAutoSelling then
-									lastMaxSell = now
-									isAutoSelling = true
-									autoHarvestActive = false
-									if HarvestStatusLabel then HarvestStatusLabel.Visible = true; HarvestStatusLabel.Text = "⏸ Paused for auto-sell (9s)..." end
-									if OnlyHarvFullLabel then OnlyHarvFullLabel.Visible = false end
-									task.spawn(function()
-										local hrp = Character and Character:FindFirstChild("HumanoidRootPart")
-										if hrp then
-											local old = hrp.CFrame
-											hrp.CFrame = CFrame.new(1013.78, 41.01, -114.92)
-											task.wait(1)
-											executeSellAllCrops()
-											task.wait(6)
-										end
-										local elapsed = os.clock() - lastMaxSell
-										if elapsed < 9 then task.wait(9 - elapsed) end
-										local harvSetter = RDR_TOGGLES and RDR_TOGGLES["SELL CROPS + AUTO HARVEST"]
-										if harvSetter then
-											harvSetter(true)
-										else
-											autoHarvestActive = true
-										end
-										if HarvestStatusLabel then HarvestStatusLabel.Text = "🌾 Auto-sell done — auto harvest ON" end
-										if OnlyHarvFullLabel then OnlyHarvFullLabel.Visible = false end
-										isAutoSelling = false
-									end)
-								end
-							end
-							break
-						end
-					end
-					if not foundMax then
-						if OnlyHarvFullLabel then OnlyHarvFullLabel.Visible = false end
-						if HarvestStatusLabel then HarvestStatusLabel.Visible = true end
-					end
-				end)
-			end
-		end)
 		local fishSellBtn = Instance.new("TextButton")
 		fishSellBtn.Size = UDim2.new(0, 170, 0, 30)
 		fishSellBtn.Position = UDim2.new(0, 10, 0, 595)
@@ -2466,6 +2298,8 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 			end
 		end)
 		local plAuto,plThread=false,nil
+		local plNetTool, plNetCFrame
+		local plSet, plRefreshNet
 		local plRemote=ReplicatedStorage:FindFirstChild("Remotes")
 		if plRemote then plRemote=plRemote:FindFirstChild("BugCatching")
 			if plRemote then plRemote=plRemote:FindFirstChild("RequestCatch") end end
@@ -2589,12 +2423,24 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 					else task.wait(0.5) end end plThread=nil
 			end)
 		end
+		plRefreshNet = function()
+			local char = Player.Character
+			if not char then return end
+			plNetTool = char:FindFirstChild("Bug Net") or char:FindFirstChildWhichIsA("Tool")
+		end
+
+		plSet = function(on)
+			plAuto = on
+			if on then plStart() end
+			if abcRefresh then abcRefresh() end
+		end
 	end
 	do
+		local RARITY_COLOR, yLog, catchScanEnabled, updateScanToggleVisuals, LogCatch
+		do
 		local mainScanNavLabel
 		local y0 = AddSectionHeader(Page1, "Welcome to RdDr Premium", 10)
 		y0 = AddNavInstructionText(Page1, "Use the tabs on the left to open each feature.", y0)
-		y0 = AddNavInstructionText(Page1, "🌾 Harvest - auto harvest all ready crops if not ready stop wait a minite", y0)
 		y0 = AddNavInstructionText(Page1, "🎣 Fish - fishing catching minigame", y0)
 		y0 = AddNavInstructionText(Page1, "🐞 Bug - bug catching minigame", y0)
 		mainScanNavLabel = Instance.new("TextLabel")
@@ -2614,7 +2460,7 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 		local SUPPRESS_MASTER = false
 
 		-- Rarity -> display color for catch-log lines.
-		local RARITY_COLOR = {
+		RARITY_COLOR = {
 			Common = Color3.fromRGB(200, 205, 215),
 			Uncommon = Color3.fromRGB(120, 220, 130),
 			Rare = Color3.fromRGB(90, 160, 255),
@@ -2770,14 +2616,12 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 			return { frame = Frame, add = add, clear = clear, applyFilter = applyFilter, search = includeSearch and SearchBox or nil }
 		end
 
-		local yLog = y0 + 5
+		yLog = y0 + 5
 		local CombinedLog = makeCatchLog(Page1, "📋 Catch Log — Fish + Bugs (type in search to filter)", yLog, 170, Color3.fromRGB(0, 210, 255), "Combined")
 		local FishLog = makeCatchLog(Page3, "Fish Catch Log", 305, 240, Color3.fromRGB(120, 200, 255), "Fish")
 		local BugLog = makeCatchLog(Page4, "Bug Catch Log", 245, 240, Color3.fromRGB(150, 230, 140), "Bug")
 		Page3.CanvasSize = UDim2.new(0, 0, 0, 520)
 		Page4.CanvasSize = UDim2.new(0, 0, 0, 520)
-
-		local HarvestLog
 
 		local function addClearButton(parent, ypos, label, log)
 			local b = Instance.new("TextButton")
@@ -2813,7 +2657,6 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 				CombinedLog.clear()
 				FishLog.clear()
 				BugLog.clear()
-				if HarvestLog then HarvestLog.clear() end
 			end)
 		end)
 
@@ -2833,13 +2676,12 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 				CombinedLog.clear()
 				FishLog.clear()
 				BugLog.clear()
-				if HarvestLog then HarvestLog.clear() end
 				SUPPRESS_MASTER = true
 				for _, m in ipairs(MASTER_LOG) do
 					if m.logName == "Combined" then CombinedLog.add(m.text, m.color, m.key, m.rarity)
 					elseif m.logName == "Fish" then FishLog.add(m.text, m.color, m.key, m.rarity)
 					elseif m.logName == "Bug" then BugLog.add(m.text, m.color, m.key, m.rarity)
-					elseif m.logName == "Harvest" then if HarvestLog then HarvestLog.add(m.text, m.color, m.key, m.rarity) end end
+					end
 				end
 				SUPPRESS_MASTER = false
 			end)
@@ -2851,10 +2693,10 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 		Page4.CanvasSize = UDim2.new(0, 0, 0, 670)
 
 		-- ===== Scan Inventory Toggle (Fish + Bug Catch Logs) =====
-		local catchScanEnabled = true
+		catchScanEnabled = true
 		local scanToggleBtns = {}
 
-		local function updateScanToggleVisuals()
+		updateScanToggleVisuals = function()
 			for _, btn in ipairs(scanToggleBtns) do
 				if catchScanEnabled then
 					btn.BackgroundColor3 = Color3.fromRGB(0, 210, 255)
@@ -2912,17 +2754,21 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 			return btn
 		end
 
-		-- Fish Catch Log (Page3): scan toggle + nav instructions
+		-- Fish Catch Log (Page3): scan toggle + nav instructions (simplified to 2 + dropdown guide)
 		createScanToggleButton(Page3, 213)
 		AddNavInstructionText(Page3, "Scan Inventory (Fish+Bug): When ON, automatically scans your inventory for new fish/bug catches and logs them here.", 255)
 		AddNavInstructionText(Page3, "Turn this OFF to stop inventory scanning. This controls scanning for BOTH Fish and Bug catch logs.", 285)
-		Page3.CanvasSize = UDim2.new(0, 0, 0, 730)
+		-- Dropdown guide for remaining instructions
 
-		-- Bug Catch Log (Page4): scan toggle + nav instructions
+		Page3.CanvasSize = UDim2.new(0, 0, 0, 550)
+
+		-- Bug Catch Log (Page4): scan toggle + nav instructions (simplified to 2 + dropdown guide)
 		createScanToggleButton(Page4, 210)
-		AddNavInstructionText(Page4, "Scan Inventory (Fish+Bug): When ON, automatically scans your inventory for new fish/bug catches and logs them here.", 185)
-		AddNavInstructionText(Page4, "Turn this OFF to stop inventory scanning. This controls scanning for BOTH Fish and Bug catch logs.", 155)
-		Page4.CanvasSize = UDim2.new(0, 0, 0, 730)
+		AddNavInstructionText(Page4, "Scan Inventory (Fish+Bug): When ON, automatically scans your inventory for new fish/bug catches and logs them here.", 150)
+		AddNavInstructionText(Page4, "Turn this OFF to stop inventory scanning. This controls scanning for BOTH Fish and Bug catch logs.", 180)
+		-- Dropdown guide for remaining instructions
+
+		Page4.CanvasSize = UDim2.new(0, 0, 0, 550)
 
 		local catchSeq = 0
 
@@ -3134,7 +2980,7 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 			end
 		end
 
-		local function LogCatch(name, kind, data)
+		LogCatch = function(name, kind, data)
 			if not name or name == "" then return end
 			kind = kind == "Bug" and "Bug" or "Fish"
 
@@ -3300,6 +3146,7 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 			end)
 		end
 		startCatchLogger()
+		end
 		do
 			local yFav = yLog + 213
 			local FavHeader = Instance.new("TextLabel")
@@ -4026,10 +3873,21 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 				makeToggle("🛡 Safe Mode (pause near players)", UDim2.new(0, 10, 0, CfgY + 40), Page1, function(state)
 					safeModeActive = state
 				end)
+				-- Config Profile Instructions
+				local CfgGuide = Instance.new("TextLabel")
+				CfgGuide.Size = UDim2.new(1, -20, 0, 16)
+				CfgGuide.Position = UDim2.new(0, 10, 0, CfgY + 155)
+				CfgGuide.Text = "💾 Type a name or pick from dropdown → Save/Load your settings as profiles."
+				CfgGuide.TextColor3 = Color3.fromRGB(160, 165, 180)
+				CfgGuide.Font = Enum.Font.SourceSansItalic
+				CfgGuide.TextSize = 11
+				CfgGuide.TextXAlignment = Enum.TextXAlignment.Left
+				CfgGuide.BackgroundTransparency = 1
+				CfgGuide.Parent = Page1
 				local ProfLabel = Instance.new("TextLabel")
-				ProfLabel.Size = UDim2.new(1, -20, 0, 18)
-				ProfLabel.Position = UDim2.new(0, 10, 0, CfgY + 160)
-				ProfLabel.Text = "Config profile name:"
+				ProfLabel.Size = UDim2.new(0, 100, 0, 16)
+				ProfLabel.Position = UDim2.new(0, 10, 0, CfgY + 173)
+				ProfLabel.Text = "Profile name:"
 				ProfLabel.TextColor3 = Color3.fromRGB(170, 175, 190)
 				ProfLabel.Font = Enum.Font.SourceSans
 				ProfLabel.TextSize = 11
@@ -4037,8 +3895,8 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 				ProfLabel.BackgroundTransparency = 1
 				ProfLabel.Parent = Page1
 				local ProfBox = Instance.new("TextBox")
-				ProfBox.Size = UDim2.new(1, -20, 0, 26)
-				ProfBox.Position = UDim2.new(0, 10, 0, CfgY + 178)
+				ProfBox.Size = UDim2.new(1, -150, 0, 26)
+				ProfBox.Position = UDim2.new(0, 10, 0, CfgY + 190)
 				ProfBox.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
 				ProfBox.PlaceholderText = "e.g. farm"
 				ProfBox.Text = ""
@@ -4048,21 +3906,133 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 				ProfBox.ClearTextOnFocus = false
 				ProfBox.Parent = Page1
 				Instance.new("UICorner", ProfBox).CornerRadius = UDim.new(0, 4)
-				createActionButton("💾 Save Profile", UDim2.new(0, 10, 0, CfgY + 210), UDim2.new(0, 175, 0, 32), Page1, function()
+				-- Saved profiles dropdown
+				local DropBtn = Instance.new("TextButton")
+				DropBtn.Size = UDim2.new(0, 130, 0, 26)
+				DropBtn.Position = UDim2.new(1, -140, 0, CfgY + 190)
+				DropBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+				DropBtn.Text = " Select... ▾"
+				DropBtn.TextColor3 = Color3.fromRGB(200, 205, 215)
+				DropBtn.Font = Enum.Font.SourceSans
+				DropBtn.TextSize = 12
+				DropBtn.TextXAlignment = Enum.TextXAlignment.Left
+				DropBtn.Parent = Page1
+				Instance.new("UICorner", DropBtn).CornerRadius = UDim.new(0, 4)
+				local DropList = Instance.new("ScrollingFrame")
+				DropList.Size = UDim2.new(0, 130, 0, 100)
+				DropList.Position = UDim2.new(1, -140, 0, CfgY + 218)
+				DropList.BackgroundColor3 = Color3.fromRGB(25, 27, 35)
+				DropList.BorderSizePixel = 0
+				DropList.ScrollBarThickness = 3
+				DropList.Visible = false
+				DropList.ZIndex = 30
+				DropList.Parent = Page1
+				Instance.new("UICorner", DropList).CornerRadius = UDim.new(0, 4)
+				local DropLayout = Instance.new("UIListLayout")
+				DropLayout.Parent = DropList
+				DropLayout.SortOrder = Enum.SortOrder.Name
+				DropLayout.Padding = UDim.new(0, 1)
+				local function getSavedProfiles()
+					local profiles = {}
+					pcall(function()
+						if listfiles then
+							for _, f in ipairs(listfiles()) do
+								local name = f:match("RdDrConfig_([^/]+)%.json$")
+								if name then table.insert(profiles, name) end
+							end
+						end
+					end)
+					for k, _ in pairs(_G) do
+						local name = tostring(k):match("^RDR_CFG_(.+)$")
+						if name and name ~= "" then
+							local found = false
+							for _, p in ipairs(profiles) do if p == name then found = true break end end
+							if not found then table.insert(profiles, name) end
+						end
+					end
+					-- Also check the saved profiles registry
+					if _G.RDR_SAVED_PROFILES then
+						for name, _ in pairs(_G.RDR_SAVED_PROFILES) do
+							local found = false
+							for _, p in ipairs(profiles) do if p == name then found = true break end end
+							if not found then table.insert(profiles, name) end
+						end
+					end
+					table.sort(profiles)
+					return profiles
+				end
+				local function refreshDropdown()
+					for _, child in ipairs(DropList:GetChildren()) do
+						if child:IsA("TextButton") then child:Destroy() end
+					end
+					local profiles = getSavedProfiles()
+					if #profiles == 0 then
+						DropBtn.Text = " No profiles ▾"
+					else
+						DropBtn.Text = " Select... ▾"
+					end
+					for _, name in ipairs(profiles) do
+						local ItemBtn = Instance.new("TextButton")
+						ItemBtn.Size = UDim2.new(1, 0, 0, 24)
+						ItemBtn.BackgroundColor3 = Color3.fromRGB(30, 32, 42)
+						ItemBtn.Text = "  " .. name
+						ItemBtn.TextColor3 = Color3.fromRGB(220, 225, 235)
+						ItemBtn.Font = Enum.Font.SourceSans
+						ItemBtn.TextSize = 12
+						ItemBtn.TextXAlignment = Enum.TextXAlignment.Left
+						ItemBtn.ZIndex = 31
+						ItemBtn.Parent = DropList
+						applyButtonEffects(ItemBtn, Color3.fromRGB(30, 32, 42), Color3.fromRGB(40, 44, 58))
+						ItemBtn.MouseButton1Click:Connect(function()
+							ProfBox.Text = name
+							DropBtn.Text = " " .. name .. " ▾"
+							DropList.Visible = false
+							-- Auto-load the profile on click
+							local ok, msg = loadRDRConfig(name)
+							if ok then
+								showToast("📂 Auto-loaded Profile: " .. name, Color3.fromRGB(120, 220, 130), 3)
+								if autoClaimDaily then task.spawn(claimDaily) end
+							else
+								showToast("❌ Auto-load failed: " .. tostring(msg), Color3.fromRGB(255, 120, 120), 3)
+							end
+						end)
+					end
+					DropList.CanvasSize = UDim2.new(0, 0, 0, #profiles * 25)
+				end
+				DropBtn.MouseButton1Click:Connect(function()
+					DropList.Visible = not DropList.Visible
+					if DropList.Visible then refreshDropdown() end
+				end)
+				createActionButton("💾 Save Profile", UDim2.new(0, 10, 0, CfgY + 222), UDim2.new(0, 175, 0, 28), Page1, function()
 					local name = ProfBox.Text:match("^%s*(.-)%s*$")
-					if name == "" then DelStatus.Text = "Profile name required." return end
+					if name == "" then
+						DelStatus.Text = "Profile name required."
+						showToast("⚠ Profile name required", Color3.fromRGB(255, 170, 90), 2)
+						return
+					end
 					local where = saveRDRConfig(name)
 					DelStatus.Text = "Profile '" .. name .. "' saved (" .. where .. ")."
+					showToast("💾 Saving Profile: " .. name .. " (" .. where .. ")", Color3.fromRGB(120, 220, 130), 3)
+					refreshDropdown()
 				end)
-				createActionButton("📂 Load Profile", UDim2.new(0, 200, 0, CfgY + 210), UDim2.new(0, 175, 0, 32), Page1, function()
+				createActionButton("📂 Load Profile", UDim2.new(0, 200, 0, CfgY + 222), UDim2.new(0, 175, 0, 28), Page1, function()
 					local name = ProfBox.Text:match("^%s*(.-)%s*$")
-					if name == "" then DelStatus.Text = "Profile name required." return end
+					if name == "" then
+						DelStatus.Text = "Profile name required."
+						showToast("⚠ Profile name required", Color3.fromRGB(255, 170, 90), 2)
+						return
+					end
 					local ok, msg = loadRDRConfig(name)
 					DelStatus.Text = ok and ("Profile '" .. name .. "' loaded.") or ("Load failed: " .. tostring(msg))
-					if ok and autoClaimDaily then task.spawn(claimDaily) end
+					if ok then
+						showToast("📂 Loading Profile: " .. name, Color3.fromRGB(120, 220, 130), 3)
+						if autoClaimDaily then task.spawn(claimDaily) end
+					else
+						showToast("❌ Load failed: " .. tostring(msg), Color3.fromRGB(255, 120, 120), 3)
+					end
 				end)
-				local antiAfkActive = false
-				local antiAfkThread = nil
+				antiAfkActive = false
+				antiAfkThread = nil
 				local antiAfkInterval = 30
 				local function antiAfkLoop()
 					while antiAfkActive do
@@ -4097,7 +4067,8 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 				AfkIntLbl.BackgroundTransparency = 1
 				AfkIntLbl.Parent = Page1
 				createAmtInputBox(UDim2.new(0, 330, 0, CfgY + 254), 30, Page1, function(v) antiAfkInterval = math.clamp(math.floor(v), 5, 300) end)
-				local PROMO_CODES = {"RELEASEDAY", "HAPPYBIRTHDAYGQ", "FISHQUEST", "BIGSPOON", "MAGICFOREST", "ORB", "CABBAGE", "FOX", "ROCKET", "SPACE", "HAPPY1MONTH", "WILLOW" }
+
+				local PROMO_CODES = {"RELEASEDAY", "HAPPYBIRTHDAYGQ", "FISHQUEST", "BIGSPOON", "MAGICFOREST", "ORB", "CABBAGE", "FOX", "ROCKET", "SPACE", "HAPPY1MONTH", "WILLOW", "TEAM"}
 				local PROMO_DESCRIPTIONS = {
 					RELEASEDAY = "x5 Premium Flower Pack 🌱 ",
 					HAPPYBIRTHDAYGQ = "x1 Birthday Cow 🥚 ",
@@ -4110,11 +4081,12 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 					ROCKET = "x1 Permanent Lock 🔒 ",
 					SPACE = " 1x Gold Watering Can 🧺 ",
 					HAPPY1MONTH = "2x Premium Magic Pack 🌱 ",
-					WILLOW = "x1 Protection Lock 🔒 "
+					WILLOW = "x1 Protection Lock 🔒 ", -- TEAM for
+					TEAM = "x2 Ultimate sprinklers ⚙️ "
 				}
 				local CodeLog
-				local autoRedeemCodes = false
-				local autoRedeemThread = nil
+				autoRedeemCodes = false
+				autoRedeemThread = nil
 				local function redeemCodes()
 					local rem = ReplicatedStorage:FindFirstChild("RedeemCode", true)
 					if not rem then
@@ -4129,6 +4101,7 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 							local description = PROMO_DESCRIPTIONS[code] or "Description unavailable"
 							CodeLog.add("🎟 " .. (ok and "Redeemed" or "Failed") .. ": " .. code .. " — " .. description, ok and Color3.fromRGB(150, 255, 180) or Color3.fromRGB(255, 160, 160))
 						end
+						task.wait(0.2)
 					end
 					showToast("🎟 Tried " .. #PROMO_CODES .. " codes", Color3.fromRGB(200, 200, 255), 2)
 				end
@@ -4266,6 +4239,8 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 				local plCat, sg
 				local function _buildBugLog()
 					local plAuto,plThread=false,nil
+					local plNetTool, plNetCFrame
+					local plRefreshNet
 					local plRemote=ReplicatedStorage:FindFirstChild("Remotes")
 					if plRemote then plRemote=plRemote:FindFirstChild("BugCatching")
 						if plRemote then plRemote=plRemote:FindFirstChild("RequestCatch") end end
@@ -4385,6 +4360,11 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 											while plAuto and plMini() do task.wait(0.2) end end end
 								else task.wait(0.5) end end plThread=nil
 						end)
+					end
+					plRefreshNet = function()
+						local char = Player.Character
+						if not char then return end
+						plNetTool = char:FindFirstChild("Bug Net") or char:FindFirstChildWhichIsA("Tool")
 					end
 					sg=Instance.new("ScreenGui") sg.Name="MasterLogGui" sg.ResetOnSpawn=false sg.Parent=PlayerGui sg.Enabled=false
 					local mf=Instance.new("Frame") mf.Name="MainMasterLogFrame" mf.Size=UDim2.new(0,540,0,660)
@@ -4577,7 +4557,6 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 				_buildBugLog()
 				do
 					local PL_CFG={
-						{Title="ACTIVE BUGS LOG",Path=workspace:FindFirstChild("ActiveBugVisuals"),HasCatch=true,Accent=Color3.fromRGB(255,170,85)},
 						{Title="ARTIFACTS LOG",Path=workspace:FindFirstChild("Artifacts"),Accent=Color3.fromRGB(255,170,60)},
 						{Title="HAT LOG",Path=workspace:FindFirstChild("Hats"),Attributes={"HatColor_prim"},Accent=Color3.fromRGB(255,120,200)},
 						{Title="MAGIC ORBS LOG",Path=workspace:FindFirstChild("MagicOrbs"),Accent=Color3.fromRGB(120,200,255)},
@@ -4590,6 +4569,19 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 						Attributes={"Category","ItemName","Amount"},Accent=Color3.fromRGB(100,230,130)}
 					}
 					for _,cfg in ipairs(PL_CFG) do plCat(cfg) end
+					-- Retry Active Bugs Log separately since ActiveBugVisuals may not exist at startup
+					task.spawn(function()
+						for i = 1, 30 do
+							local af = workspace:FindFirstChild("ActiveBugVisuals")
+							if af then
+								plCat({Title="ACTIVE BUGS LOG",Path=af,HasCatch=true,Accent=Color3.fromRGB(255,170,85)})
+								return
+							end
+							task.wait(1)
+						end
+						-- Timeout: show NOT FOUND
+						plCat({Title="ACTIVE BUGS LOG",Path=nil,HasCatch=true,Accent=Color3.fromRGB(255,170,85)})
+					end)
 					local plOpenBtn=Instance.new("TextButton") plOpenBtn.Size=UDim2.new(0,280,0,32)
 					plOpenBtn.Position=UDim2.new(0,10,0,CfgY+640) plOpenBtn.BackgroundColor3=Color3.fromRGB(35,35,42)
 					plOpenBtn.Text="📋 Open Master Log Panel" plOpenBtn.TextColor3=Color3.fromRGB(0,210,255)
@@ -4727,214 +4719,6 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 				end
 			end)
 		end
-		local HarvestRemote = nil
-		task.spawn(function()
-			local ok, r = pcall(function()
-				return ReplicatedStorage:WaitForChild("Remotes", 8):WaitForChild("Farming", 8):WaitForChild("HarvestCrop", 8)
-			end)
-			if ok then HarvestRemote = r end
-		end)
-		local CROP_RARITY = {}
-		pcall(function()
-			local mod = ReplicatedStorage:WaitForChild("Modules", 5):WaitForChild("ItemDisplayDataCategories", 5):WaitForChild("HarvestedCrops", 5)
-			local data = require(mod)
-			for internal, info in pairs(data) do
-				if info and info.DisplayName then
-					CROP_RARITY[string.lower(tostring(internal))] = info.Rarity
-					CROP_RARITY[string.lower(tostring(info.DisplayName))] = info.Rarity
-				end
-			end
-		end)
-		local function getCropRarity(name)
-			if not name then return nil end
-			return CROP_RARITY[string.lower(tostring(name))]
-		end
-
-		local y2 = AddSectionHeader(Page2, "Auto Harvest All Crops", 10)
-		y2 = AddNavInstructionText(Page2, "Checks each fruit's CanHarvest flag; teleports onto and fires the Harvest proximity prompt of every READY ", y2)
-		y2 = AddNavInstructionText(Page2, "fruit (skips any not ready). ", y2)
-
-		local OnlyHarvFullLabel = Instance.new("TextLabel")
-		OnlyHarvFullLabel.Size = UDim2.new(1, -20, 0, 30)
-		OnlyHarvFullLabel.Position = UDim2.new(0, 10, 0, y2 + 90)
-		OnlyHarvFullLabel.BackgroundColor3 = Color3.fromRGB(70, 35, 12)
-		OnlyHarvFullLabel.Text = "🍎 Inventory FULL — harvest only, NOT auto-selling"
-		OnlyHarvFullLabel.TextColor3 = Color3.fromRGB(255, 195, 120)
-		OnlyHarvFullLabel.Font = Enum.Font.SourceSansBold
-		OnlyHarvFullLabel.TextSize = 13
-		OnlyHarvFullLabel.TextXAlignment = Enum.TextXAlignment.Left
-		OnlyHarvFullLabel.Visible = false
-		OnlyHarvFullLabel.Parent = Page2
-		Instance.new("UICorner", OnlyHarvFullLabel).CornerRadius = UDim.new(0, 6)
-
-		-- MAX SPEED PROXIMITY ENGINE
-		local function firePromptFast(prompt)
-			if not prompt then return end
-			pcall(function()
-				if fireproximityprompt then
-					fireproximityprompt(prompt)
-				else
-					prompt.HoldDuration = 0
-					prompt:InputHoldBegin()
-					prompt:InputHoldEnd()
-				end
-			end)
-		end
-
-		local cachedPlotsFolder = nil
-		local function getPlotsFolder()
-			if cachedPlotsFolder and cachedPlotsFolder.Parent then return cachedPlotsFolder end
-			local map = workspace:FindFirstChild("Map")
-			local island = map and (map:FindFirstChild("MainIsland") or map)
-			if island and island:FindFirstChild("PlayerGardens") then cachedPlotsFolder = island.PlayerGardens:FindFirstChild("Plots") end
-			if not cachedPlotsFolder and island then cachedPlotsFolder = island:FindFirstChild("Plots") end
-			if not cachedPlotsFolder and map then cachedPlotsFolder = map:FindFirstChild("Plots") end
-			if not cachedPlotsFolder then cachedPlotsFolder = workspace:FindFirstChild("Plots") end
-			return cachedPlotsFolder
-		end
-
-		local function getMyPlots()
-			local f = getPlotsFolder(); if not f then return {} end
-			local id = Player.UserId; local out = {}
-			for _, p in ipairs(f:GetChildren()) do
-				local o = p:GetAttribute("Owner") or p:GetAttribute("OwnerUserId")
-				if o == id then table.insert(out, p) end
-			end
-			return out
-		end
-
-		local function getCropFruits(crop)
-			local sc = crop:FindFirstChild("ServerConfiguration")
-			return (sc and sc:FindFirstChild("Fruits")) or crop:FindFirstChild("Fruits")
-		end
-
-		local onlyFishingMode = false
-		local harvestedTotal = 0
-
-
-		-- HIGH EFFICIENCY HARVEST LOOP (NO LAG + INSTANT DISPATCH)
-		local function autoHarvestLoop()
-			local harvestedThisRun = 0
-			local lastUIUpdate = 0
-
-			while autoHarvestActive do
-				if _sellInProgress or (safeModeActive and playerNearby(SAFE_MODE_RADIUS)) then
-					task.wait(0.2)
-					continue
-				end
-
-				if not onlyFishingMode then
-					local myPlots = getMyPlots()
-					if #myPlots == 0 then 
-						task.wait(0.3) 
-						continue 
-					end
-
-					for _, plot in ipairs(myPlots) do
-						if not autoHarvestActive then break end
-						local plantedSeeds = plot:FindFirstChild("PlantedSeeds")
-						if not plantedSeeds then continue end
-
-						for _, crop in ipairs(plantedSeeds:GetChildren()) do
-							if not autoHarvestActive then break end
-							local fruitsFolder = getCropFruits(crop)
-							if not fruitsFolder then continue end
-
-							for _, fruit in ipairs(fruitsFolder:GetChildren()) do
-								if not autoHarvestActive then break end
-
-								local canHarvest = false
-								local ch = fruit:FindFirstChild("CanHarvest")
-								if ch and ch:IsA("BoolValue") then
-									canHarvest = ch.Value
-								else
-									local gp = fruit:FindFirstChild("GrowthPercentage")
-									canHarvest = (gp and typeof(gp.Value) == "number" and gp.Value >= 100)
-								end
-
-								local prompt = nil
-								if fruit:IsA("ProximityPrompt") then
-									prompt = fruit
-									canHarvest = true
-								else
-									prompt = fruit:FindFirstChildWhichIsA("ProximityPrompt", true)
-									if prompt then canHarvest = true end
-								end
-
-								local fav = fruit:FindFirstChild("Favorited")
-								local locked = fruit:FindFirstChild("PermanentLocked")
-								local isFav = (fav and fav.Value) or fruit:GetAttribute("Favorited") == true
-								local isLocked = (locked and locked.Value) or fruit:GetAttribute("PermanentLocked") == true
-
-								if canHarvest and not isFav and not isLocked then
-									-- Pivot character once per crop zone if out of range
-									local hrp = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-									if hrp and (hrp.Position - crop:GetPivot().Position).Magnitude > 14 then
-										pcall(function() hrp.CFrame = crop:GetPivot() + Vector3.new(0, 3, 0) end)
-										task.wait(0.045)
-									end
-
-									-- Instant Trigger Execution (Concurrently Spammed)
-									if HarvestRemote then
-										pcall(function() HarvestRemote:FireServer(crop.Name, fruit.Name) end)
-									end
-									if prompt then
-										firePromptFast(prompt)
-									end
-
-									-- DECOUPLED VERIFICATION THREAD (Never blocks execution loop, handles latency)
-									task.spawn(function()
-										local startTrack = os.clock()
-										local nameString = fruit:GetAttribute("ItemName") or fruit:GetAttribute("ItemId") or fruit.Name
-										local cropName = crop.Name
-
-										while os.clock() - startTrack < 1.5 do
-											if not fruit or not fruit:IsDescendantOf(workspace) or (prompt and not prompt:IsDescendantOf(workspace)) then
-												harvestedThisRun = harvestedThisRun + 1
-
-												break
-											end
-											task.wait(0.05)
-										end
-									end)
-								end
-							end
-						end
-					end
-
-					-- Throttled UI label refresh rate
-					if os.clock() - lastUIUpdate > 0.25 then
-						lastUIUpdate = os.clock()
-						if HarvestStatusLabel then
-							HarvestStatusLabel.Text = "Harvesting... crops: " .. harvestedThisRun .. "  |  🌾 Session: " .. harvestedTotal
-						end
-					end
-				end
-
-				task.wait(0.02)
-			end
-		end
-
-		makeToggle("ONLY AUTO HARVEST", UDim2.new(0, 10, 0, y2), Page2, function(enabled)
-			if enabled then
-				if OnlyHarvFullLabel then OnlyHarvFullLabel.Visible = false end
-				if HarvestStatusLabel then HarvestStatusLabel.Visible = true end
-				local nc = RDR_TOGGLES and RDR_TOGGLES["Phase State (No-Clip)"]
-				local fl = RDR_TOGGLES and RDR_TOGGLES["FLY HIGH"]
-				if nc and not nc.get() then nc(true) end
-				if fl and not fl.get() then fl(true) end
-				autoHarvestActive = true
-				task.spawn(autoHarvestLoop)
-			else
-				autoHarvestActive = false
-				if OnlyHarvFullLabel then OnlyHarvFullLabel.Visible = false end
-				if HarvestStatusLabel then HarvestStatusLabel.Visible = true end
-				local ncOff = RDR_TOGGLES and RDR_TOGGLES["Phase State (No-Clip)"]
-				local flOff = RDR_TOGGLES and RDR_TOGGLES["FLY HIGH"]
-				if ncOff and ncOff.get() then ncOff(false) end
-				if flOff and flOff.get() then flOff(false) end
-			end
-		end)
 		local FishCastRemote = nil
 		task.spawn(function()
 			local ok, r = pcall(function()
@@ -4954,8 +4738,8 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 		local combinedFishEnabled = false
 		local fishBypassEnabled = false
 		local fishWonThisSession = false
-		local fishHandsFreeThread = nil
-		local fishTrackConnection = nil
+		fishHandsFreeThread = nil
+		fishTrackConnection = nil
 		local fishLastCompleteFire = 0
 		local fishHolding = false
 		local autoCastEnabled = false
@@ -5288,233 +5072,15 @@ Space Event Furniture Shop|SpaceEventFurnitureShop|Nil
 					end
 				end)
 			end
-				runBugTracker()
-			
+			runBugTracker()
+
 			buildShopPages()
 		end
 	end
 end)
-
-local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-
--- Global Automation State
-local isAutoCatchActive = false
-local trackConnection = nil
-local autoCatchThread = nil
-
--- Remote Event Reference
-local BugCatchingRemote = ReplicatedStorage:WaitForChild("Remotes", 5)
-    and ReplicatedStorage.Remotes:WaitForChild("BugCatching", 5)
-    and ReplicatedStorage.Remotes.BugCatching:WaitForChild("RequestCatch", 5)
-
--- Teleport Helper
-local function getTargetPosition(target)
-    if not target then return nil end
-    if target:IsA("PVInstance") then
-        return target:GetPivot().Position
-    elseif target:IsA("BasePart") then
-        return target.Position
-    elseif target:IsA("Model") then
-        local primary = target.PrimaryPart or target:FindFirstChildWhichIsA("BasePart", true)
-        if primary then return primary.Position end
-    end
-    return nil
+if not BUILD_OK then
+	warn("[RdDr] BUILD FAILED: " .. tostring(BUILD_ERR))
+	if _G.RDR_DEBUG then _G.RDR_DEBUG.lastError = tostring(BUILD_ERR) end
+else
+	print("[RdDr] BUILD OK")
 end
-
-local function teleportToTarget(target)
-    local character = LocalPlayer.Character
-    if not character then return end
-    local pos = getTargetPosition(target)
-    if pos then
-        character:PivotTo(CFrame.new(pos + Vector3.new(0, 3, 0)))
-    end
-end
-
--- Attribute / Value Resolver
-local function getItemData(child, dataName)
-    local attrVal = child:GetAttribute(dataName)
-    if attrVal ~= nil then
-        return tostring(attrVal)
-    end
-    local childObj = child:FindFirstChild(dataName)
-    if childObj and childObj:IsA("ValueBase") then
-        return tostring(childObj.Value)
-    end
-    return nil
-end
-
--- Fire Catch Remote Helper
-local function fireCatch(bugInstance)
-    local rawBugId = getItemData(bugInstance, "BugId") or bugInstance.Name
-    if BugCatchingRemote then
-        BugCatchingRemote:FireServer(rawBugId)
-    else
-        local remote = ReplicatedStorage:FindFirstChild("Remotes")
-            and ReplicatedStorage.Remotes:FindFirstChild("BugCatching")
-            and ReplicatedStorage.Remotes.BugCatching:FindFirstChild("RequestCatch")
-        if remote then
-            remote:FireServer(rawBugId)
-        end
-    end
-end
-
--- Check if Minigame Gui is active
-local function isMinigameActive()
-    local minigameGui = PlayerGui:FindFirstChild("BugMinigameGui")
-    if minigameGui and minigameGui.Enabled then
-        local container = minigameGui:FindFirstChild("BugBoxContainer")
-        if container and container.Visible then
-            return true
-        end
-    end
-    return false
-end
-
--- Minigame Tracker Loop
-local function runBugTracker()
-    if trackConnection then return end
-    trackConnection = RunService.Heartbeat:Connect(function()
-        if not isAutoCatchActive then return end
-        local Container = PlayerGui:FindFirstChild("BugMinigameGui") and PlayerGui:FindFirstChild("BugMinigameGui"):FindFirstChild("BugBoxContainer")
-        local catchBox = Container and Container:FindFirstChild("CatchBox")
-        local bugBox = Container and Container:FindFirstChild("BugBox")
-        
-        if catchBox and bugBox then
-            if catchBox.AbsolutePosition.X < bugBox.AbsolutePosition.X then
-                VirtualUser:Button1Down(Vector2.new(0, 0))
-            else
-                VirtualUser:Button1Up(Vector2.new(0, 0))
-            end
-        else
-            VirtualUser:Button1Up(Vector2.new(0, 0))
-        end
-    end)
-end
-
-runBugTracker()
-
--- Get Bugs Sorted by BugId (Lowest First)
-local function getSortedBugs()
-    local activeBugsFolder = workspace:FindFirstChild("ActiveBugs")
-    if not activeBugsFolder then return {} end
-
-    local bugsList = {}
-    for _, bug in ipairs(activeBugsFolder:GetChildren()) do
-        local rawId = getItemData(bug, "BugId")
-        local numId = tonumber(rawId) or math.huge
-        table.insert(bugsList, { Instance = bug, BugIdNum = numId })
-    end
-
-    table.sort(bugsList, function(a, b)
-        return a.BugIdNum < b.BugIdNum
-    end)
-
-    return bugsList
-end
-
--- Sequential Auto Catch Routine
-local function startAutoCatchRoutine()
-    if autoCatchThread then return end
-
-    autoCatchThread = task.spawn(function()
-        while isAutoCatchActive do
-            local sortedBugs = getSortedBugs()
-
-            if #sortedBugs > 0 then
-                for i = 1, #sortedBugs do
-                    if not isAutoCatchActive then break end
-
-                    local targetBug = sortedBugs[i].Instance
-
-                    if targetBug and targetBug.Parent then
-                        teleportToTarget(targetBug)
-                        task.wait(0.5)
-
-                        if isAutoCatchActive and targetBug and targetBug.Parent then
-                            fireCatch(targetBug)
-                        end
-                        task.wait(1.0)
-
-                        while isAutoCatchActive and isMinigameActive() do
-                            task.wait(0.2)
-                        end
-                    end
-                end
-            else
-                task.wait(0.5)
-            end
-        end
-        autoCatchThread = nil
-    end)
-end
-
--- State Controller Function
-local function setAutomationState(enabled)
-    isAutoCatchActive = enabled
-    if isAutoCatchActive then
-        startAutoCatchRoutine()
-    else
-        -- Ensure click release if stopped abruptly
-        VirtualUser:Button1Up(Vector2.new(0, 0))
-    end
-end
-
--- Keybind Handling (F = ON, Y = OFF)
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.UserInputType == Enum.UserInputType.Keyboard then
-        if input.KeyCode == Enum.KeyCode.F then
-            setAutomationState(true)
-        elseif input.KeyCode == Enum.KeyCode.Y then
-            setAutomationState(false)
-        end
-    end
-end)
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Remotes = ReplicatedStorage:WaitForChild("Remotes", 10)
-
-if not Remotes then
-    warn("[Auto-Farm] Could not find Remotes folder.")
-    return
-end
-
-local spinRemote = Remotes:WaitForChild("SpinningWheel", 5):WaitForChild("RequestSpinningWheelSpin", 5)
-local claimRemote = Remotes:WaitForChild("DailyRewards", 5):WaitForChild("ClaimPlaytimeReward", 5)
-local dailyRewardRemote = Remotes:WaitForChild("DailyRewards", 5):WaitForChild("ClaimDailyReward", 5)
-
-print("Ready Auto Claim Spin (every 1s), Playtime (every 1s), And Daily Rewards!")
-
-task.spawn(function()
-    while true do
-        -- Auto Spin
-        if spinRemote then
-            pcall(function()
-                spinRemote:InvokeServer()
-            end)
-        end
-        task.wait(1)
-
-        -- Auto Claim Playtime Rewards (every 1s per minute interval)
-        if claimRemote then
-            for mins = 10, 120, 10 do
-                pcall(function()
-                    claimRemote:InvokeServer("Playtime" .. mins .. "Minutes")
-                end)
-                task.wait(1)
-            end
-        end
-
-        -- Auto Claim Daily Rewards (1-7)
-        if dailyRewardRemote then
-            for day = 1, 7 do
-                pcall(function()
-                    dailyRewardRemote:InvokeServer(day)
-                end)
-                task.wait(1)
-            end
-        else
-            task.wait(1)
-        end
-    end
-end)
