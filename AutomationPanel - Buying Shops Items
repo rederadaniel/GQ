@@ -1,0 +1,2063 @@
+-- AutomationPanel (RdDr Framework - Modernized Glassmorphism, Multi-Service Auto-Discovery & Silent Loader)
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local PlayerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
+local Lighting = game:GetService("Lighting")
+local ReplicatedFirst = game:GetService("ReplicatedFirst")
+
+local Modules = ReplicatedStorage:WaitForChild("Modules", 10)
+local ItemDisplayData = Modules and Modules:FindFirstChild("ItemDisplayData") and require(Modules.ItemDisplayData) or {}
+
+local LocalPlayer = Players.LocalPlayer
+
+-- Remote References
+local Remotes = ReplicatedStorage:WaitForChild("Remotes", 10)
+local Shops = Remotes and Remotes:WaitForChild("Shops", 10)
+local RequestShopState = Shops and Shops:WaitForChild("RequestShopState", 10)
+local ShopStateUpdated = Shops and Shops:WaitForChild("ShopStateUpdated", 10)
+local BuyShopItem = Shops and Shops:WaitForChild("BuyShopItem", 10)
+
+-- ===========================================================================
+-- DATA & STATE MANAGEMENT
+-- ===========================================================================
+local scriptRunning = true
+local connections = {}
+
+local shopIds = {}
+local shopOrder = {}
+local shopItems = {}
+local shopStateMap = {}     -- shopId -> latest state payload
+local shopStatusMap = {}   -- shopId -> "Pending" | "Loaded" | "Ready"
+local excludedShops = {}    -- shopId -> true
+local excludedItems = {}    -- "shopId|itemName" -> true
+local selected = {}         -- "shopId|itemName" -> true
+local cards = {}            -- "shopId|itemName" -> card table
+local shopHeaders = {}      -- shopId -> header Frame
+local shopTimerLabels = {}  -- shopId -> restock timer label
+local restockDueAtMap = {}   -- shopId -> local os.clock() deadline
+local shopRequestAtMap = {}
+
+local currentNavTab = "Automatic"
+local currentShopFilter = "All"
+local searchFilterText = ""
+local searchTargetMode = "Item+Shop"
+
+local allowedRarities = {}
+local rarityPriorityText = "Common,Uncommon,Rare,Epic,Legendary,Mythical,Ethereal"
+local allowedTiersEnabled = false
+local sessionSpent = 0
+local rarityOptions = {"Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythical", "Ethereal", "Divine", "Secret"}
+
+-- Sorting Modes: 1 = Lower Common->Ethereal + Lower Price, 2 = Upper Ethereal->Common + Upper Price
+local currentSortMode = 1
+
+-- Auto Buy & Active Selection States
+local selectedBuyMode = "Selected"
+local isAutoLoopOn = false
+local buyDelay = 0.35
+local purchaseQueue = {}
+local queuedPurchases = {}
+local lastPurchaseAt = 0
+local purchaseInProgress = false
+local purchaseStatusText = "System Operational"
+
+-- Forward Declarations
+local applyShopFilter
+local updateItemStats
+local registerShop
+
+-- Destroy existing panel instance if re-executed
+if PlayerGui:FindFirstChild("RdDrAutomationPanel") then
+	PlayerGui.RdDrAutomationPanel:Destroy()
+end
+
+-- Visual Styling Utility Helpers
+local function addStroke(instance, color, thickness, transparency)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = color or Color3.fromRGB(0, 200, 255)
+	stroke.Thickness = thickness or 1
+	stroke.Transparency = transparency or 0.7
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Parent = instance
+	return stroke
+end
+
+local function formatCompactNumber(value)
+	local number = tonumber(value)
+	if not number then return tostring(value or "Unknown") end
+	local absolute = math.abs(number)
+	local suffix = ""
+	local divisor = 1
+	if absolute >= 1e12 then suffix, divisor = "t", 1e12
+	elseif absolute >= 1e9 then suffix, divisor = "b", 1e9
+	elseif absolute >= 1e6 then suffix, divisor = "m", 1e6
+	elseif absolute >= 1e3 then suffix, divisor = "k", 1e3 end
+	local scaled = number / divisor
+	if suffix == "" then return tostring(math.floor(scaled)) end
+	local text = string.format("%.1f", scaled):gsub("%.0$", "")
+	return text .. suffix
+end
+
+local function rebuildAllowedRarities()
+	allowedRarities = {}
+	for _, rarity in ipairs(string.split(rarityPriorityText, ",")) do
+		rarity = rarity:gsub("^%s+", ""):gsub("%s+$", "")
+		if rarity ~= "" then allowedRarities[rarity:lower()] = true end
+	end
+end
+
+local function isRarityAllowed(rarity)
+	if not allowedTiersEnabled then return true end
+	return allowedRarities[tostring(rarity):lower()] == true
+end
+
+-- ===========================================================================
+-- MAIN SCREEN GUI
+-- ===========================================================================
+local gui = Instance.new("ScreenGui")
+gui.Name = "RdDrAutomationPanel"
+gui.ResetOnSpawn = false
+gui.Parent = PlayerGui
+
+local function destroyGUI()
+	scriptRunning = false
+	isAutoLoopOn = false
+
+	for _, conn in ipairs(connections) do
+		if conn and conn.Connected then
+			conn:Disconnect()
+		end
+	end
+
+	gui:Destroy()
+end
+
+-- REOPEN BUTTON
+local reopenBtn = Instance.new("TextButton")
+reopenBtn.Name = "ReopenButton"
+reopenBtn.Size = UDim2.new(0, 200, 0, 38)
+reopenBtn.Position = UDim2.new(0.5, -100, 0, 12)
+reopenBtn.BackgroundColor3 = Color3.fromRGB(12, 16, 24)
+reopenBtn.BorderSizePixel = 0
+reopenBtn.Text = "⚡ LAUNCH AUTOMATION PANEL"
+reopenBtn.TextColor3 = Color3.fromRGB(0, 229, 255)
+reopenBtn.Font = Enum.Font.GothamBold
+reopenBtn.TextSize = 12
+reopenBtn.Visible = false
+reopenBtn.Active = true
+reopenBtn.Draggable = true
+reopenBtn.Parent = gui
+
+local reopenCorner = Instance.new("UICorner")
+reopenCorner.CornerRadius = UDim.new(0, 8)
+reopenCorner.Parent = reopenBtn
+addStroke(reopenBtn, Color3.fromRGB(0, 229, 255), 1.2, 0.4)
+
+-- Window Frame
+local window = Instance.new("Frame")
+window.Name = "MainWindow"
+window.Size = UDim2.new(0, 980, 0, 590)
+window.Position = UDim2.new(0.5, -490, 0.5, -295)
+window.BackgroundColor3 = Color3.fromRGB(11, 14, 20)
+window.BorderSizePixel = 0
+window.Active = true
+window.Draggable = true
+window.Parent = gui
+
+local windowCorner = Instance.new("UICorner")
+windowCorner.CornerRadius = UDim.new(0, 10)
+windowCorner.Parent = window
+addStroke(window, Color3.fromRGB(35, 45, 65), 1.5, 0.3)
+
+-- Top Bar Header
+local header = Instance.new("Frame")
+header.Name = "Header"
+header.Size = UDim2.new(1, 0, 0, 44)
+header.BackgroundColor3 = Color3.fromRGB(15, 19, 28)
+header.BorderSizePixel = 0
+header.Parent = window
+
+local headerCorner = Instance.new("UICorner")
+headerCorner.CornerRadius = UDim.new(0, 10)
+headerCorner.Parent = header
+
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(0, 360, 1, 0)
+titleLabel.Position = UDim2.new(0, 16, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "⚡ RdDr Ultimate Automation Suite"
+titleLabel.TextColor3 = Color3.fromRGB(240, 245, 255)
+titleLabel.Font = Enum.Font.GothamBold
+titleLabel.TextSize = 15
+titleLabel.TextXAlignment = Enum.TextXAlignment.Left
+titleLabel.Parent = header
+
+-- Header Controls
+local destroyHeaderBtn = Instance.new("TextButton")
+destroyHeaderBtn.Name = "DestroyBtn"
+destroyHeaderBtn.Size = UDim2.new(0, 85, 0, 26)
+destroyHeaderBtn.Position = UDim2.new(1, -155, 0, 9)
+destroyHeaderBtn.BackgroundColor3 = Color3.fromRGB(160, 35, 35)
+destroyHeaderBtn.Text = "🗑 Destroy"
+destroyHeaderBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+destroyHeaderBtn.Font = Enum.Font.GothamBold
+destroyHeaderBtn.TextSize = 11
+destroyHeaderBtn.Parent = header
+
+local destroyHeaderCorner = Instance.new("UICorner")
+destroyHeaderCorner.CornerRadius = UDim.new(0, 6)
+destroyHeaderCorner.Parent = destroyHeaderBtn
+
+destroyHeaderBtn.MouseButton1Click:Connect(destroyGUI)
+
+local minBtn = Instance.new("TextButton")
+minBtn.Name = "MinBtn"
+minBtn.Size = UDim2.new(0, 26, 0, 26)
+minBtn.Position = UDim2.new(1, -64, 0, 9)
+minBtn.BackgroundColor3 = Color3.fromRGB(30, 38, 54)
+minBtn.Text = "—"
+minBtn.TextColor3 = Color3.fromRGB(200, 210, 225)
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 12
+minBtn.Parent = header
+
+local minCorner = Instance.new("UICorner")
+minCorner.CornerRadius = UDim.new(0, 6)
+minCorner.Parent = minBtn
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Name = "CloseBtn"
+closeBtn.Size = UDim2.new(0, 26, 0, 26)
+closeBtn.Position = UDim2.new(1, -34, 0, 9)
+closeBtn.BackgroundColor3 = Color3.fromRGB(210, 140, 30)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 12
+closeBtn.Parent = header
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = closeBtn
+
+-- Content Container
+local contentContainer = Instance.new("Frame")
+contentContainer.Size = UDim2.new(1, -20, 1, -54)
+contentContainer.Position = UDim2.new(0, 10, 0, 44)
+contentContainer.BackgroundTransparency = 1
+contentContainer.Parent = window
+
+-- Window Actions
+minBtn.MouseButton1Click:Connect(function()
+	contentContainer.Visible = not contentContainer.Visible
+	window.Size = contentContainer.Visible and UDim2.new(0, 980, 0, 590) or UDim2.new(0, 980, 0, 44)
+end)
+
+closeBtn.MouseButton1Click:Connect(function()
+	window.Visible = false
+	reopenBtn.Visible = true
+end)
+
+reopenBtn.MouseButton1Click:Connect(function()
+	window.Visible = true
+	reopenBtn.Visible = false
+end)
+
+-- ===========================================================================
+-- WARNING MODAL
+-- ===========================================================================
+local warningModal = Instance.new("Frame")
+warningModal.Name = "WarningModal"
+warningModal.Size = UDim2.new(1, 0, 1, 0)
+warningModal.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+warningModal.BackgroundTransparency = 0.55
+warningModal.BorderSizePixel = 0
+warningModal.ZIndex = 50
+warningModal.Visible = false
+warningModal.Parent = window
+
+local warningBox = Instance.new("Frame")
+warningBox.Size = UDim2.new(0, 540, 0, 420)
+warningBox.Position = UDim2.new(0.5, -270, 0.5, -210)
+warningBox.BackgroundColor3 = Color3.fromRGB(16, 20, 30)
+warningBox.BorderSizePixel = 0
+warningBox.ZIndex = 51
+warningBox.Parent = warningModal
+
+local wCorner = Instance.new("UICorner")
+wCorner.CornerRadius = UDim.new(0, 8)
+wCorner.Parent = warningBox
+addStroke(warningBox, Color3.fromRGB(240, 160, 40), 1.2, 0.2)
+
+local wTitle = Instance.new("TextLabel")
+wTitle.Size = UDim2.new(1, -20, 0, 36)
+wTitle.Position = UDim2.new(0, 10, 0, 10)
+wTitle.BackgroundTransparency = 1
+wTitle.Text = "⚠️ WHOLE SHOP EXECUTION WARNING"
+wTitle.TextColor3 = Color3.fromRGB(255, 190, 50)
+wTitle.Font = Enum.Font.GothamBold
+wTitle.TextSize = 14
+wTitle.ZIndex = 52
+wTitle.Parent = warningBox
+
+local wDivider = Instance.new("Frame")
+wDivider.Size = UDim2.new(1, -20, 0, 1)
+wDivider.Position = UDim2.new(0, 10, 0, 42)
+wDivider.BackgroundColor3 = Color3.fromRGB(45, 55, 75)
+wDivider.BorderSizePixel = 0
+wDivider.ZIndex = 52
+wDivider.Parent = warningBox
+
+local wBodyText = Instance.new("TextLabel")
+wBodyText.Size = UDim2.new(1, -24, 0, 38)
+wBodyText.Position = UDim2.new(0, 12, 0, 48)
+wBodyText.BackgroundTransparency = 1
+wBodyText.Text = "Executing purchase routines across entire shops requires substantial currency. Please review active restrictions:"
+wBodyText.TextColor3 = Color3.fromRGB(230, 235, 245)
+wBodyText.Font = Enum.Font.SourceSans
+wBodyText.TextSize = 13
+wBodyText.TextWrapped = true
+wBodyText.TextXAlignment = Enum.TextXAlignment.Left
+wBodyText.ZIndex = 52
+wBodyText.Parent = warningBox
+
+local wAvoidScroll = Instance.new("ScrollingFrame")
+wAvoidScroll.Size = UDim2.new(1, -24, 0, 230)
+wAvoidScroll.Position = UDim2.new(0, 12, 0, 92)
+wAvoidScroll.BackgroundColor3 = Color3.fromRGB(11, 14, 20)
+wAvoidScroll.BorderSizePixel = 0
+wAvoidScroll.ScrollBarThickness = 4
+wAvoidScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 229, 255)
+wAvoidScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+wAvoidScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+wAvoidScroll.ZIndex = 52
+wAvoidScroll.Parent = warningBox
+
+local waCorner = Instance.new("UICorner")
+waCorner.CornerRadius = UDim.new(0, 6)
+waCorner.Parent = wAvoidScroll
+
+local wAvoidListLayout = Instance.new("UIListLayout")
+wAvoidListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+wAvoidListLayout.Padding = UDim.new(0, 4)
+wAvoidListLayout.Parent = wAvoidScroll
+
+local wConfirmBtn = Instance.new("TextButton")
+wConfirmBtn.Size = UDim2.new(0, 140, 0, 34)
+wConfirmBtn.Position = UDim2.new(1, -152, 1, -44)
+wConfirmBtn.BackgroundColor3 = Color3.fromRGB(35, 150, 75)
+wConfirmBtn.Text = "Proceed ✓"
+wConfirmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+wConfirmBtn.Font = Enum.Font.GothamBold
+wConfirmBtn.TextSize = 13
+wConfirmBtn.ZIndex = 52
+wConfirmBtn.Parent = warningBox
+
+local wcCorner = Instance.new("UICorner")
+wcCorner.CornerRadius = UDim.new(0, 6)
+wcCorner.Parent = wConfirmBtn
+
+local wCancelBtn = Instance.new("TextButton")
+wCancelBtn.Size = UDim2.new(0, 100, 0, 34)
+wCancelBtn.Position = UDim2.new(1, -262, 1, -44)
+wCancelBtn.BackgroundColor3 = Color3.fromRGB(150, 45, 45)
+wCancelBtn.Text = "Abort"
+wCancelBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+wCancelBtn.Font = Enum.Font.GothamBold
+wCancelBtn.TextSize = 13
+wCancelBtn.ZIndex = 52
+wCancelBtn.Parent = warningBox
+
+local wcaCorner = Instance.new("UICorner")
+wcaCorner.CornerRadius = UDim.new(0, 6)
+wcaCorner.Parent = wCancelBtn
+
+local pendingConfirmCallback = nil
+
+local function promptWarning(onConfirm)
+	pendingConfirmCallback = onConfirm
+
+	for _, child in ipairs(wAvoidScroll:GetChildren()) do
+		if not child:IsA("UIListLayout") then child:Destroy() end
+	end
+
+	local avoidedShopsList = {}
+	for sId, isEx in pairs(excludedShops) do
+		if isEx then table.insert(avoidedShopsList, sId) end
+	end
+
+	local sHeader = Instance.new("TextLabel")
+	sHeader.Size = UDim2.new(1, -10, 0, 24)
+	sHeader.BackgroundTransparency = 1
+	sHeader.Text = string.format("🚫 AVOIDED SHOPS (%d):", #avoidedShopsList)
+	sHeader.TextColor3 = Color3.fromRGB(255, 120, 120)
+	sHeader.Font = Enum.Font.GothamBold
+	sHeader.TextSize = 12
+	sHeader.TextXAlignment = Enum.TextXAlignment.Left
+	sHeader.ZIndex = 53
+	sHeader.Parent = wAvoidScroll
+
+	if #avoidedShopsList == 0 then
+		local noneLbl = Instance.new("TextLabel")
+		noneLbl.Size = UDim2.new(1, -10, 0, 20)
+		noneLbl.BackgroundTransparency = 1
+		noneLbl.Text = "   • None (All Shops Active)"
+		noneLbl.TextColor3 = Color3.fromRGB(150, 160, 175)
+		noneLbl.Font = Enum.Font.SourceSans
+		noneLbl.TextSize = 12
+		noneLbl.TextXAlignment = Enum.TextXAlignment.Left
+		noneLbl.ZIndex = 53
+		noneLbl.Parent = wAvoidScroll
+	else
+		for _, sId in ipairs(avoidedShopsList) do
+			local r = Instance.new("Frame")
+			r.Size = UDim2.new(1, -10, 0, 24)
+			r.BackgroundColor3 = Color3.fromRGB(24, 20, 28)
+			r.ZIndex = 53
+			r.Parent = wAvoidScroll
+
+			local rc = Instance.new("UICorner")
+			rc.CornerRadius = UDim.new(0, 4)
+			rc.Parent = r
+
+			local txt = Instance.new("TextLabel")
+			txt.Size = UDim2.new(1, -10, 1, 0)
+			txt.Position = UDim2.new(0, 8, 0, 0)
+			txt.BackgroundTransparency = 1
+			txt.Text = "• " .. sId
+			txt.TextColor3 = Color3.fromRGB(240, 210, 210)
+			txt.Font = Enum.Font.SourceSans
+			txt.TextSize = 12
+			txt.TextXAlignment = Enum.TextXAlignment.Left
+			txt.ZIndex = 54
+			txt.Parent = r
+		end
+	end
+
+	warningModal.Visible = true
+end
+
+wConfirmBtn.MouseButton1Click:Connect(function()
+	warningModal.Visible = false
+	if pendingConfirmCallback then
+		pendingConfirmCallback()
+		pendingConfirmCallback = nil
+	end
+end)
+
+wCancelBtn.MouseButton1Click:Connect(function()
+	warningModal.Visible = false
+	pendingConfirmCallback = nil
+end)
+
+-- ===========================================================================
+-- LEFT SIDEBAR
+-- ===========================================================================
+local leftSidebar = Instance.new("Frame")
+leftSidebar.Name = "LeftSidebar"
+leftSidebar.Size = UDim2.new(0, 180, 1, 0)
+leftSidebar.BackgroundTransparency = 1
+leftSidebar.Parent = contentContainer
+
+local leftLayout = Instance.new("UIListLayout")
+leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
+leftLayout.Padding = UDim.new(0, 6)
+leftLayout.Parent = leftSidebar
+
+local autoTabBtn = Instance.new("TextButton")
+autoTabBtn.Name = "AutoTab"
+autoTabBtn.Size = UDim2.new(1, 0, 0, 42)
+autoTabBtn.BackgroundColor3 = Color3.fromRGB(18, 23, 34)
+autoTabBtn.Text = "  🛒  Automation Hub"
+autoTabBtn.TextColor3 = Color3.fromRGB(0, 229, 255)
+autoTabBtn.Font = Enum.Font.GothamBold
+autoTabBtn.TextSize = 13
+autoTabBtn.TextXAlignment = Enum.TextXAlignment.Left
+autoTabBtn.Parent = leftSidebar
+
+local autoTabCorner = Instance.new("UICorner")
+autoTabCorner.CornerRadius = UDim.new(0, 6)
+autoTabCorner.Parent = autoTabBtn
+
+local autoIndicator = Instance.new("Frame")
+autoIndicator.Size = UDim2.new(0, 3, 0, 22)
+autoIndicator.Position = UDim2.new(0, 0, 0.5, -11)
+autoIndicator.BackgroundColor3 = Color3.fromRGB(0, 229, 255)
+autoIndicator.BorderSizePixel = 0
+autoIndicator.Parent = autoTabBtn
+
+local logsTabBtn = Instance.new("TextButton")
+logsTabBtn.Name = "LogsTab"
+logsTabBtn.Size = UDim2.new(1, 0, 0, 42)
+logsTabBtn.BackgroundColor3 = Color3.fromRGB(13, 16, 24)
+logsTabBtn.Text = "  📜  Diagnostic Logs"
+logsTabBtn.TextColor3 = Color3.fromRGB(160, 175, 195)
+logsTabBtn.Font = Enum.Font.GothamBold
+logsTabBtn.TextSize = 13
+logsTabBtn.TextXAlignment = Enum.TextXAlignment.Left
+logsTabBtn.Parent = leftSidebar
+
+local logsTabCorner = Instance.new("UICorner")
+logsTabCorner.CornerRadius = UDim.new(0, 6)
+logsTabCorner.Parent = logsTabBtn
+
+local logsIndicator = Instance.new("Frame")
+logsIndicator.Size = UDim2.new(0, 3, 0, 22)
+logsIndicator.Position = UDim2.new(0, 0, 0.5, -11)
+logsIndicator.BackgroundColor3 = Color3.fromRGB(0, 229, 255)
+logsIndicator.BorderSizePixel = 0
+logsIndicator.Visible = false
+logsIndicator.Parent = logsTabBtn
+
+-- ===========================================================================
+-- CENTER SIDEBAR (SHOP NAVIGATION)
+-- ===========================================================================
+local centerPanel = Instance.new("Frame")
+centerPanel.Name = "CenterPanel"
+centerPanel.Size = UDim2.new(0, 180, 1, 0)
+centerPanel.Position = UDim2.new(0, 190, 0, 0)
+centerPanel.BackgroundTransparency = 1
+centerPanel.Parent = contentContainer
+
+local shopTabsScroll = Instance.new("ScrollingFrame")
+shopTabsScroll.Size = UDim2.new(1, 0, 1, 0)
+shopTabsScroll.BackgroundTransparency = 1
+shopTabsScroll.BorderSizePixel = 0
+shopTabsScroll.ScrollBarThickness = 3
+shopTabsScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 229, 255)
+shopTabsScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+shopTabsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+shopTabsScroll.Parent = centerPanel
+
+local shopTabsLayout = Instance.new("UIListLayout")
+shopTabsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+shopTabsLayout.Padding = UDim.new(0, 6)
+shopTabsLayout.Parent = shopTabsScroll
+
+-- ===========================================================================
+-- RIGHT PANEL
+-- ===========================================================================
+local rightPanel = Instance.new("Frame")
+rightPanel.Name = "RightPanel"
+rightPanel.Size = UDim2.new(1, -380, 1, 0)
+rightPanel.Position = UDim2.new(0, 380, 0, 0)
+rightPanel.BackgroundColor3 = Color3.fromRGB(14, 18, 26)
+rightPanel.BorderSizePixel = 0
+rightPanel.Parent = contentContainer
+
+local rightCorner = Instance.new("UICorner")
+rightCorner.CornerRadius = UDim.new(0, 8)
+rightCorner.Parent = rightPanel
+
+-- Top Info Banner
+local infoBanner = Instance.new("Frame")
+infoBanner.Size = UDim2.new(1, -20, 0, 20)
+infoBanner.Position = UDim2.new(0, 10, 0, 6)
+infoBanner.BackgroundTransparency = 1
+infoBanner.Parent = rightPanel
+
+local infoText = Instance.new("TextLabel")
+infoText.Size = UDim2.new(1, 0, 1, 0)
+infoText.BackgroundTransparency = 1
+infoText.Text = "💡 Background shop stealth discovery active. Configure item tiers and sorting preferences."
+infoText.TextColor3 = Color3.fromRGB(150, 165, 185)
+infoText.Font = Enum.Font.SourceSansItalic
+infoText.TextSize = 12
+infoText.TextXAlignment = Enum.TextXAlignment.Left
+infoText.Parent = infoBanner
+
+-- Toolbar
+local toolbarBar = Instance.new("Frame")
+toolbarBar.Size = UDim2.new(1, -20, 0, 28)
+toolbarBar.Position = UDim2.new(0, 10, 0, 28)
+toolbarBar.BackgroundTransparency = 1
+toolbarBar.Parent = rightPanel
+
+local tLayout = Instance.new("UIListLayout")
+tLayout.FillDirection = Enum.FillDirection.Horizontal
+tLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+tLayout.Padding = UDim.new(0, 6)
+tLayout.Parent = toolbarBar
+
+local function createToolbarBtn(text, color, flexWidth)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(flexWidth, -6, 1, 0)
+	b.BackgroundColor3 = color
+	b.Text = text
+	b.TextColor3 = Color3.fromRGB(255, 255, 255)
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 11
+	b.TextTruncate = Enum.TextTruncate.AtEnd
+	b.Parent = toolbarBar
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 5)
+	corner.Parent = b
+	return b
+end
+
+local selectToggleBtn = createToolbarBtn("Toggle Selection", Color3.fromRGB(35, 60, 95), 0.25)
+local avoidToggleBtn = createToolbarBtn("Toggle Exclusion", Color3.fromRGB(130, 40, 40), 0.25)
+local deselectAllShopsBtn = createToolbarBtn("Clear All Selected", Color3.fromRGB(50, 55, 70), 0.25)
+local avoidDropdownBtn = createToolbarBtn("🚫 Manage Shops ▼", Color3.fromRGB(28, 35, 50), 0.25)
+avoidDropdownBtn.TextColor3 = Color3.fromRGB(240, 180, 50)
+
+-- ===========================================================================
+-- SEARCH & SORT CONTROLS BAR
+-- ===========================================================================
+local searchSortBar = Instance.new("Frame")
+searchSortBar.Name = "SearchSortBar"
+searchSortBar.Size = UDim2.new(1, -20, 0, 28)
+searchSortBar.Position = UDim2.new(0, 10, 0, 60)
+searchSortBar.BackgroundTransparency = 1
+searchSortBar.Parent = rightPanel
+
+local searchBox = Instance.new("TextBox")
+searchBox.Name = "SearchBox"
+searchBox.Size = UDim2.new(0.40, 0, 1, 0)
+searchBox.Position = UDim2.new(0, 0, 0, 0)
+searchBox.BackgroundColor3 = Color3.fromRGB(20, 25, 36)
+searchBox.BorderSizePixel = 0
+searchBox.PlaceholderText = "🔍 Search item name or shop..."
+searchBox.PlaceholderColor3 = Color3.fromRGB(120, 130, 150)
+searchBox.Text = ""
+searchBox.TextColor3 = Color3.fromRGB(0, 229, 255)
+searchBox.Font = Enum.Font.GothamMedium
+searchBox.TextSize = 11
+searchBox.TextXAlignment = Enum.TextXAlignment.Left
+searchBox.Parent = searchSortBar
+
+local sbCorner = Instance.new("UICorner")
+sbCorner.CornerRadius = UDim.new(0, 5)
+sbCorner.Parent = searchBox
+addStroke(searchBox, Color3.fromRGB(35, 45, 65), 1, 0.5)
+
+local searchTargetBtn = Instance.new("TextButton")
+searchTargetBtn.Size = UDim2.new(0.23, -5, 1, 0)
+searchTargetBtn.Position = UDim2.new(0.41, 0, 0, 0)
+searchTargetBtn.BackgroundColor3 = Color3.fromRGB(28, 35, 50)
+searchTargetBtn.Text = "Target: Item + Shop"
+searchTargetBtn.TextColor3 = Color3.fromRGB(220, 225, 235)
+searchTargetBtn.Font = Enum.Font.GothamBold
+searchTargetBtn.TextSize = 10
+searchTargetBtn.Parent = searchSortBar
+
+local stCorner = Instance.new("UICorner")
+stCorner.CornerRadius = UDim.new(0, 5)
+stCorner.Parent = searchTargetBtn
+
+local sortModeBtn = Instance.new("TextButton")
+sortModeBtn.Size = UDim2.new(0.35, -5, 1, 0)
+sortModeBtn.Position = UDim2.new(0.65, 0, 0, 0)
+sortModeBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 170)
+sortModeBtn.Text = "Sort: Lower Rarity + Price First"
+sortModeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+sortModeBtn.Font = Enum.Font.GothamBold
+sortModeBtn.TextSize = 10
+sortModeBtn.Parent = searchSortBar
+
+local smCorner = Instance.new("UICorner")
+smCorner.CornerRadius = UDim.new(0, 5)
+smCorner.Parent = sortModeBtn
+
+-- Stats Label
+local itemCountLabel = Instance.new("TextLabel")
+itemCountLabel.Size = UDim2.new(1, -20, 0, 20)
+itemCountLabel.Position = UDim2.new(0, 10, 0, 92)
+itemCountLabel.BackgroundTransparency = 1
+itemCountLabel.Text = "Filter: All | Total: 0 | Selected: 0 | Excluded Items: 0 | Excluded Shops: 0"
+itemCountLabel.TextColor3 = Color3.fromRGB(0, 229, 255)
+itemCountLabel.Font = Enum.Font.GothamBold
+itemCountLabel.TextSize = 11
+itemCountLabel.TextXAlignment = Enum.TextXAlignment.Left
+itemCountLabel.Parent = rightPanel
+
+-- AVOID DROPDOWN FRAME
+local avoidDropdownFrame = Instance.new("Frame")
+avoidDropdownFrame.Size = UDim2.new(0.95, 0, 0, 230)
+avoidDropdownFrame.Position = UDim2.new(0.025, 0, 0, 92)
+avoidDropdownFrame.BackgroundColor3 = Color3.fromRGB(18, 22, 32)
+avoidDropdownFrame.BorderSizePixel = 0
+avoidDropdownFrame.Visible = false
+avoidDropdownFrame.ZIndex = 10
+avoidDropdownFrame.Parent = rightPanel
+
+local avoidFrameCorner = Instance.new("UICorner")
+avoidFrameCorner.CornerRadius = UDim.new(0, 6)
+avoidFrameCorner.Parent = avoidDropdownFrame
+addStroke(avoidDropdownFrame, Color3.fromRGB(0, 229, 255), 1, 0.4)
+
+local avoidTitle = Instance.new("TextLabel")
+avoidTitle.Size = UDim2.new(0.4, 0, 0, 28)
+avoidTitle.Position = UDim2.new(0, 10, 0, 6)
+avoidTitle.BackgroundTransparency = 1
+avoidTitle.Text = "Select Shops to Exclude:"
+avoidTitle.TextColor3 = Color3.fromRGB(200, 210, 225)
+avoidTitle.Font = Enum.Font.GothamBold
+avoidTitle.TextSize = 12
+avoidTitle.TextXAlignment = Enum.TextXAlignment.Left
+avoidTitle.ZIndex = 11
+avoidTitle.Parent = avoidDropdownFrame
+
+local avoidAllShopsBtn = Instance.new("TextButton")
+avoidAllShopsBtn.Size = UDim2.new(0, 105, 0, 24)
+avoidAllShopsBtn.Position = UDim2.new(1, -216, 0, 8)
+avoidAllShopsBtn.BackgroundColor3 = Color3.fromRGB(150, 45, 45)
+avoidAllShopsBtn.Text = "Exclude All"
+avoidAllShopsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+avoidAllShopsBtn.Font = Enum.Font.GothamBold
+avoidAllShopsBtn.TextSize = 11
+avoidAllShopsBtn.ZIndex = 11
+avoidAllShopsBtn.Parent = avoidDropdownFrame
+
+local unavoidAllShopsBtn = Instance.new("TextButton")
+unavoidAllShopsBtn.Size = UDim2.new(0, 105, 0, 24)
+unavoidAllShopsBtn.Position = UDim2.new(1, -106, 0, 8)
+unavoidAllShopsBtn.BackgroundColor3 = Color3.fromRGB(35, 130, 70)
+unavoidAllShopsBtn.Text = "Allow All"
+unavoidAllShopsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+unavoidAllShopsBtn.Font = Enum.Font.GothamBold
+unavoidAllShopsBtn.TextSize = 11
+unavoidAllShopsBtn.ZIndex = 11
+unavoidAllShopsBtn.Parent = avoidDropdownFrame
+
+local avoidScroll = Instance.new("ScrollingFrame")
+avoidScroll.Size = UDim2.new(1, -16, 1, -42)
+avoidScroll.Position = UDim2.new(0, 8, 0, 36)
+avoidScroll.BackgroundTransparency = 1
+avoidScroll.BorderSizePixel = 0
+avoidScroll.ScrollBarThickness = 4
+avoidScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 229, 255)
+avoidScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+avoidScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+avoidScroll.ZIndex = 11
+avoidScroll.Parent = avoidDropdownFrame
+
+local avoidLayout = Instance.new("UIListLayout")
+avoidLayout.SortOrder = Enum.SortOrder.LayoutOrder
+avoidLayout.Padding = UDim.new(0, 4)
+avoidLayout.Parent = avoidScroll
+
+avoidDropdownBtn.MouseButton1Click:Connect(function()
+	avoidDropdownFrame.Visible = not avoidDropdownFrame.Visible
+end)
+
+-- Items Container
+local itemsScroll = Instance.new("ScrollingFrame")
+itemsScroll.Size = UDim2.new(1, -20, 1, -196)
+itemsScroll.Position = UDim2.new(0, 10, 0, 120)
+itemsScroll.BackgroundTransparency = 1
+itemsScroll.BorderSizePixel = 0
+itemsScroll.ScrollBarThickness = 5
+itemsScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 229, 255)
+itemsScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+itemsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+itemsScroll.Parent = rightPanel
+
+local itemsLayout = Instance.new("UIListLayout")
+itemsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+itemsLayout.Padding = UDim.new(0, 6)
+itemsLayout.Parent = itemsScroll
+
+-- Bottom Control Bar
+local bottomControlBar = Instance.new("Frame")
+bottomControlBar.Size = UDim2.new(1, -20, 0, 38)
+bottomControlBar.Position = UDim2.new(0, 10, 1, -74)
+bottomControlBar.BackgroundTransparency = 1
+bottomControlBar.Parent = rightPanel
+
+local bGrid = Instance.new("UIListLayout")
+bGrid.FillDirection = Enum.FillDirection.Horizontal
+bGrid.VerticalAlignment = Enum.VerticalAlignment.Center
+bGrid.Padding = UDim.new(0, 6)
+bGrid.Parent = bottomControlBar
+
+local function createBottom4ColBtn(text)
+	local b = Instance.new("TextButton")
+	b.Size = UDim2.new(0.25, -5, 1, 0)
+	b.BackgroundColor3 = Color3.fromRGB(28, 35, 50)
+	b.Text = text
+	b.TextColor3 = Color3.fromRGB(255, 255, 255)
+	b.Font = Enum.Font.GothamBold
+	b.TextSize = 11
+	b.TextWrapped = true
+	b.Parent = bottomControlBar
+
+	local corner = Instance.new("UICorner")
+	corner.CornerRadius = UDim.new(0, 6)
+	corner.Parent = b
+	return b
+end
+
+local buySelectedBtn = createBottom4ColBtn("Buy Selected Items")
+local buyCurrentShopBtn = createBottom4ColBtn("Buy Current Shop")
+local buyWholeShopsBtn = createBottom4ColBtn("Buy Whole Shops")
+local autoLoopBtn = createBottom4ColBtn("Auto Loop: OFF")
+
+-- Quantity Sub Bar
+local qtySubBar = Instance.new("Frame")
+qtySubBar.Name = "QuantitySubBar"
+qtySubBar.Size = UDim2.new(1, -20, 0, 28)
+qtySubBar.Position = UDim2.new(0, 10, 1, -30)
+qtySubBar.BackgroundTransparency = 1
+qtySubBar.Parent = rightPanel
+
+local qtyLbl = Instance.new("TextLabel")
+qtyLbl.Size = UDim2.new(0, 95, 1, 0)
+qtyLbl.BackgroundTransparency = 1
+qtyLbl.Text = "Purchase Qty:"
+qtyLbl.TextColor3 = Color3.fromRGB(160, 170, 185)
+qtyLbl.Font = Enum.Font.GothamBold
+qtyLbl.TextSize = 11
+qtyLbl.TextXAlignment = Enum.TextXAlignment.Left
+qtyLbl.Parent = qtySubBar
+
+local qtyBox = Instance.new("TextBox")
+qtyBox.Size = UDim2.new(0, 75, 1, 0)
+qtyBox.Position = UDim2.new(0, 95, 0, 0)
+qtyBox.BackgroundColor3 = Color3.fromRGB(20, 25, 36)
+qtyBox.BorderSizePixel = 0
+qtyBox.Text = "1"
+qtyBox.TextColor3 = Color3.fromRGB(0, 229, 255)
+qtyBox.Font = Enum.Font.GothamBold
+qtyBox.TextSize = 12
+qtyBox.Parent = qtySubBar
+
+local qtyBoxCorner = Instance.new("UICorner")
+qtyBoxCorner.CornerRadius = UDim.new(0, 5)
+qtyBoxCorner.Parent = qtyBox
+
+local tierToggle = Instance.new("TextButton")
+tierToggle.Size = UDim2.new(0, 88, 1, 0)
+tierToggle.Position = UDim2.new(0, 178, 0, 0)
+tierToggle.BackgroundColor3 = Color3.fromRGB(80, 45, 45)
+tierToggle.BorderSizePixel = 0
+tierToggle.Text = "Tiers: OFF"
+tierToggle.TextColor3 = Color3.fromRGB(255, 210, 150)
+tierToggle.Font = Enum.Font.GothamBold
+tierToggle.TextSize = 10
+tierToggle.Parent = qtySubBar
+
+local tierCorner = Instance.new("UICorner")
+tierCorner.CornerRadius = UDim.new(0, 5)
+tierCorner.Parent = tierToggle
+
+local rarityBox = Instance.new("TextButton")
+rarityBox.Size = UDim2.new(0, 310, 1, 0)
+rarityBox.Position = UDim2.new(0, 274, 0, 0)
+rarityBox.BackgroundColor3 = Color3.fromRGB(20, 25, 36)
+rarityBox.BorderSizePixel = 0
+rarityBox.Text = "Active Tiers: " .. rarityPriorityText
+rarityBox.TextColor3 = Color3.fromRGB(0, 229, 255)
+rarityBox.Font = Enum.Font.GothamBold
+rarityBox.TextSize = 10
+rarityBox.TextTruncate = Enum.TextTruncate.AtEnd
+rarityBox.Parent = qtySubBar
+
+local rarityCorner = Instance.new("UICorner")
+rarityCorner.CornerRadius = UDim.new(0, 5)
+rarityCorner.Parent = rarityBox
+
+-- DROP-UP RARITY DROPDOWN MENU
+local rarityDropdown = Instance.new("Frame")
+rarityDropdown.Size = UDim2.new(0, 310, 0, 0)
+rarityDropdown.Position = UDim2.new(0, 274, 0, -235)
+rarityDropdown.BackgroundColor3 = Color3.fromRGB(18, 22, 32)
+rarityDropdown.BorderSizePixel = 0
+rarityDropdown.Visible = false
+rarityDropdown.ZIndex = 25
+rarityDropdown.Parent = qtySubBar
+
+local rDropCorner = Instance.new("UICorner")
+rDropCorner.CornerRadius = UDim.new(0, 6)
+rDropCorner.Parent = rarityDropdown
+addStroke(rarityDropdown, Color3.fromRGB(0, 229, 255), 1, 0.4)
+
+local rarityDropdownLayout = Instance.new("UIListLayout")
+rarityDropdownLayout.SortOrder = Enum.SortOrder.LayoutOrder
+rarityDropdownLayout.Padding = UDim.new(0, 2)
+rarityDropdownLayout.Parent = rarityDropdown
+
+local limitStatusLabel = Instance.new("TextLabel")
+limitStatusLabel.Size = UDim2.new(1, -595, 1, 0)
+limitStatusLabel.Position = UDim2.new(0, 590, 0, 0)
+limitStatusLabel.BackgroundTransparency = 1
+limitStatusLabel.Text = "Ready"
+limitStatusLabel.TextColor3 = Color3.fromRGB(110, 220, 150)
+limitStatusLabel.Font = Enum.Font.GothamMedium
+limitStatusLabel.TextSize = 10
+limitStatusLabel.TextXAlignment = Enum.TextXAlignment.Right
+limitStatusLabel.TextTruncate = Enum.TextTruncate.AtEnd
+limitStatusLabel.Parent = qtySubBar
+
+-- ===========================================================================
+-- LOGS VIEW PANEL
+-- ===========================================================================
+local logsPanel = Instance.new("Frame")
+logsPanel.Name = "LogsPanel"
+logsPanel.Size = UDim2.new(1, -190, 1, 0)
+logsPanel.Position = UDim2.new(0, 190, 0, 0)
+logsPanel.BackgroundColor3 = Color3.fromRGB(14, 18, 26)
+logsPanel.BorderSizePixel = 0
+logsPanel.Visible = false
+logsPanel.Parent = contentContainer
+
+local logsCorner = Instance.new("UICorner")
+logsCorner.CornerRadius = UDim.new(0, 8)
+logsCorner.Parent = logsPanel
+
+local logsHeaderLabel = Instance.new("TextLabel")
+logsHeaderLabel.Size = UDim2.new(1, -20, 0, 32)
+logsHeaderLabel.Position = UDim2.new(0, 12, 0, 10)
+logsHeaderLabel.BackgroundTransparency = 1
+logsHeaderLabel.Text = "📜 Live Shop Synchronization & Diagnostic Logs"
+logsHeaderLabel.TextColor3 = Color3.fromRGB(0, 229, 255)
+logsHeaderLabel.Font = Enum.Font.GothamBold
+logsHeaderLabel.TextSize = 15
+logsHeaderLabel.TextXAlignment = Enum.TextXAlignment.Left
+logsHeaderLabel.Parent = logsPanel
+
+local logsSummaryLabel = Instance.new("TextLabel")
+logsSummaryLabel.Size = UDim2.new(1, -20, 0, 22)
+logsSummaryLabel.Position = UDim2.new(0, 12, 0, 40)
+logsSummaryLabel.BackgroundTransparency = 1
+logsSummaryLabel.Text = "Total Tracked Shops: 0 | Loaded: 0 | Pending: 0"
+logsSummaryLabel.TextColor3 = Color3.fromRGB(150, 165, 185)
+logsSummaryLabel.Font = Enum.Font.SourceSans
+logsSummaryLabel.TextSize = 13
+logsSummaryLabel.TextXAlignment = Enum.TextXAlignment.Left
+logsSummaryLabel.Parent = logsPanel
+
+local logsScroll = Instance.new("ScrollingFrame")
+logsScroll.Size = UDim2.new(1, -20, 1, -74)
+logsScroll.Position = UDim2.new(0, 10, 0, 66)
+logsScroll.BackgroundTransparency = 1
+logsScroll.BorderSizePixel = 0
+logsScroll.ScrollBarThickness = 4
+logsScroll.ScrollBarImageColor3 = Color3.fromRGB(0, 229, 255)
+logsScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+logsScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+logsScroll.Parent = logsPanel
+
+local logsLayout = Instance.new("UIListLayout")
+logsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+logsLayout.Padding = UDim.new(0, 6)
+logsLayout.Parent = logsScroll
+
+local logRows = {}
+
+local function updateLogsSummary()
+	local total, loaded, pending = 0, 0, 0
+	for _, status in pairs(shopStatusMap) do
+		total = total + 1
+		if status == "Loaded" then
+			loaded = loaded + 1
+		else
+			pending = pending + 1
+		end
+	end
+	logsSummaryLabel.Text = string.format("Total Tracked Shops: %d | Loaded: %d | Pending: %d", total, loaded, pending)
+end
+
+local function refreshLogRowsOrder()
+	for idx, sId in ipairs(shopOrder) do
+		local rowObj = logRows[sId]
+		if rowObj and rowObj.IndexLabel then
+			rowObj.IndexLabel.Text = string.format("%d.)", idx)
+			rowObj.Frame.LayoutOrder = idx
+		end
+	end
+end
+
+local function addOrUpdateLogRow(shopId, status, itemNum)
+	shopStatusMap[shopId] = status
+	updateLogsSummary()
+
+	local rowObj = logRows[shopId]
+	if not rowObj then
+		local row = Instance.new("Frame")
+		row.Name = "LogRow_" .. shopId
+		row.Size = UDim2.new(1, -4, 0, 36)
+		row.BackgroundColor3 = Color3.fromRGB(18, 23, 33)
+		row.BorderSizePixel = 0
+		row.Parent = logsScroll
+
+		local rCorner = Instance.new("UICorner")
+		rCorner.CornerRadius = UDim.new(0, 6)
+		rCorner.Parent = row
+
+		local indexLbl = Instance.new("TextLabel")
+		indexLbl.Size = UDim2.new(0, 35, 1, 0)
+		indexLbl.Position = UDim2.new(0, 10, 0, 0)
+		indexLbl.BackgroundTransparency = 1
+		indexLbl.TextColor3 = Color3.fromRGB(0, 229, 255)
+		indexLbl.Font = Enum.Font.GothamBold
+		indexLbl.TextSize = 12
+		indexLbl.TextXAlignment = Enum.TextXAlignment.Left
+		indexLbl.Parent = row
+
+		local nameLbl = Instance.new("TextLabel")
+		nameLbl.Size = UDim2.new(0.40, 0, 1, 0)
+		nameLbl.Position = UDim2.new(0, 45, 0, 0)
+		nameLbl.BackgroundTransparency = 1
+		nameLbl.Text = shopId
+		nameLbl.TextColor3 = Color3.fromRGB(230, 235, 245)
+		nameLbl.Font = Enum.Font.GothamBold
+		nameLbl.TextSize = 12
+		nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+		nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		nameLbl.Parent = row
+
+		local statusLbl = Instance.new("TextLabel")
+		statusLbl.Size = UDim2.new(0.25, 0, 1, 0)
+		statusLbl.Position = UDim2.new(0.48, 0, 0, 0)
+		statusLbl.BackgroundTransparency = 1
+		statusLbl.Font = Enum.Font.GothamBold
+		statusLbl.TextSize = 11
+		statusLbl.TextXAlignment = Enum.TextXAlignment.Left
+		statusLbl.Parent = row
+
+		local itemsLbl = Instance.new("TextLabel")
+		itemsLbl.Size = UDim2.new(0.22, 0, 1, 0)
+		itemsLbl.Position = UDim2.new(0.75, 0, 0, 0)
+		itemsLbl.BackgroundTransparency = 1
+		itemsLbl.TextColor3 = Color3.fromRGB(150, 160, 175)
+		itemsLbl.Font = Enum.Font.SourceSans
+		itemsLbl.TextSize = 12
+		itemsLbl.TextXAlignment = Enum.TextXAlignment.Right
+		itemsLbl.Parent = row
+
+		rowObj = { Frame = row, IndexLabel = indexLbl, StatusLabel = statusLbl, ItemsLabel = itemsLbl }
+		logRows[shopId] = rowObj
+		refreshLogRowsOrder()
+	end
+
+	if status == "Loaded" then
+		rowObj.StatusLabel.Text = "● SYNCHRONIZED"
+		rowObj.StatusLabel.TextColor3 = Color3.fromRGB(50, 210, 120)
+		rowObj.ItemsLabel.Text = (itemNum or 0) .. " Items"
+	elseif status == "Ready" then
+		rowObj.StatusLabel.Text = "● STANDBY"
+		rowObj.StatusLabel.TextColor3 = Color3.fromRGB(100, 180, 240)
+		rowObj.ItemsLabel.Text = "Awaiting Payload"
+	else
+		rowObj.StatusLabel.Text = "⏳ SYNCHRONIZING..."
+		rowObj.StatusLabel.TextColor3 = Color3.fromRGB(240, 180, 50)
+		rowObj.ItemsLabel.Text = "--"
+	end
+end
+
+-- ===========================================================================
+-- TAB SWITCHING
+-- ===========================================================================
+local function switchTab(tabName)
+	currentNavTab = tabName
+	if tabName == "Automatic" then
+		autoTabBtn.BackgroundColor3 = Color3.fromRGB(18, 23, 34)
+		autoTabBtn.TextColor3 = Color3.fromRGB(0, 229, 255)
+		autoIndicator.Visible = true
+
+		logsTabBtn.BackgroundColor3 = Color3.fromRGB(13, 16, 24)
+		logsTabBtn.TextColor3 = Color3.fromRGB(160, 175, 195)
+		logsIndicator.Visible = false
+
+		centerPanel.Visible = true
+		rightPanel.Visible = true
+		logsPanel.Visible = false
+	elseif tabName == "Logs" then
+		logsTabBtn.BackgroundColor3 = Color3.fromRGB(18, 23, 34)
+		logsTabBtn.TextColor3 = Color3.fromRGB(0, 229, 255)
+		logsIndicator.Visible = true
+
+		autoTabBtn.BackgroundColor3 = Color3.fromRGB(13, 16, 24)
+		autoTabBtn.TextColor3 = Color3.fromRGB(160, 175, 195)
+		autoIndicator.Visible = false
+
+		centerPanel.Visible = false
+		rightPanel.Visible = false
+		logsPanel.Visible = true
+	end
+end
+
+autoTabBtn.MouseButton1Click:Connect(function() switchTab("Automatic") end)
+logsTabBtn.MouseButton1Click:Connect(function() switchTab("Logs") end)
+
+-- ===========================================================================
+-- RENDER & SEARCH/SORT/FILTER ENGINE
+-- ===========================================================================
+local shopNavButtons = {}
+
+local function getQuantity()
+	local n = tonumber(qtyBox.Text)
+	if not n or n < 1 then return 1 end
+	return math.floor(n)
+end
+
+local function getNumericStock(stock)
+	if tostring(stock) == "Unlimited" or tostring(stock) == "Unknown" then return math.huge end
+	return tonumber(stock) or math.huge
+end
+
+local function refreshLimitStatus(message)
+	purchaseStatusText = message or purchaseStatusText
+	limitStatusLabel.Text = string.format("%s | Total Spent: %s", purchaseStatusText, formatCompactNumber(sessionSpent))
+end
+
+local function canQueuePurchase(shopId, itemName, qty)
+	local key = shopId .. "|" .. itemName
+	local cardData = cards[key]
+	if excludedShops[shopId] or excludedItems[key] then return false end
+	if cardData and not isRarityAllowed(cardData.rarity) then return false end
+	local stock = cardData and getNumericStock(cardData.stock) or math.huge
+	if stock <= 0 then return false end
+	local amount = math.min(qty, stock == math.huge and qty or stock)
+	if amount <= 0 then return false end
+	local price = cardData and cardData.price or 0
+	if queuedPurchases[key] then return false end
+	return true, amount, price
+end
+
+local function enqueuePurchase(shopId, itemName, qty)
+	local ok, amount, price = canQueuePurchase(shopId, itemName, qty)
+	if not ok then return false end
+	local key = shopId .. "|" .. itemName
+	queuedPurchases[key] = true
+	table.insert(purchaseQueue, {shopId = shopId, itemName = itemName, qty = amount, price = price, key = key})
+	return true
+end
+
+-- SAFELY EXECUTE REMOTE CALLS
+local function processPurchaseQueue()
+	if purchaseInProgress or not BuyShopItem then return end
+	local request = table.remove(purchaseQueue, 1)
+	if not request then return end
+	purchaseInProgress = true
+	queuedPurchases[request.key] = nil
+	local elapsed = os.clock() - lastPurchaseAt
+	if elapsed < buyDelay then task.wait(buyDelay - elapsed) end
+
+	task.spawn(function()
+		pcall(function()
+			if BuyShopItem:IsA("RemoteEvent") then
+				BuyShopItem:FireServer(tostring(request.shopId), tostring(request.itemName), tonumber(request.qty))
+			elseif BuyShopItem:IsA("RemoteFunction") then
+				BuyShopItem:InvokeServer(tostring(request.shopId), tostring(request.itemName), tonumber(request.qty))
+			end
+		end)
+	end)
+	sessionSpent = sessionSpent + (request.price * request.qty)
+	lastPurchaseAt = os.clock()
+	refreshLimitStatus("Purchase dispatched successfully")
+	purchaseInProgress = false
+end
+
+task.spawn(function()
+	while scriptRunning do
+		processPurchaseQueue()
+		task.wait(0.05)
+	end
+end)
+
+local function getExcludedShopsCount()
+	local count = 0
+	for _, isEx in pairs(excludedShops) do
+		if isEx then count = count + 1 end
+	end
+	return count
+end
+
+updateItemStats = function()
+	local total, selCount, excludeItemCount = 0, 0, 0
+	for key, cardData in pairs(cards) do
+		if currentShopFilter == "All" or cardData.shopId == currentShopFilter then
+			total = total + 1
+			if excludedItems[key] then
+				excludeItemCount = excludeItemCount + 1
+			elseif selected[key] then
+				selCount = selCount + 1
+			end
+		end
+	end
+	local excludeShopCount = getExcludedShopsCount()
+	itemCountLabel.Text = string.format("Filter: %s | Total: %d | Selected: %d | Excluded Items: %d | Excluded Shops: %d", 
+		currentShopFilter, total, selCount, excludeItemCount, excludeShopCount)
+end
+
+local function formatTimer(value)
+	local seconds = tonumber(value)
+	if not seconds then return "Awaiting server restock sync" end
+	seconds = math.max(0, math.floor(seconds))
+	if seconds >= 3600 then
+		return string.format("%02d:%02d:%02d", math.floor(seconds / 3600), math.floor(seconds / 60) % 60, seconds % 60)
+	end
+	return string.format("%02d:%02d", math.floor(seconds / 60), seconds % 60)
+end
+
+local function getRarityRank(rarity)
+	local normalized = tostring(rarity or "Unknown"):lower()
+	local ranks = {
+		common = 1, uncommon = 2, rare = 3, epic = 4, legendary = 5, mythical = 6, mythic = 6, ethereal = 7, divine = 8, secret = 9
+	}
+	return ranks[normalized] or 50
+end
+
+local function refreshTierToggle()
+	tierToggle.Text = allowedTiersEnabled and "Tiers: ON" or "Tiers: OFF"
+	tierToggle.BackgroundColor3 = allowedTiersEnabled and Color3.fromRGB(35, 130, 75) or Color3.fromRGB(80, 45, 45)
+end
+
+local function refreshRarityDropdown()
+	for _, child in ipairs(rarityDropdown:GetChildren()) do
+		if child:IsA("TextButton") then child:Destroy() end
+	end
+	for index, rarity in ipairs(rarityOptions) do
+		local option = Instance.new("TextButton")
+		option.Size = UDim2.new(1, 0, 0, 24)
+		option.BackgroundColor3 = allowedRarities[rarity:lower()] and Color3.fromRGB(35, 130, 75) or Color3.fromRGB(24, 29, 42)
+		option.BorderSizePixel = 0
+		option.Text = (allowedRarities[rarity:lower()] and "✓ Active: " or "✕ Disabled: ") .. rarity
+		option.TextColor3 = Color3.fromRGB(230, 235, 245)
+		option.Font = Enum.Font.GothamMedium
+		option.TextSize = 11
+		option.TextXAlignment = Enum.TextXAlignment.Left
+		option.LayoutOrder = index
+		option.ZIndex = 26
+		option.Parent = rarityDropdown
+		option.MouseButton1Click:Connect(function()
+			allowedRarities[rarity:lower()] = not allowedRarities[rarity:lower()] or nil
+			local selectedNames = {}
+			for _, candidate in ipairs(rarityOptions) do
+				if allowedRarities[candidate:lower()] then table.insert(selectedNames, candidate) end
+			end
+			rarityPriorityText = table.concat(selectedNames, ",")
+			if rarityPriorityText == "" then rarityPriorityText = "Common,Uncommon,Rare,Epic,Legendary,Mythical,Ethereal" end
+			rarityBox.Text = "Active Tiers: " .. rarityPriorityText
+			rebuildAllowedRarities()
+			refreshRarityDropdown()
+			applyShopFilter()
+		end)
+	end
+	rarityDropdown.Size = UDim2.new(0, 310, 0, #rarityOptions * 26)
+end
+
+rebuildAllowedRarities()
+
+local function getItemMetadata(itemName, itemData)
+	local metadata = type(itemData) == "table" and itemData or {}
+	local display = type(ItemDisplayData) == "table" and ItemDisplayData[itemName] or nil
+	if type(display) ~= "table" then
+		display = type(ItemDisplayData) == "table" and ItemDisplayData[itemName:gsub("Seed$", "")] or {}
+	end
+
+	local rarity = metadata.Rarity or display.Rarity or "Unknown"
+	local description = metadata.Description or metadata.ShortDescription or metadata.EncyclopediaText or display.Description or display.ShortDescription or display.EncyclopediaText or "No descriptive data available."
+	local stock = metadata.Stock or metadata.Quantity or metadata.Count or metadata.Amount
+	local shimmer = metadata.Price or metadata.ShimmerPrice or metadata.Cost or metadata.BasePrice
+	local robux = metadata.RobuxPrice or metadata.RobuxCost or metadata.PriceRobux
+	return tostring(rarity), tostring(stock or (metadata.UnlimitedStock and "Unlimited" or "Unknown")), formatCompactNumber(shimmer or "Unknown"), formatCompactNumber(robux or "Unavailable"), tostring(description), tonumber(shimmer) or math.huge
+end
+
+local function getOrCreateShopHeader(sId, shopIndex)
+	if shopHeaders[sId] then return shopHeaders[sId] end
+
+	local hFrame = Instance.new("Frame")
+	hFrame.Name = "ShopHeader_" .. sId
+	hFrame.Size = UDim2.new(1, -4, 0, 48)
+	hFrame.BackgroundColor3 = Color3.fromRGB(24, 31, 46)
+	hFrame.BorderSizePixel = 0
+	hFrame.LayoutOrder = shopIndex * 1000
+	hFrame.Parent = itemsScroll
+
+	local hCorner = Instance.new("UICorner")
+	hCorner.CornerRadius = UDim.new(0, 5)
+	hCorner.Parent = hFrame
+
+	local hTitle = Instance.new("TextLabel")
+	hTitle.Size = UDim2.new(1, -15, 0, 24)
+	hTitle.Position = UDim2.new(0, 10, 0, 2)
+	hTitle.BackgroundTransparency = 1
+	hTitle.Text = "🏪 SHOP NODE: " .. sId:upper()
+	hTitle.TextColor3 = Color3.fromRGB(0, 229, 255)
+	hTitle.Font = Enum.Font.GothamBold
+	hTitle.TextSize = 12
+	hTitle.TextXAlignment = Enum.TextXAlignment.Left
+	hTitle.Parent = hFrame
+
+	local timerLabel = Instance.new("TextLabel")
+	timerLabel.Name = "RestockTimer"
+	timerLabel.Size = UDim2.new(1, -15, 0, 20)
+	timerLabel.Position = UDim2.new(0, 10, 0, 24)
+	timerLabel.BackgroundTransparency = 1
+	timerLabel.TextColor3 = Color3.fromRGB(240, 180, 50)
+	timerLabel.Font = Enum.Font.SourceSans
+	timerLabel.TextSize = 12
+	timerLabel.TextXAlignment = Enum.TextXAlignment.Left
+	timerLabel.Parent = hFrame
+
+	shopHeaders[sId] = hFrame
+	shopTimerLabels[sId] = timerLabel
+	return hFrame
+end
+
+applyShopFilter = function()
+	local query = searchFilterText:lower()
+	local visibleCountsPerShop = {}
+
+	for key, cardData in pairs(cards) do
+		local matchesFilter = (currentShopFilter == "All") or (cardData.shopId == currentShopFilter)
+		local matchesSearch = true
+		local matchesTier = isRarityAllowed(cardData.rarity)
+
+		if query ~= "" then
+			if searchTargetMode == "Item" then
+				matchesSearch = cardData.itemId:lower():find(query, 1, true) ~= nil
+			elseif searchTargetMode == "Shop" then
+				matchesSearch = cardData.shopId:lower():find(query, 1, true) ~= nil
+			else
+				matchesSearch = (cardData.itemId:lower():find(query, 1, true) ~= nil) or (cardData.shopId:lower():find(query, 1, true) ~= nil)
+			end
+		end
+
+		local visible = matchesFilter and matchesSearch and matchesTier
+		cardData.frame.Visible = visible
+
+		if visible then
+			visibleCountsPerShop[cardData.shopId] = (visibleCountsPerShop[cardData.shopId] or 0) + 1
+		end
+	end
+
+	for sId, headerFrame in pairs(shopHeaders) do
+		if currentShopFilter == "All" then
+			headerFrame.Visible = (visibleCountsPerShop[sId] or 0) > 0
+		else
+			headerFrame.Visible = false
+		end
+	end
+
+	local cardList = {}
+	for _, cardData in pairs(cards) do
+		table.insert(cardList, cardData)
+	end
+
+	-- Dual Sort Engine
+	table.sort(cardList, function(a, b)
+		local rankA = getRarityRank(a.rarity)
+		local rankB = getRarityRank(b.rarity)
+
+		if currentSortMode == 1 then
+			if rankA == rankB then
+				if a.price == b.price then return a.itemId:lower() < b.itemId:lower() end
+				return a.price < b.price
+			end
+			return rankA < rankB
+		else
+			if rankA == rankB then
+				if a.price == b.price then return a.itemId:lower() < b.itemId:lower() end
+				return a.price > b.price
+			end
+			return rankA > rankB
+		end
+	end)
+
+	for idx, cardData in ipairs(cardList) do
+		cardData.frame.LayoutOrder = idx
+	end
+
+	updateItemStats()
+end
+
+searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+	searchFilterText = searchBox.Text
+	applyShopFilter()
+end)
+
+searchTargetBtn.MouseButton1Click:Connect(function()
+	if searchTargetMode == "Item+Shop" then
+		searchTargetMode = "Item"
+	elseif searchTargetMode == "Item" then
+		searchTargetMode = "Shop"
+	else
+		searchTargetMode = "Item+Shop"
+	end
+	searchTargetBtn.Text = "Target: " .. searchTargetMode
+	applyShopFilter()
+end)
+
+sortModeBtn.MouseButton1Click:Connect(function()
+	if currentSortMode == 1 then
+		currentSortMode = 2
+		sortModeBtn.Text = "Sort: Upper Rarity + Price First"
+		sortModeBtn.BackgroundColor3 = Color3.fromRGB(160, 65, 35)
+	else
+		currentSortMode = 1
+		sortModeBtn.Text = "Sort: Lower Rarity + Price First"
+		sortModeBtn.BackgroundColor3 = Color3.fromRGB(0, 120, 170)
+	end
+	applyShopFilter()
+end)
+
+tierToggle.MouseButton1Click:Connect(function()
+	allowedTiersEnabled = not allowedTiersEnabled
+	refreshTierToggle()
+	refreshLimitStatus(allowedTiersEnabled and "Tier enforcement active" or "Tier enforcement disabled")
+	applyShopFilter()
+end)
+
+rarityBox.MouseButton1Click:Connect(function()
+	rarityDropdown.Visible = not rarityDropdown.Visible
+	if rarityDropdown.Visible then refreshRarityDropdown() end
+end)
+
+local function rebuildAvoidDropdownList()
+	for _, child in ipairs(avoidScroll:GetChildren()) do
+		if child:IsA("Frame") then child:Destroy() end
+	end
+
+	for _, sId in ipairs(shopOrder) do
+		local itemRow = Instance.new("Frame")
+		itemRow.Size = UDim2.new(1, 0, 0, 30)
+		itemRow.BackgroundColor3 = Color3.fromRGB(24, 29, 42)
+		itemRow.ZIndex = 12
+		itemRow.Parent = avoidScroll
+
+		local iCorner = Instance.new("UICorner")
+		iCorner.CornerRadius = UDim.new(0, 4)
+		iCorner.Parent = itemRow
+
+		local sNameLabel = Instance.new("TextLabel")
+		sNameLabel.Size = UDim2.new(1, -75, 1, 0)
+		sNameLabel.Position = UDim2.new(0, 10, 0, 0)
+		sNameLabel.BackgroundTransparency = 1
+		sNameLabel.Text = sId
+		sNameLabel.TextColor3 = Color3.fromRGB(220, 225, 235)
+		sNameLabel.Font = Enum.Font.SourceSans
+		sNameLabel.TextSize = 13
+		sNameLabel.TextXAlignment = Enum.TextXAlignment.Left
+		sNameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+		sNameLabel.ZIndex = 12
+		sNameLabel.Parent = itemRow
+
+		local avoidToggle = Instance.new("TextButton")
+		avoidToggle.Size = UDim2.new(0, 62, 0, 22)
+		avoidToggle.Position = UDim2.new(1, -66, 0.5, -11)
+		avoidToggle.ZIndex = 12
+		avoidToggle.Font = Enum.Font.GothamBold
+		avoidToggle.TextSize = 10
+		avoidToggle.Parent = itemRow
+
+		local tCorner = Instance.new("UICorner")
+		tCorner.CornerRadius = UDim.new(0, 4)
+		tCorner.Parent = avoidToggle
+
+		local function updateToggleState()
+			if excludedShops[sId] then
+				avoidToggle.Text = "EXCLUDED"
+				avoidToggle.BackgroundColor3 = Color3.fromRGB(170, 50, 50)
+				avoidToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+			else
+				avoidToggle.Text = "ACTIVE"
+				avoidToggle.BackgroundColor3 = Color3.fromRGB(35, 130, 70)
+				avoidToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+			end
+		end
+
+		avoidToggle.MouseButton1Click:Connect(function()
+			excludedShops[sId] = not excludedShops[sId]
+			updateToggleState()
+			updateItemStats()
+		end)
+
+		updateToggleState()
+	end
+end
+
+avoidAllShopsBtn.MouseButton1Click:Connect(function()
+	for _, sId in ipairs(shopOrder) do excludedShops[sId] = true end
+	rebuildAvoidDropdownList()
+	updateItemStats()
+end)
+
+unavoidAllShopsBtn.MouseButton1Click:Connect(function()
+	for _, sId in ipairs(shopOrder) do excludedShops[sId] = false end
+	rebuildAvoidDropdownList()
+	updateItemStats()
+end)
+
+local function updateShopTabStyles()
+	for sId, btn in pairs(shopNavButtons) do
+		if currentShopFilter == sId then
+			btn.BackgroundColor3 = Color3.fromRGB(0, 229, 255)
+			btn.TextColor3 = Color3.fromRGB(10, 12, 17)
+		else
+			btn.BackgroundColor3 = Color3.fromRGB(18, 23, 34)
+			btn.TextColor3 = Color3.fromRGB(170, 180, 200)
+		end
+	end
+end
+
+local function rebuildShopNavTabs()
+	for _, child in ipairs(shopTabsScroll:GetChildren()) do
+		if child:IsA("TextButton") then child:Destroy() end
+	end
+	shopNavButtons = {}
+
+	local function addShopTab(displayName, targetShopId)
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(1, -6, 0, 36)
+		btn.Text = displayName
+		btn.Font = Enum.Font.GothamBold
+		btn.TextSize = 12
+		btn.TextTruncate = Enum.TextTruncate.AtEnd
+		btn.Parent = shopTabsScroll
+
+		local bCorner = Instance.new("UICorner")
+		bCorner.CornerRadius = UDim.new(0, 6)
+		bCorner.Parent = btn
+
+		shopNavButtons[targetShopId] = btn
+
+		btn.MouseButton1Click:Connect(function()
+			currentShopFilter = targetShopId
+			updateShopTabStyles()
+			applyShopFilter()
+		end)
+	end
+
+	addShopTab("⚡ All Shops", "All")
+	for idx, sId in ipairs(shopOrder) do
+		getOrCreateShopHeader(sId, idx)
+		addShopTab(sId, sId)
+	end
+	updateShopTabStyles()
+	rebuildAvoidDropdownList()
+	refreshLogRowsOrder()
+end
+
+-- ===========================================================================
+-- CARD GENERATION
+-- ===========================================================================
+local function makeCard(shopId, itemName, itemIndex, itemData)
+	local key = shopId .. "|" .. itemName
+	local rarity, stock, shimmer, robux, description, price = getItemMetadata(itemName, itemData)
+	if cards[key] then
+		cards[key].rarity = rarity
+		cards[key].stock = stock
+		cards[key].price = price
+		cards[key].metadataLabel.Text = string.format("Tier: %s  •  Stock: %s  •  Shimmers: %s  •  Robux: %s", rarity, formatCompactNumber(stock), shimmer, robux)
+		applyShopFilter()
+		return
+	end
+
+	local sIdx = 1
+	for idx, id in ipairs(shopOrder) do
+		if id == shopId then sIdx = idx break end
+	end
+	local calculatedOrder = (sIdx * 1000) + (itemIndex or 1)
+
+	local row = Instance.new("Frame")
+	row.Name = "Row_" .. itemName
+	row.Size = UDim2.new(1, -4, 0, 88)
+	row.BackgroundColor3 = Color3.fromRGB(18, 22, 32)
+	row.BorderSizePixel = 0
+	row.LayoutOrder = calculatedOrder
+	row.Parent = itemsScroll
+
+	local rCorner = Instance.new("UICorner")
+	rCorner.CornerRadius = UDim.new(0, 6)
+	rCorner.Parent = row
+
+	local itemLabel = Instance.new("TextLabel")
+	itemLabel.Size = UDim2.new(1, -195, 0, 22)
+	itemLabel.Position = UDim2.new(0, 10, 0, 6)
+	itemLabel.BackgroundTransparency = 1
+	itemLabel.Text = itemName
+	itemLabel.TextColor3 = Color3.fromRGB(235, 240, 250)
+	itemLabel.Font = Enum.Font.GothamBold
+	itemLabel.TextSize = 13
+	itemLabel.TextXAlignment = Enum.TextXAlignment.Left
+	itemLabel.TextTruncate = Enum.TextTruncate.AtEnd
+	itemLabel.Parent = row
+
+	local metadataLabel = Instance.new("TextLabel")
+	metadataLabel.Size = UDim2.new(1, -195, 0, 20)
+	metadataLabel.Position = UDim2.new(0, 10, 0, 28)
+	metadataLabel.BackgroundTransparency = 1
+	metadataLabel.Text = string.format("Tier: %s  •  Stock: %s  •  Shimmers: %s  •  Robux: %s", rarity, formatCompactNumber(stock), shimmer, robux)
+	metadataLabel.TextColor3 = Color3.fromRGB(240, 180, 50)
+	metadataLabel.Font = Enum.Font.GothamMedium
+	metadataLabel.TextSize = 10
+	metadataLabel.TextXAlignment = Enum.TextXAlignment.Left
+	metadataLabel.TextTruncate = Enum.TextTruncate.AtEnd
+	metadataLabel.Parent = row
+
+	local descriptionLabel = Instance.new("TextLabel")
+	descriptionLabel.Size = UDim2.new(1, -195, 0, 32)
+	descriptionLabel.Position = UDim2.new(0, 10, 0, 48)
+	descriptionLabel.BackgroundTransparency = 1
+	descriptionLabel.Text = description
+	descriptionLabel.TextColor3 = Color3.fromRGB(150, 160, 180)
+	descriptionLabel.Font = Enum.Font.SourceSans
+	descriptionLabel.TextSize = 11
+	descriptionLabel.TextWrapped = true
+	descriptionLabel.TextXAlignment = Enum.TextXAlignment.Left
+	descriptionLabel.TextYAlignment = Enum.TextYAlignment.Top
+	descriptionLabel.TextTruncate = Enum.TextTruncate.AtEnd
+	descriptionLabel.Parent = row
+
+	local buyItemBtn = Instance.new("TextButton")
+	buyItemBtn.Size = UDim2.new(0, 72, 0, 24)
+	buyItemBtn.Position = UDim2.new(1, -178, 0, 10)
+	buyItemBtn.BackgroundColor3 = Color3.fromRGB(0, 130, 210)
+	buyItemBtn.Text = "Purchase"
+	buyItemBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	buyItemBtn.Font = Enum.Font.GothamBold
+	buyItemBtn.TextSize = 11
+	buyItemBtn.Parent = row
+
+	local biCorner = Instance.new("UICorner")
+	biCorner.CornerRadius = UDim.new(0, 4)
+	biCorner.Parent = buyItemBtn
+
+	local avoidItemBtn = Instance.new("TextButton")
+	avoidItemBtn.Size = UDim2.new(0, 66, 0, 24)
+	avoidItemBtn.Position = UDim2.new(1, -104, 0, 40)
+	avoidItemBtn.BackgroundColor3 = Color3.fromRGB(28, 35, 50)
+	avoidItemBtn.Text = "Exclude"
+	avoidItemBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+	avoidItemBtn.Font = Enum.Font.GothamBold
+	avoidItemBtn.TextSize = 10
+	avoidItemBtn.Parent = row
+
+	local aiCorner = Instance.new("UICorner")
+	aiCorner.CornerRadius = UDim.new(0, 4)
+	aiCorner.Parent = avoidItemBtn
+
+	local checkBox = Instance.new("TextButton")
+	checkBox.Size = UDim2.new(0, 24, 0, 24)
+	checkBox.Position = UDim2.new(1, -34, 0, 40)
+	checkBox.BackgroundColor3 = Color3.fromRGB(24, 29, 42)
+	checkBox.Text = ""
+	checkBox.Parent = row
+
+	local cCorner = Instance.new("UICorner")
+	cCorner.CornerRadius = UDim.new(0, 5)
+	cCorner.Parent = checkBox
+
+	buyItemBtn.MouseButton1Click:Connect(function()
+		enqueuePurchase(shopId, itemName, getQuantity())
+	end)
+
+	local function refreshCard()
+		if excludedItems[key] then
+			selected[key] = false
+			checkBox.Visible = false
+			avoidItemBtn.Text = "EXCLUDED"
+			avoidItemBtn.BackgroundColor3 = Color3.fromRGB(170, 50, 50)
+			avoidItemBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+			row.BackgroundColor3 = Color3.fromRGB(30, 18, 22)
+		else
+			checkBox.Visible = true
+			avoidItemBtn.Text = "Exclude"
+			avoidItemBtn.BackgroundColor3 = Color3.fromRGB(28, 35, 50)
+			avoidItemBtn.TextColor3 = Color3.fromRGB(200, 200, 200)
+			row.BackgroundColor3 = Color3.fromRGB(18, 22, 32)
+		end
+
+		if selected[key] and not excludedItems[key] then
+			checkBox.BackgroundColor3 = Color3.fromRGB(0, 229, 255)
+			checkBox.Text = "✓"
+			checkBox.TextColor3 = Color3.fromRGB(10, 12, 17)
+			checkBox.Font = Enum.Font.GothamBold
+		else
+			checkBox.BackgroundColor3 = Color3.fromRGB(24, 29, 42)
+			checkBox.Text = ""
+		end
+
+		updateItemStats()
+	end
+
+	avoidItemBtn.MouseButton1Click:Connect(function()
+		excludedItems[key] = not excludedItems[key]
+		refreshCard()
+	end)
+
+	checkBox.MouseButton1Click:Connect(function()
+		if not excludedItems[key] then
+			selected[key] = not selected[key]
+			refreshCard()
+		end
+	end)
+
+	cards[key] = {
+		shopId = shopId,
+		itemId = itemName,
+		rarity = rarity,
+		stock = stock,
+		price = price,
+		frame = row,
+		metadataLabel = metadataLabel,
+		defaultLayoutOrder = calculatedOrder,
+		refresh = refreshCard
+	}
+
+	refreshCard()
+	applyShopFilter()
+end
+
+-- ===========================================================================
+-- SILENT ALL-SHOP DISCOVERY & SYNCHRONIZATION ENGINE
+-- ===========================================================================
+local function requestShopStateFast(sId)
+	if not RequestShopState or not shopIds[sId] then return end
+	local now = os.clock()
+	if shopRequestAtMap[sId] and now - shopRequestAtMap[sId] < 0.5 then return end
+	shopRequestAtMap[sId] = now
+	
+	if shopStatusMap[sId] ~= "Loaded" then
+		addOrUpdateLogRow(sId, "Loading")
+	end
+	
+	task.spawn(function()
+		pcall(function()
+			if RequestShopState:IsA("RemoteEvent") then
+				RequestShopState:FireServer(sId)
+			elseif RequestShopState:IsA("RemoteFunction") then
+				RequestShopState:InvokeServer(sId)
+			end
+		end)
+	end)
+end
+
+registerShop = function(sId)
+	if type(sId) == "string" and sId ~= "" and not shopIds[sId] then
+		shopIds[sId] = true
+		table.insert(shopOrder, sId)
+		table.sort(shopOrder, function(a, b) return a:lower() < b:lower() end)
+		addOrUpdateLogRow(sId, "Ready")
+		rebuildShopNavTabs()
+		requestShopStateFast(sId)
+	end
+end
+
+-- Deep Discovery Engine: Scans all client accessible containers for hidden/pending shops
+local function performGlobalShopScan()
+	local containersToScan = {
+		Workspace,
+		ReplicatedStorage,
+		PlayerGui,
+		Lighting,
+		ReplicatedFirst
+	}
+
+	for _, container in ipairs(containersToScan) do
+		pcall(function()
+			for _, desc in ipairs(container:GetDescendants()) do
+				local sid = desc:GetAttribute("ShopId")
+				if typeof(sid) == "string" and sid ~= "" then
+					registerShop(sid)
+				end
+				if desc:IsA("StringValue") and desc.Name == "ShopId" and desc.Value ~= "" then
+					registerShop(desc.Value)
+				end
+			end
+		end)
+	end
+
+	-- Extract Shop IDs from registered modules if available
+	if type(ItemDisplayData) == "table" then
+		for _, data in pairs(ItemDisplayData) do
+			if type(data) == "table" then
+				if data.ShopId then registerShop(tostring(data.ShopId)) end
+				if data.Shop then registerShop(tostring(data.Shop)) end
+			end
+		end
+	end
+end
+
+-- Initial Global Discovery Execution
+performGlobalShopScan()
+
+table.sort(shopOrder, function(a, b) return a:lower() < b:lower() end)
+rebuildShopNavTabs()
+
+-- Dynamic Listeners for Real-time Hidden Shop Instance Spawns
+table.insert(connections, Workspace.DescendantAdded:Connect(function(desc)
+	local sid = desc:GetAttribute("ShopId")
+	if typeof(sid) == "string" and sid ~= "" then registerShop(sid) end
+	table.insert(connections, desc:GetAttributeChangedSignal("ShopId"):Connect(function()
+		local updatedSid = desc:GetAttribute("ShopId")
+		if typeof(updatedSid) == "string" and updatedSid ~= "" then registerShop(updatedSid) end
+	end))
+end))
+
+table.insert(connections, ReplicatedStorage.DescendantAdded:Connect(function(desc)
+	local sid = desc:GetAttribute("ShopId")
+	if typeof(sid) == "string" and sid ~= "" then registerShop(sid) end
+end))
+
+if ShopStateUpdated then
+	table.insert(connections, ShopStateUpdated.OnClientEvent:Connect(function(state)
+		if type(state) ~= "table" then return end
+		local sId = state.ShopId
+		local items = state.Items
+		if type(sId) ~= "string" or type(items) ~= "table" then return end
+
+		-- Silently register shop if state update arrives for unknown node
+		registerShop(sId)
+
+		shopStateMap[sId] = state
+		shopItems[sId] = items
+		
+		local timer = state.RestockTimeRemaining or state.RestockSeconds or state.SecondsUntilRestock or state.RestockTimer or state.RestockTime or state.TimeUntilRestock or state.NextRestock
+		if type(timer) == "table" then
+			timer = timer.Value or timer.Seconds or timer.Remaining
+		end
+		
+		local restockAt = state.RestockAt or state.NextRestockAt or state.RestockTimestamp
+		if type(restockAt) == "number" then
+			local now = os.time()
+			if restockAt > now then timer = restockAt - now end
+		end
+		if tonumber(timer) then
+			restockDueAtMap[sId] = os.clock() + math.max(0, tonumber(timer))
+		end
+		if shopTimerLabels[sId] then
+			shopTimerLabels[sId].Text = "Restock Countdown: " .. formatTimer(timer)
+		end
+
+		local itemCount = 0
+		for itemName, itemInfo in pairs(items) do
+			if type(itemName) == "string" then
+				itemCount = itemCount + 1
+				makeCard(sId, itemName, itemCount, itemInfo)
+			end
+		end
+
+		addOrUpdateLogRow(sId, "Loaded", itemCount)
+	end))
+end
+
+-- Continuous Background Synchronization Engine
+task.spawn(function()
+	while scriptRunning do
+		task.wait(1)
+		for _, sId in ipairs(shopOrder) do
+			local status = shopStatusMap[sId]
+			local dueAt = restockDueAtMap[sId]
+			if status ~= "Loaded" or (dueAt and os.clock() >= dueAt) then
+				requestShopStateFast(sId)
+			end
+			
+			if shopTimerLabels[sId] and dueAt then
+				local remaining = math.max(0, math.ceil(dueAt - os.clock()))
+				shopTimerLabels[sId].Text = "Restock Countdown: " .. formatTimer(remaining)
+			end
+		end
+	end
+end)
+
+-- Periodic Global Discovery Scanner
+task.spawn(function()
+	while scriptRunning do
+		task.wait(5)
+		performGlobalShopScan()
+	end
+end)
+
+-- ===========================================================================
+-- BUY EXECUTION ENGINES
+-- ===========================================================================
+local function executeBuySelected()
+	local qty = getQuantity()
+	local hasPurchased = false
+
+	for key, isSel in pairs(selected) do
+		if not isAutoLoopOn or selectedBuyMode ~= "Selected" then break end
+		if isSel then
+			local shopId, itemName = key:match("^(.-)|(.*)$")
+			if shopId and itemName and not excludedShops[shopId] and not excludedItems[key] then
+				if enqueuePurchase(shopId, itemName, qty) then hasPurchased = true end
+				task.wait(0.05)
+			end
+		end
+	end
+
+	if not hasPurchased then task.wait(0.2) end
+end
+
+local function executeBuyCurrentShop()
+	local qty = getQuantity()
+	local targetShop = currentShopFilter
+	local hasPurchased = false
+
+	if targetShop == "All" then
+		for sId, items in pairs(shopItems) do
+			if not isAutoLoopOn or selectedBuyMode ~= "CurrentShop" then break end
+			if not excludedShops[sId] then
+				for itemName in pairs(items) do
+					if not isAutoLoopOn or selectedBuyMode ~= "CurrentShop" then break end
+					local itemKey = sId .. "|" .. itemName
+					if not excludedItems[itemKey] then
+						if enqueuePurchase(sId, itemName, qty) then hasPurchased = true end
+						task.wait(0.05)
+					end
+				end
+			end
+		end
+	else
+		if shopItems[targetShop] and not excludedShops[targetShop] then
+			for itemName in pairs(shopItems[targetShop]) do
+				if not isAutoLoopOn or selectedBuyMode ~= "CurrentShop" then break end
+				local itemKey = targetShop .. "|" .. itemName
+				if not excludedItems[itemKey] then
+					if enqueuePurchase(targetShop, itemName, qty) then hasPurchased = true end
+					task.wait(0.05)
+				end
+			end
+		end
+	end
+
+	if not hasPurchased then task.wait(0.2) end
+end
+
+local function executeBuyAllShops()
+	local qty = getQuantity()
+	local hasPurchased = false
+
+	for sId, items in pairs(shopItems) do
+		if not isAutoLoopOn or selectedBuyMode ~= "AllShops" then break end
+		if not excludedShops[sId] then
+			for itemName in pairs(items) do
+				if not isAutoLoopOn or selectedBuyMode ~= "AllShops" then break end
+				local itemKey = sId .. "|" .. itemName
+				if not excludedItems[itemKey] then
+					if enqueuePurchase(sId, itemName, qty) then hasPurchased = true end
+					task.wait(0.05)
+				end
+			end
+		end
+	end
+
+	if not hasPurchased then task.wait(0.2) end
+end
+
+task.spawn(function()
+	while scriptRunning do
+		if isAutoLoopOn then
+			if selectedBuyMode == "Selected" then
+				executeBuySelected()
+			elseif selectedBuyMode == "CurrentShop" then
+				executeBuyCurrentShop()
+			elseif selectedBuyMode == "AllShops" then
+				executeBuyAllShops()
+			end
+		else
+			task.wait(0.2)
+		end
+	end
+end)
+
+local function refreshBottomBarStyles()
+	local activeGreen = Color3.fromRGB(35, 180, 90)
+	local defaultDark = Color3.fromRGB(28, 35, 50)
+
+	buySelectedBtn.BackgroundColor3 = (selectedBuyMode == "Selected") and activeGreen or Color3.fromRGB(0, 120, 180)
+	buyCurrentShopBtn.BackgroundColor3 = (selectedBuyMode == "CurrentShop") and activeGreen or Color3.fromRGB(180, 110, 30)
+	buyWholeShopsBtn.BackgroundColor3 = (selectedBuyMode == "AllShops") and activeGreen or Color3.fromRGB(140, 40, 140)
+
+	if isAutoLoopOn then
+		autoLoopBtn.Text = "Auto Loop: ON"
+		autoLoopBtn.BackgroundColor3 = activeGreen
+	else
+		autoLoopBtn.Text = "Auto Loop: OFF"
+		autoLoopBtn.BackgroundColor3 = defaultDark
+	end
+end
+
+refreshBottomBarStyles()
+
+-- ===========================================================================
+-- BUTTON LISTENERS
+-- ===========================================================================
+selectToggleBtn.MouseButton1Click:Connect(function()
+	local hasUnselected = false
+	for key, cardData in pairs(cards) do
+		if cardData.frame.Visible and not excludedItems[key] then
+			if not selected[key] then
+				hasUnselected = true
+				break
+			end
+		end
+	end
+
+	for key, cardData in pairs(cards) do
+		if cardData.frame.Visible and not excludedItems[key] then
+			selected[key] = hasUnselected
+			cardData.refresh()
+		end
+	end
+end)
+
+avoidToggleBtn.MouseButton1Click:Connect(function()
+	local hasUnavoided = false
+	for key, cardData in pairs(cards) do
+		if cardData.frame.Visible then
+			if not excludedItems[key] then
+				hasUnavoided = true
+				break
+			end
+		end
+	end
+
+	for key, cardData in pairs(cards) do
+		if cardData.frame.Visible then
+			excludedItems[key] = hasUnavoided
+			if hasUnavoided then selected[key] = false end
+			cardData.refresh()
+		end
+	end
+end)
+
+deselectAllShopsBtn.MouseButton1Click:Connect(function()
+	for key in pairs(selected) do selected[key] = false end
+	for _, cardData in pairs(cards) do cardData.refresh() end
+end)
+
+buySelectedBtn.MouseButton1Click:Connect(function()
+	selectedBuyMode = "Selected"
+	isAutoLoopOn = true
+	refreshBottomBarStyles()
+end)
+
+buyCurrentShopBtn.MouseButton1Click:Connect(function()
+	selectedBuyMode = "CurrentShop"
+	isAutoLoopOn = true
+	refreshBottomBarStyles()
+end)
+
+buyWholeShopsBtn.MouseButton1Click:Connect(function()
+	promptWarning(function()
+		selectedBuyMode = "AllShops"
+		isAutoLoopOn = true
+		refreshBottomBarStyles()
+	end)
+end)
+
+autoLoopBtn.MouseButton1Click:Connect(function()
+	if not isAutoLoopOn then
+		if selectedBuyMode == "AllShops" then
+			promptWarning(function()
+				isAutoLoopOn = true
+				refreshBottomBarStyles()
+			end)
+		else
+			isAutoLoopOn = true
+			refreshBottomBarStyles()
+		end
+	else
+		isAutoLoopOn = false
+		refreshBottomBarStyles()
+	end
+end)
