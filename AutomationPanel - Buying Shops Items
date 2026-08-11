@@ -137,11 +137,11 @@ end
 -- REOPEN BUTTON
 local reopenBtn = Instance.new("TextButton")
 reopenBtn.Name = "ReopenButton"
-reopenBtn.Size = UDim2.new(0, 200, 0, 38)
-reopenBtn.Position = UDim2.new(0.5, -100, 0, 12)
+reopenBtn.Size = UDim2.new(0, 180, 0, 38)
+reopenBtn.Position = UDim2.new(0.5, 210, 0, 12)
 reopenBtn.BackgroundColor3 = Color3.fromRGB(12, 16, 24)
 reopenBtn.BorderSizePixel = 0
-reopenBtn.Text = "⚡ LAUNCH AUTOMATION PANEL"
+reopenBtn.Text = "⚡ REOPEN AUTOMATION PANEL ⚡"
 reopenBtn.TextColor3 = Color3.fromRGB(0, 229, 255)
 reopenBtn.Font = Enum.Font.GothamBold
 reopenBtn.TextSize = 12
@@ -187,7 +187,7 @@ local titleLabel = Instance.new("TextLabel")
 titleLabel.Size = UDim2.new(0, 360, 1, 0)
 titleLabel.Position = UDim2.new(0, 16, 0, 0)
 titleLabel.BackgroundTransparency = 1
-titleLabel.Text = "⚡ RdDr Ultimate Automation Suite"
+titleLabel.Text = "⚡ RdDr Ultimate Automation Suite ⚡"
 titleLabel.TextColor3 = Color3.fromRGB(240, 245, 255)
 titleLabel.Font = Enum.Font.GothamBold
 titleLabel.TextSize = 15
