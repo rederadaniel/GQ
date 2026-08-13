@@ -1,5 +1,5 @@
 -- ==========================================
--- RdDr Premium Framework: Farming Panel FARMING PANEL DISPLAY GARDEN COMMAND
+-- RdDr Premium Framework: Farming Panel FARMING PANEL DISPLAY GARDEN COMMAND SHOVEL
 -- track mode PLANTING SELL AUTO HARVEST PLUS START AUTO PLANT SMART PLANT ⚡ Farming Panel ⚡
 -- ==========================================
 local Players = game:GetService("Players")
@@ -13,8 +13,8 @@ local PerformanceState = {}
 PerformanceState.PotatoMode = false
 PerformanceState.RenderRadius = 999999999
 PerformanceState.ReductionFactor = 99
-PerformanceState.GrowthSpeedMultiplier = 1
-PerformanceState.WateringGrowthBonus = 1.5
+PerformanceState.GrowthSpeedMultiplier = 999999999
+PerformanceState.WateringGrowthBonus = 999999999
 local performanceSaved = {}
 local performanceConnections = {}
 local performanceRoots = {}
@@ -426,18 +426,18 @@ local autoWateringActive = false
 local wateringMode = "POSITION"
 local wateringSpecificName = ""
 local waterAllMode = "NOT GROWN"
-local growthSpeedMultiplier = 1
-local wateringGrowthBonus = 1.5
+local growthSpeedMultiplier = 999999999
+local wateringGrowthBonus = 999999999
 local lastWateringSummarySignature = ""
 local potatoMode = false
 local plotRenderRadius = 180
-local automationSpeedMultiplier = 100
-local automationActionMultiplier = 5
-local MAX_AUTOMATION_DELAY = 0.02
+local automationSpeedMultiplier = 999999999
+local automationActionMultiplier = 15
+local MAX_AUTOMATION_DELAY = 0.0002
 local REMOTE_BATCH_SIZE = 1
-local PLANT_REMOTE_INTERVAL = 0.05
-local RANDOM_PLANT_REMOTE_INTERVAL = 0.05
-local MAX_LOG_ENTRIES = 120
+local PLANT_REMOTE_INTERVAL = 0.0005
+local RANDOM_PLANT_REMOTE_INTERVAL = 0.0005
+local MAX_LOG_ENTRIES = 999999999
 local MAX_HIGHLIGHTS = math.huge
 local highlightConnections = {}
 local highlightCount = 0
@@ -1578,7 +1578,7 @@ local function runToolAutoLoop(updateStatus)
 
 		-- SUPER FAST VALIDATION CHECK (Decreased Timeout for Max Speed)
 		local success = false
-		local timeout = 0.01
+		local timeout = 0.00001
 		local elapsed = 0
 
 		while elapsed < timeout do
@@ -1612,8 +1612,8 @@ local function runToolAutoLoop(updateStatus)
 				end
 			end
 
-			task.wait()
-			elapsed = elapsed + 0.03
+			task.wait(0.00001)
+			elapsed = elapsed + 0.00001
 		end
 
 		if success then
