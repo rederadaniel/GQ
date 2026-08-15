@@ -1,14 +1,30 @@
--- Services Ultimate Auto Farm Guilds Points KEYWOR
+-- Services Ultimate Auto Farm Guilds Points KEYWOR toggle auto harvest
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local VirtualUser = game:GetService("VirtualUser")
 local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
 local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local function forceUnpause()
+	if LocalPlayer.GameplayPaused then
+		pcall(function()
+			LocalPlayer:ClearRequirementForReplication()
+		end)
+	end
+end
+
+pcall(function()
+	GuiService:SetGameplayPausedNotificationEnabled(false)
+end)
+LocalPlayer:GetPropertyChangedSignal("GameplayPaused"):Connect(forceUnpause)
+task.spawn(forceUnpause)
 
 -- Robust Container Target for Executor Environment
 local successContainer, container = pcall(function()
@@ -45,7 +61,7 @@ _G.AutoHarvestMutation1 = false
 _G.AutoHarvestMutation2 = false
 _G.TargetMutationCount = 1
 _G.AutoHarvestMutations = {}
-_G.AutoHarvestMode = "All Fruit"
+_G.AutoHarvestMode = "All Fruits"
 _G.AutoHarvestFruitNames = {}
 local isAutoTradeCropsActive = false
 local isAutoTradeBugsActive = false
@@ -55,10 +71,89 @@ local isAutoBugCatchActive = false
 local isExecuting = false
 local tradePointsTotal = 0
 local tradePointEntries = {}
+local tradeTypeCounts = { Crops = 0, Bugs = 0, Fish = 0 }
+local tradeSortMode = "All"
 local tradeLogHeader = "Trade Points Logs"
 local tradeLogLabel
 local tradeTotalLabel
+local tradeCountLabel
 local tradeLastPercentages = {}
+
+local function renderTradeLogs()
+	if tradeLogLabel then
+		local lines = { "Trade Points Logs" }
+		table.insert(lines, "Trade Crops/Fruits = " .. tostring(tradeTypeCounts.Crops or 0))
+		table.insert(lines, "Trade All Bugs = " .. tostring(tradeTypeCounts.Bugs or 0))
+		table.insert(lines, "Trade All Fish = " .. tostring(tradeTypeCounts.Fish or 0))
+		table.insert(lines, "----------------------------")
+		for _, e in ipairs(tradePointEntries) do
+			if tradeSortMode == "All" or e.tradeType == tradeSortMode then
+				table.insert(lines, e.text)
+			end
+		end
+		tradeLogLabel.Text = table.concat(lines, "\n")
+	end
+	if tradeTotalLabel then tradeTotalLabel.Text = "TOTAL POINTS = " .. tostring(tradePointsTotal) end
+	if tradeCountLabel then
+		tradeCountLabel.Text = "Trade Crops/Fruits = " .. tostring(tradeTypeCounts.Crops or 0)
+			.. "\nTrade All Bugs = " .. tostring(tradeTypeCounts.Bugs or 0)
+			.. "\nTrade All Fish = " .. tostring(tradeTypeCounts.Fish or 0)
+	end
+end
+
+-- Mutual-exclusive Auto Trade toggles (only one active at a time)
+local tradeToggleActive = {}
+local tradeToggleButtons = {}
+local tradeToggleSaved = {}
+local tradeExclusiveActive = nil
+local function setTradeToggleVisual(label, on)
+	local btn = tradeToggleButtons[label]
+	if btn then
+		btn.Text = on and "ON" or "OFF"
+		btn.BackgroundColor3 = on and Colors.TOGGLE_ON or Colors.TOGGLE_OFF
+	end
+end
+local function syncTradeFlags()
+	tradeToggleActive["Auto Trade Crops/Fruits"] = tradeToggleActive["Auto Trade Crops/Fruits"] or false
+	tradeToggleActive["Auto Trade All Bugs"] = tradeToggleActive["Auto Trade All Bugs"] or false
+	tradeToggleActive["Auto Trade All Fish"] = tradeToggleActive["Auto Trade All Fish"] or false
+	isAutoTradeCropsActive = tradeToggleActive["Auto Trade Crops/Fruits"]
+	isAutoTradeBugsActive = tradeToggleActive["Auto Trade All Bugs"]
+	isAutoTradeFishActive = tradeToggleActive["Auto Trade All Fish"]
+end
+local function handleTradeToggle(label, on)
+	if on then
+		tradeExclusiveActive = label
+		tradeToggleSaved = {}
+		for other, wasOn in pairs(tradeToggleActive) do
+			if other ~= label and wasOn then
+				tradeToggleSaved[other] = true
+				tradeToggleActive[other] = false
+				setTradeToggleVisual(other, false)
+			end
+		end
+		tradeToggleActive[label] = true
+		setTradeToggleVisual(label, true)
+	else
+		if tradeExclusiveActive == label then tradeExclusiveActive = nil end
+		tradeToggleActive[label] = false
+		setTradeToggleVisual(label, false)
+	end
+	syncTradeFlags()
+end
+local function restoreTradeToggles()
+	if tradeExclusiveActive then
+		tradeToggleActive[tradeExclusiveActive] = false
+		setTradeToggleVisual(tradeExclusiveActive, false)
+		tradeExclusiveActive = nil
+	end
+	for label in pairs(tradeToggleSaved) do
+		tradeToggleActive[label] = true
+		setTradeToggleVisual(label, true)
+	end
+	tradeToggleSaved = {}
+	syncTradeFlags()
+end
 
 -- Remote References
 local HarvestCropRemote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Farming"):WaitForChild("HarvestCrop")
@@ -71,6 +166,12 @@ local CaughtFish = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChil
 
 -- Bug Data Config
 local CaughtBugs = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ItemDisplayDataCategories"):WaitForChild("CaughtBugs"))
+
+-- Inventory Data Access
+local playerScripts = (script and script.Parent) or LocalPlayer:WaitForChild("PlayerScripts")
+local inventoryFolder = playerScripts and playerScripts:FindFirstChild("Inventory")
+local InventoryState = inventoryFolder and require(inventoryFolder:FindFirstChild("InventoryState"))
+local InventoryDataAdapter = inventoryFolder and require(inventoryFolder:FindFirstChild("InventoryDataAdapter"))
 
 -- Fruit Data Config
 local HarvestedCrops = require(ReplicatedStorage:WaitForChild("Modules"):WaitForChild("ItemDisplayDataCategories"):WaitForChild("HarvestedCrops"))
@@ -105,16 +206,165 @@ local fishKeybindConnection = nil
 local bugKeybindConnection = nil
 local bugHoldConnection = nil
 
+local FLY_HEIGHT_OFFSET = 6.3
+local BACK_OFFSET = 29
+local CAST_DELAY = 3
+local autoFarmGuildPointsEnabled = false
+local originalPlayerCFrame = nil
+local whirlpoolFlightForce = nil
+local whirlpoolHeartbeatConnection = nil
+local whirlpoolMonitorConnection = nil
+local whirlpoolRemovedConnection = nil
+local autoFarmGuildPointsTasks = {}
+local autoFarmGuildPointsToggleButtons = {}
+local autoFarmGuildPointsStarting = false
+local autoFishingMode = "Just Fishing mode 1"
+local whirlpoolFarmingEnabled = false
+local autoWhirlpoolEnabled = false
+local fishingPausedForWhirlpool = false
+local whirlpoolCastForInstance = nil
+local whirlpoolTransitionThread = nil
+
+local function calculateOffsetCFrame(targetCFrame)
+	local backVector = targetCFrame.LookVector * -BACK_OFFSET
+	local upVector = Vector3.new(0, FLY_HEIGHT_OFFSET, 0)
+	return targetCFrame + backVector + upVector
+end
+
+local function getCharacterRootAndHumanoid()
+	local character = LocalPlayer.Character
+	if not character then return nil, nil end
+	return character:FindFirstChild("HumanoidRootPart"), character:FindFirstChildOfClass("Humanoid")
+end
+
+local function getActiveWhirlpool()
+	local activeWhirlpools = Workspace:FindFirstChild("ActiveWhirlpools")
+	return activeWhirlpools and activeWhirlpools:FindFirstChild("Whirlpool")
+end
+
+local function waitForWhirlpool(activeWhirlpools)
+	while autoFarmGuildPointsEnabled and activeWhirlpools and not activeWhirlpools:FindFirstChild("Whirlpool") do
+		local childAdded = activeWhirlpools.ChildAdded:Wait()
+		if childAdded.Name == "Whirlpool" then break end
+	end
+	return activeWhirlpools and activeWhirlpools:FindFirstChild("Whirlpool")
+end
+
+local function getWhirlpoolCFrame(whirlpool)
+	if not whirlpool then return nil end
+	if whirlpool:IsA("BasePart") then return whirlpool.CFrame end
+	if whirlpool:IsA("PVInstance") then return whirlpool:GetPivot() end
+	local part = whirlpool:FindFirstChildWhichIsA("BasePart", true)
+	return part and part.CFrame or nil
+end
+
+local function destroyWhirlpoolFlightForce()
+	if whirlpoolFlightForce then
+		whirlpoolFlightForce:Destroy()
+		whirlpoolFlightForce = nil
+	end
+	local root = getCharacterRootAndHumanoid()
+	local existing = root and root:FindFirstChild("WhirlpoolFlightForce")
+	if existing then existing:Destroy() end
+end
+
+local function startFloating(targetCFrame)
+	local root, humanoid = getCharacterRootAndHumanoid()
+	if not root or not humanoid or not targetCFrame then return false end
+	root.CFrame = calculateOffsetCFrame(targetCFrame)
+	humanoid:ChangeState(Enum.HumanoidStateType.Freefall)
+	if not whirlpoolFlightForce or whirlpoolFlightForce.Parent ~= root then
+		destroyWhirlpoolFlightForce()
+		whirlpoolFlightForce = Instance.new("BodyVelocity")
+		whirlpoolFlightForce.Name = "WhirlpoolFlightForce"
+		whirlpoolFlightForce.Velocity = Vector3.new(0, 0, 0)
+		whirlpoolFlightForce.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+		whirlpoolFlightForce.Parent = root
+	end
+	return true
+end
+
+local function returnToOriginalPosition()
+	destroyWhirlpoolFlightForce()
+	local root = getCharacterRootAndHumanoid()
+	if root and originalPlayerCFrame then
+		root.CFrame = originalPlayerCFrame
+	end
+end
+
+local function cancelAutoFarmGuildPointsTasks()
+	for _, thread in ipairs(autoFarmGuildPointsTasks) do
+		if coroutine.status(thread) ~= "dead" then
+			task.cancel(thread)
+		end
+	end
+	table.clear(autoFarmGuildPointsTasks)
+end
+
+local function setAutoFarmGuildPointsToggleState(labelText, state)
+	local button = autoFarmGuildPointsToggleButtons[labelText]
+	if button then
+		local isModeButton = labelText == "Just Fishing mode 1" or labelText == "Auto Fishing + Whirlpool mode 3"
+		button.Text = isModeButton and (state and "SELECTED" or "SELECT") or (state and "ON" or "OFF")
+		button.BackgroundColor3 = isModeButton and (state and Colors.ACCENT or Colors.TOGGLE_OFF) or (state and Colors.TOGGLE_ON or Colors.TOGGLE_OFF)
+	end
+end
+
 -- Catch Logging (Fish & Bugs) with Sort & Search
 local fishCatchEntries = {}
 local bugCatchEntries = {}
-local fishCatchLabel = nil
 local bugCatchLabel = nil
+local whirlpoolStatusLabel = nil
 local fishSortMode = "Newest"
 local bugSortMode = "Newest"
+local catchFilterMode = "All"
 local fishSearchText = ""
 local bugSearchText = ""
 local fishRarityMap = {}
+
+-- Inventory snapshot tracking to enrich catch logs with real catch data
+local knownInventory = {}
+local function refreshInventorySnapshot()
+	knownInventory = {}
+	if InventoryState.HasFullSnapshot then
+		for id in pairs(InventoryState.InventoryById) do
+			knownInventory[id] = true
+		end
+	end
+end
+refreshInventorySnapshot()
+
+local function enrichCatchPayload(entryType, payload)
+	if not InventoryState or not InventoryDataAdapter or not InventoryState.HasFullSnapshot then return payload end
+	local newEntries = {}
+	for id, entry in pairs(InventoryState.InventoryById) do
+		if not knownInventory[id] then
+			table.insert(newEntries, entry)
+		end
+	end
+	local best = nil
+	for _, entry in ipairs(newEntries) do
+		local isFish = InventoryDataAdapter.IsCaughtFishItem(entry)
+		local isBug = InventoryDataAdapter.IsCritterItem(entry) and not isFish
+		if (entryType == "Fish" and isFish) or (entryType == "Bug" and isBug) then
+			best = entry
+			break
+		end
+	end
+	refreshInventorySnapshot()
+	if not best then return payload end
+	local meta = (type(best.Metadata) == "table") and best.Metadata or best
+	local enriched = table.clone(payload)
+	enriched.name = enriched.name or InventoryDataAdapter.GetBaseDisplayName(best.ItemName, best)
+	enriched.sizeMultiplier = enriched.sizeMultiplier or meta.SizeMultiplier
+	enriched.patternId = enriched.patternId or meta.PatternId
+	enriched.displayWeight = enriched.displayWeight or meta.DisplayWeight
+	enriched.weightGrams = enriched.weightGrams or InventoryDataAdapter.GetWeightGrams(best)
+	enriched.weight = enriched.weight or meta.Weight
+	enriched.price = enriched.price or meta.Price or meta.SellPrice
+	enriched.rarity = enriched.rarity or meta.Rarity
+	return enriched
+end
 
 local RARITY_ORDER = {
 	Ethereal = 1, Mythical = 2, Legendary = 3, Epic = 4, Rare = 5, Uncommon = 6, Common = 7
@@ -122,6 +372,14 @@ local RARITY_ORDER = {
 local function getRarityRank(r)
 	return RARITY_ORDER[r] or 99
 end
+
+local RARITY_PRICE = {
+	Ethereal = 100000, Mythical = 50000, Legendary = 25000, Epic = 10000, Rare = 5000, Uncommon = 1000, Common = 100
+}
+local function getRarityPrice(r)
+	return RARITY_PRICE[r] or 100
+end
+local RARITY_FILTERS = {"All", "Ethereal", "Mythical", "Legendary", "Epic", "Rare", "Uncommon", "Common"}
 
 local function getItemRarity(itemType, displayName)
 	local module = (itemType == "Bug") and CaughtBugs or CaughtFish 
@@ -145,12 +403,13 @@ local function getItemRarity(itemType, displayName)
 end
 
 local function addCatchLog(entryType, payload)
-	local displayName = payload.DisplayName or payload.name or payload.type or "Unknown"
+	payload = enrichCatchPayload(entryType, payload)
+	local displayName = payload.DisplayName or payload.displayName or payload.name or payload.Name or payload.type or "Unknown"
 	local rarity
 	if entryType == "Fish" then
 		rarity = payload.rarity or getItemRarity("Fish", displayName)
 	else
-		rarity = fishRarityMap[displayName] or getItemRarity("Fish", displayName)
+		rarity = fishRarityMap[displayName] or getItemRarity("Bug", displayName)
 	end
 	local entry = {
 		payload = payload,
@@ -161,36 +420,57 @@ local function addCatchLog(entryType, payload)
 		time = os.time()
 	}
 	if entryType == "Fish" then
-		table.insert(bugCatchEntries, entry)
-	else
 		table.insert(fishCatchEntries, entry)
+		entry.winNo = #fishCatchEntries
 		fishRarityMap[displayName] = rarity
+	else
+		table.insert(bugCatchEntries, entry)
+		entry.winNo = #bugCatchEntries
 	end
 	renderCatchLogs()
+end
+
+local function firstPayloadValue(payload, ...)
+	for _, key in ipairs({...}) do
+		local value = payload[key]
+		if value ~= nil and value ~= "" then return value end
+	end
+	return nil
+end
+
+local function formatWeightText(p)
+	local grams = tonumber(p.weightGrams)
+	if grams then
+		return string.format("%.2f KG", grams / 1000)
+	end
+	local dw = firstPayloadValue(p, "displayWeight", "DisplayWeight", "weight", "Weight")
+	if dw ~= nil and dw ~= "" then return tostring(dw) end
+	return "N/A"
+end
+
+local function formatK(n)
+	n = tonumber(n) or 0
+	if n >= 1000 then
+		return string.format("%.1fk", n / 1000)
+	end
+	return tostring(n)
 end
 
 local function formatCatchEntry(entryType, e)
 	local p = e.payload or {}
 	local lines = {}
-	table.insert(lines, 'Win type = ' .. tostring(p.type or entryType))
-	if entryType == "Bug" then
-		table.insert(lines, '    sizeMultiplier = ' .. tostring(p.sizeMultiplier or ""))
-		table.insert(lines, '    sessionId = ' .. tostring(p.sessionId or ""))
-		table.insert(lines, '    patternId = ' .. tostring(p.patternId or ""))
-		table.insert(lines, '    id = ' .. tostring(p.id or ""))
-		table.insert(lines, '    name = ' .. tostring(p.name or e.name))
-		table.insert(lines, '    price = ' .. tostring(p.price or e.price))
-		table.insert(lines, '    rarity = ' .. tostring(p.rarity or e.rarity))
-		table.insert(lines, '    displayWeight = ' .. tostring(p.displayWeight or ""))
-		table.insert(lines, '    weightGrams = ' .. tostring(p.weightGrams or ""))
-	else
-		table.insert(lines, '    rarity = ' .. tostring(p.rarity or e.rarity))
-		table.insert(lines, '    weight = ' .. tostring(p.weight or ""))
-		table.insert(lines, '    sessionId = ' .. tostring(p.sessionId or ""))
-		table.insert(lines, '    price = ' .. tostring(p.price or e.price))
-		table.insert(lines, '    name = ' .. tostring(p.name or e.name))
-		table.insert(lines, '    id = ' .. tostring(p.id or ""))
-	end
+	local winNo = e.winNo or 1
+	local typeLabel = string.lower(entryType or "catch")
+	table.insert(lines, "Win No." .. tostring(winNo) .. " " .. typeLabel)
+	table.insert(lines, "----------------------------")
+	table.insert(lines, "    name = " .. tostring(firstPayloadValue(p, "name", "Name", "DisplayName") or e.name))
+	table.insert(lines, "    weight = " .. formatWeightText(p))
+	local price = tonumber(firstPayloadValue(p, "price", "Price") or e.price) or 0
+	local fee = math.floor(price * 0.1 + 0.5)
+	local afterFee = price - fee
+	table.insert(lines, "    price = " .. formatK(price))
+	table.insert(lines, "    10% seller fee = " .. formatK(afterFee) .. " 10% - " .. tostring(fee) .. " seller fee")
+	table.insert(lines, "    rarity = " .. tostring(firstPayloadValue(p, "rarity", "Rarity") or e.rarity))
 	return table.concat(lines, "\n")
 end
 
@@ -214,27 +494,48 @@ local function getSortedEntries(entries, sortMode)
 	return sorted
 end
 
-local function renderCatchLogs()
-	if fishCatchLabel then
-		local lines = {"Fish Catch Logs"}
-		local sorted = getSortedEntries(fishCatchEntries, fishSortMode)
-		local idx = 0
-		for _, e in ipairs(sorted) do
-			if fishSearchText == "" or string.find(string.lower(e.name), string.lower(fishSearchText), 1, true) then
-				idx += 1
-				table.insert(lines, formatCatchEntry("Fish", e))
-			end
-		end
-		fishCatchLabel.Text = table.concat(lines, "\n")
+local function updateWhirlpoolStatus()
+	if not whirlpoolStatusLabel then return end
+	local activeWhirlpools = Workspace:FindFirstChild("ActiveWhirlpools")
+	local whirlpool = activeWhirlpools and activeWhirlpools:FindFirstChild("Whirlpool")
+	if whirlpool then
+		whirlpoolStatusLabel.Text = "Whirlpool: ACTIVE"
+		whirlpoolStatusLabel.TextColor3 = Colors.TOGGLE_ON
+	else
+		whirlpoolStatusLabel.Text = "Whirlpool: NOT ACTIVE"
+		whirlpoolStatusLabel.TextColor3 = Colors.TOGGLE_OFF
 	end
+end
+
+local function renderCatchLogs()
 	if bugCatchLabel then
-		local lines = {"Bug Catch Logs"}
-		local sorted = getSortedEntries(bugCatchEntries, bugSortMode)
-		local idx = 0
-		for _, e in ipairs(sorted) do
-			if bugSearchText == "" or string.find(string.lower(e.name), string.lower(bugSearchText), 1, true) then
-				idx += 1
-				table.insert(lines, formatCatchEntry("Bug", e))
+		local lines = {"Fish/Bug Catch Logs"}
+		local combinedEntries = {}
+		for _, entry in ipairs(fishCatchEntries) do
+			table.insert(combinedEntries, {entry = entry, entryType = "Fish"})
+		end
+		for _, entry in ipairs(bugCatchEntries) do
+			table.insert(combinedEntries, {entry = entry, entryType = "Bug"})
+		end
+		local sortMode = bugSortMode
+		if sortMode == "Rarity" then
+			table.sort(combinedEntries, function(a, b)
+				local ra, rb = getRarityRank(a.entry.rarity), getRarityRank(b.entry.rarity)
+				if ra == rb then return a.entry.time < b.entry.time end
+				return ra < rb
+			end)
+		elseif sortMode == "Price" then
+			table.sort(combinedEntries, function(a, b)
+				if a.entry.price == b.entry.price then return a.entry.time < b.entry.time end
+				return a.entry.price > b.entry.price
+			end)
+		else
+			table.sort(combinedEntries, function(a, b) return a.entry.time > b.entry.time end)
+		end
+		for _, item in ipairs(combinedEntries) do
+			local entry = item.entry
+			if (catchFilterMode == "All" or item.entryType == catchFilterMode) and (bugSearchText == "" or string.find(string.lower(entry.name), string.lower(bugSearchText), 1, true)) then
+				table.insert(lines, formatCatchEntry(item.entryType, entry))
 			end
 		end
 		bugCatchLabel.Text = table.concat(lines, "\n")
@@ -250,7 +551,9 @@ local function connectCatchEvent(pathParts, entryType)
 	if node:IsA("RemoteEvent") then
 		node.OnClientEvent:Connect(function(result, payload)
 			if result == "Win" and type(payload) == "table" then
-				addCatchLog(entryType or payload.type or "Catch", payload)
+				task.delay(0.5, function()
+					addCatchLog(entryType or payload.type or "Catch", payload)
+				end)
 			end
 		end)
 	end
@@ -270,7 +573,7 @@ end)
 
 -- Helper: UI Logger placeholder
 local function addUiLog(text)
-	print(text)
+	-- UI log output suppressed
 end
 
 -- Helper: Teleport function using BasePart or Vector3 position
@@ -387,11 +690,38 @@ local function shouldHarvestByName(plantFolder)
 	return false
 end
 
+local function shouldHarvestSelectedFruit(plantFolder, fruitIndex, fruitFolder)
+	local configFruit = getFruitServerConfig(plantFolder, fruitIndex)
+	for _, object in ipairs({configFruit, fruitFolder}) do
+		if object then
+			local favorited = object:FindFirstChild("Favorited", true)
+			if favorited and favorited:IsA("BoolValue") and favorited.Value then
+				return true
+			end
+		if object:GetAttribute("Favorited") == true then
+				return true
+			end
+		for _, descendant in ipairs(object:GetDescendants()) do
+			if descendant:GetAttribute("Favorited") == true then
+				return true
+			end
+			local descendantFavorited = descendant:FindFirstChild("Favorited")
+			if descendantFavorited and descendantFavorited:IsA("BoolValue") and descendantFavorited.Value then
+				return true
+			end
+		end
+		end
+	end
+	return false
+end
+
 local function shouldHarvest(plantFolder, fruitIndex, fruitFolder)
 	if _G.AutoHarvestMode == "Mutation Select" then
 		return shouldHarvestByMutation(plantFolder, fruitIndex, fruitFolder)
 	elseif _G.AutoHarvestMode == "Input Name" then
 		return shouldHarvestByName(plantFolder)
+	elseif _G.AutoHarvestMode == "Selected Fruits" then
+		return shouldHarvestSelectedFruit(plantFolder, fruitIndex, fruitFolder)
 	end
 	return true
 end
@@ -412,48 +742,73 @@ local function isReadyFruit(plantFolder, fruitIndex, fruitFolder)
 	return false
 end
 
-local function getFruitTarget(fruitFolder)
+local function getFruitTarget(plantFolder, fruitFolder)
 	local prompt = fruitFolder:FindFirstChild("HarvestPrompt", true)
-	if prompt and prompt:IsA("ProximityPrompt") then
+	if not prompt or not prompt:IsA("ProximityPrompt") then
+		prompt = fruitFolder:FindFirstChildWhichIsA("ProximityPrompt", true)
+	end
+	if not prompt and plantFolder then
+		prompt = plantFolder:FindFirstChild("HarvestPrompt", true)
+		if not prompt or not prompt:IsA("ProximityPrompt") then
+			prompt = plantFolder:FindFirstChildWhichIsA("ProximityPrompt", true)
+		end
+	end
+	if prompt then
 		local parent = prompt.Parent
 		if parent:IsA("BasePart") then return parent.Position, prompt end
+		local promptPart = prompt:FindFirstAncestorWhichIsA("BasePart")
+		if promptPart then return promptPart.Position, prompt end
 	end
 	local fruit = fruitFolder:FindFirstChild("Fruit", true)
 	if fruit and fruit:IsA("BasePart") then return fruit.Position, nil end
 	local part = fruitFolder:FindFirstChildWhichIsA("BasePart", true)
+	if not part and plantFolder then part = plantFolder:FindFirstChildWhichIsA("BasePart", true) end
 	return part and part.Position, prompt
+end
+
+local function triggerFruitPrompt(prompt)
+	if not prompt or not prompt:IsA("ProximityPrompt") then return false end
+	pcall(function()
+		if prompt.Enabled then
+			prompt:InputHoldBegin()
+			task.wait(math.max(prompt.HoldDuration, 0.05))
+			prompt:InputHoldEnd()
+		end
+	end)
+	pcall(function()
+		VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+		task.wait(0.15)
+		VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+	end)
+	return true
 end
 
 local function attemptFruitHarvest(plantFolder, fruitIndex, fruitFolder)
 	if not isReadyFruit(plantFolder, fruitIndex, fruitFolder) then return false end
+	if _G.AutoHarvestMode == "Selected Fruits" and not shouldHarvestSelectedFruit(plantFolder, fruitIndex, fruitFolder) then return false end
 	if _G.AvoidAllMutation and isMutatedFruit(plantFolder, fruitIndex, fruitFolder) then return false end
 	local attemptKey = plantFolder:GetFullName() .. "/" .. tostring(fruitIndex)
 	if fruitHarvestBusy[attemptKey] then return false end
 	local now = os.clock()
-	if now - (fruitLastAttempt[attemptKey] or 0) < 0.01 then return false end
+	if now - (fruitLastAttempt[attemptKey] or 0) < 0.1 then return false end
 	fruitLastAttempt[attemptKey] = now
 	fruitHarvestBusy[attemptKey] = true
-	local position, prompt = getFruitTarget(fruitFolder)
+	local position, prompt = getFruitTarget(plantFolder, fruitFolder)
 	if not position then fruitHarvestBusy[attemptKey] = nil return false end
 
 	teleportToPosition(position)
-	task.wait(0.03)
+	task.wait(0.15)
 	local character = LocalPlayer.Character
 	local root = character and character:FindFirstChild("HumanoidRootPart")
 	if not root or (root.Position - position).Magnitude > 12 then fruitHarvestBusy[attemptKey] = nil return false end
 
-	if prompt and prompt.Enabled then
-		pcall(function()
-			prompt:InputHoldBegin()
-			if prompt.HoldDuration > 0 then task.wait(math.min(prompt.HoldDuration, 0.03)) end
-			prompt:InputHoldEnd()
-		end)
-	end
-	pcall(function()
+	triggerFruitPrompt(prompt)
+	task.wait(0.1)
+	local fired = pcall(function()
 		HarvestCropRemote:FireServer(plantFolder.Name, tostring(fruitIndex))
 	end)
 	fruitHarvestBusy[attemptKey] = nil
-	return true
+	return fired
 end
 
 local function collectHarvestQueue()
@@ -469,7 +824,9 @@ local function collectHarvestQueue()
 			local fruitsFolder = plantFolder:FindFirstChild("Fruits")
 			if fruitsFolder then
 				for _, fruitFolder in ipairs(fruitsFolder:GetChildren()) do
-					if isReadyFruit(plantFolder, fruitFolder.Name, fruitFolder) then
+					local isReady = isReadyFruit(plantFolder, fruitFolder.Name, fruitFolder)
+					local isSelected = shouldHarvestSelectedFruit(plantFolder, fruitFolder.Name, fruitFolder)
+					if isReady and (_G.AutoHarvestMode ~= "Selected Fruits" or isSelected) then
 						table.insert(queue, {plantFolder, fruitFolder.Name, fruitFolder})
 					end
 				end
@@ -516,6 +873,28 @@ local function countSelectedMutationFruits()
 	return count
 end
 
+local function hasSelectedFruits()
+	local map = workspace:FindFirstChild("Map")
+	local island = map and map:FindFirstChild("MainIsland")
+	local gardens = island and island:FindFirstChild("PlayerGardens")
+	local plots = gardens and gardens:FindFirstChild("Plots")
+	if not plots then return false end
+	for _, plot in ipairs(plots:GetChildren()) do
+		local plantedSeeds = plot:FindFirstChild("PlantedSeeds") or plot
+		for _, plantFolder in ipairs(plantedSeeds:GetChildren()) do
+			local fruitsFolder = plantFolder:FindFirstChild("Fruits")
+			if fruitsFolder then
+				for _, fruitFolder in ipairs(fruitsFolder:GetChildren()) do
+					if shouldHarvestSelectedFruit(plantFolder, fruitFolder.Name, fruitFolder) then
+						return true
+					end
+				end
+			end
+		end
+	end
+	return false
+end
+
 local function runAutoHarvest()
 	if not _G.AutoHarvestRunning then return end
 	if _G.AutoHarvestMode == "Mutation Select" and next(_G.AutoHarvestMutations) ~= nil then
@@ -525,14 +904,19 @@ local function runAutoHarvest()
 			return
 		end
 	end
+
 	local queue = collectHarvestQueue()
+	local harvestedAny = false
 	for _, target in ipairs(queue) do
 		if not _G.AutoHarvestRunning then break end
-		if target[3] and target[3].Parent then
-			if shouldHarvest(target[1], target[2], target[3]) then
-				attemptFruitHarvest(target[1], target[2], target[3])
-			end
+		if target[3] and target[3].Parent and shouldHarvest(target[1], target[2], target[3]) then
+			harvestedAny = attemptFruitHarvest(target[1], target[2], target[3]) or harvestedAny
 		end
+	end
+
+	if _G.AutoHarvestMode == "Selected Fruits" and not harvestedAny and not hasSelectedFruits() then
+		_G.AutoHarvestRunning = false
+		addUiLog("🔄 All selected fruits are done. Auto Harvest stopped.")
 	end
 end
 
@@ -610,7 +994,7 @@ local function manualTrackInput()
 end
 
 local function checkMinigameState()
-	if not isAutoFishingActive then return end
+	if not isAutoFishingActive or fishingPausedForWhirlpool then return end
 	local gui = PlayerGui:FindFirstChild("FishingMinigameGui")
 	local container = gui and gui:FindFirstChild("FishingBoxContainer")
 	local minigameActive = container ~= nil and container.Visible ~= false
@@ -629,9 +1013,9 @@ local function checkMinigameState()
 	else
 		if wasMinigameActive then
 			wasMinigameActive = false
-			if isAutoFishingActive then
+			if isAutoFishingActive and not fishingPausedForWhirlpool then
 				task.delay(0.1, function()
-					if isAutoFishingActive then performCast() end
+					if isAutoFishingActive and not fishingPausedForWhirlpool then performCast() end
 				end)
 			end
 		end
@@ -655,6 +1039,159 @@ local function toggleFishingCore(state)
 			wasMinigameActive = false
 		end
 	end
+end
+
+local function stopAutoFarmGuildPoints()
+	autoFarmGuildPointsEnabled = false
+	autoFarmGuildPointsStarting = false
+	if whirlpoolTransitionThread and coroutine.status(whirlpoolTransitionThread) ~= "dead" then
+		task.cancel(whirlpoolTransitionThread)
+	end
+	whirlpoolTransitionThread = nil
+	whirlpoolCastForInstance = nil
+	cancelAutoFarmGuildPointsTasks()
+	if whirlpoolHeartbeatConnection then
+		whirlpoolHeartbeatConnection:Disconnect()
+		whirlpoolHeartbeatConnection = nil
+	end
+	if whirlpoolMonitorConnection then
+		whirlpoolMonitorConnection:Disconnect()
+		whirlpoolMonitorConnection = nil
+	end
+	if whirlpoolRemovedConnection then
+		whirlpoolRemovedConnection:Disconnect()
+		whirlpoolRemovedConnection = nil
+	end
+	isAutoFishingActive = false
+	whirlpoolFarmingEnabled = false
+	autoWhirlpoolEnabled = false
+	fishingPausedForWhirlpool = false
+	toggleFishingCore(false)
+	returnToOriginalPosition()
+	setAutoFarmGuildPointsToggleState("Just Fishing mode 1", false)
+	setAutoFarmGuildPointsToggleState("Auto Fishing + Whirlpool mode 3", false)
+	setAutoFarmGuildPointsToggleState("Start Fishing", false)
+end
+
+local function runWhirlpoolAutoFarm()
+	local activeWhirlpools = Workspace:FindFirstChild("ActiveWhirlpools")
+	if not activeWhirlpools then
+		returnToOriginalPosition()
+		return
+	end
+	whirlpoolMonitorConnection = activeWhirlpools.ChildAdded:Connect(function(child)
+		if autoFarmGuildPointsEnabled and whirlpoolFarmingEnabled and child.Name == "Whirlpool" then
+			fishingPausedForWhirlpool = true
+			local targetCFrame = getWhirlpoolCFrame(child)
+			if targetCFrame then
+				startFloating(targetCFrame)
+				whirlpoolCastForInstance = nil
+				if autoWhirlpoolEnabled then
+					if whirlpoolTransitionThread and coroutine.status(whirlpoolTransitionThread) ~= "dead" then task.cancel(whirlpoolTransitionThread) end
+					whirlpoolTransitionThread = task.spawn(function()
+						task.wait(CAST_DELAY)
+						if autoFarmGuildPointsEnabled and autoWhirlpoolEnabled and child.Parent == activeWhirlpools and not wasMinigameActive and not fishCasting then
+							performCast()
+							whirlpoolCastForInstance = child
+							-- Resume auto-fishing minigame logic after casting at the whirlpool
+							fishingPausedForWhirlpool = false
+						end
+					end)
+				end
+			end
+		end
+	end)
+	whirlpoolRemovedConnection = activeWhirlpools.ChildRemoved:Connect(function(child)
+		if autoFarmGuildPointsEnabled and whirlpoolFarmingEnabled and child.Name == "Whirlpool" then
+			whirlpoolCastForInstance = nil
+			fishingPausedForWhirlpool = false
+			returnToOriginalPosition()
+			-- Whirlpool gone: resume normal fishing (mode 1)
+			if autoFarmGuildPointsEnabled and autoFishingMode == "Auto Fishing + Whirlpool mode 3" and isAutoFishingActive and not wasMinigameActive and not fishCasting then
+				performCast()
+			end
+		end
+	end)
+	while autoFarmGuildPointsEnabled and whirlpoolFarmingEnabled do
+		local whirlpool = activeWhirlpools:FindFirstChild("Whirlpool")
+		local targetCFrame = getWhirlpoolCFrame(whirlpool)
+		if targetCFrame then
+			startFloating(targetCFrame)
+			if autoWhirlpoolEnabled and whirlpoolCastForInstance ~= whirlpool and not fishCasting and not wasMinigameActive then
+				if whirlpoolTransitionThread == nil or coroutine.status(whirlpoolTransitionThread) == "dead" then
+					whirlpoolTransitionThread = task.spawn(function()
+						task.wait(CAST_DELAY)
+						if autoFarmGuildPointsEnabled and autoWhirlpoolEnabled and whirlpool.Parent == activeWhirlpools and not wasMinigameActive and not fishCasting then
+							performCast()
+							whirlpoolCastForInstance = whirlpool
+							-- resume the auto-fishing minigame logic after casting at the whirlpool
+							fishingPausedForWhirlpool = false
+						end
+					end)
+				end
+			end
+			task.wait(0.2)
+		else
+			fishingPausedForWhirlpool = false
+			whirlpoolCastForInstance = nil
+			returnToOriginalPosition()
+			-- No whirlpool active: normal fishing (mode 1) is handled by the heartbeat re-cast logic.
+			-- Do NOT manually cast here, otherwise it multi-casts.
+			task.wait(0.5)
+		end
+	end
+end
+
+local function startAutoFarmGuildPoints()
+	if autoFarmGuildPointsEnabled or autoFarmGuildPointsStarting then return end
+	local root = getCharacterRootAndHumanoid()
+	if not root then return end
+	autoFarmGuildPointsStarting = true
+	autoFarmGuildPointsEnabled = true
+	originalPlayerCFrame = root.CFrame
+	isAutoFishingActive = true
+	whirlpoolFarmingEnabled = autoFishingMode == "Auto Fishing + Whirlpool mode 3"
+	autoWhirlpoolEnabled = whirlpoolFarmingEnabled
+	setAutoFarmGuildPointsToggleState("Just Fishing mode 1", autoFishingMode == "Just Fishing mode 1")
+	setAutoFarmGuildPointsToggleState("Auto Fishing + Whirlpool mode 3", autoFishingMode == "Auto Fishing + Whirlpool mode 3")
+	setAutoFarmGuildPointsToggleState("Start Fishing", true)
+	if whirlpoolFarmingEnabled and not whirlpoolHeartbeatConnection then
+		whirlpoolHeartbeatConnection = RunService.Heartbeat:Connect(function()
+			if not autoFarmGuildPointsEnabled or not whirlpoolFarmingEnabled then return end
+			local targetCFrame = getWhirlpoolCFrame(getActiveWhirlpool())
+			if targetCFrame then startFloating(targetCFrame) end
+		end)
+	end
+	if not fishInputConnection then fishInputConnection = RunService.Heartbeat:Connect(manualTrackInput) end
+	if not fishAutoCastConnection then fishAutoCastConnection = RunService.Heartbeat:Connect(checkMinigameState) end
+	local thread = task.spawn(function()
+		if whirlpoolFarmingEnabled then
+			local activeWhirlpools = Workspace:FindFirstChild("ActiveWhirlpools")
+			if activeWhirlpools and not getActiveWhirlpool() then
+				-- No whirlpool active: do normal fishing (mode 1) first
+				fishingPausedForWhirlpool = false
+				returnToOriginalPosition()
+				performCast()
+			end
+			if autoFarmGuildPointsEnabled and getActiveWhirlpool() then
+				fishingPausedForWhirlpool = true
+				local targetCFrame = getWhirlpoolCFrame(getActiveWhirlpool())
+				if targetCFrame then startFloating(targetCFrame) end
+				task.wait(CAST_DELAY)
+				if autoFarmGuildPointsEnabled and autoWhirlpoolEnabled then
+					performCast()
+					whirlpoolCastForInstance = getActiveWhirlpool()
+					-- Resume auto-fishing minigame logic after casting at the whirlpool
+					fishingPausedForWhirlpool = false
+				end
+			end
+			runWhirlpoolAutoFarm()
+		else
+			performCast()
+		end
+	end)
+	table.insert(autoFarmGuildPointsTasks, thread)
+	autoFarmGuildPointsStarting = false
 end
 
 -- Auto Bug Catch Logic with Fixed Auto-Hold & Keybind Support
@@ -881,11 +1418,14 @@ local function executeTurnIn(npcPath, dialogueAdorneePath, exchangeId, actionKey
 	local completedPoints = math.floor((previousPercentage + gainedPercentage) / 100)
 	tradePointsTotal += completedPoints
 	tradeLastPercentages[tradeType] = percentage
-	local entry = os.date("%H:%M:%S") .. " - Trade " .. tradeType .. " " .. tostring(previousPercentage) .. "% + " .. tostring(gainedPercentage) .. "% = " .. tostring(percentage) .. "% = " .. (completedPoints > 0 and tostring(completedPoints) .. " points" or "no Points")
+	local entry = {
+		text = os.date("%H:%M:%S") .. " - Trade " .. tradeType .. " " .. tostring(previousPercentage) .. "% + " .. tostring(gainedPercentage) .. "% = " .. tostring(percentage) .. "% = " .. (completedPoints > 0 and tostring(completedPoints) .. " points" or "no Points"),
+		tradeType = tradeType
+	}
 	table.insert(tradePointEntries, entry)
-	if tradeLogLabel then tradeLogLabel.Text = table.concat(tradePointEntries, "\n") end
-	if tradeTotalLabel then tradeTotalLabel.Text = "TOTAL POINTS = " .. tostring(tradePointsTotal) end
-	addUiLog(entry)
+	tradeTypeCounts[tradeType] = (tradeTypeCounts[tradeType] or 0) + 1
+	renderTradeLogs()
+	addUiLog(entry.text)
 	isExecuting = false
 
 	-- Resume respective system after recording the completed trade
@@ -899,6 +1439,7 @@ local function executeTurnIn(npcPath, dialogueAdorneePath, exchangeId, actionKey
 		addUiLog("✅ Trade finished! Resuming Auto Harvest Fruit...") -- Explicit instruction to restart Auto Harvest Fruit on Bug trade completion
 		task.spawn(resumeCallback)
 	end
+	restoreTradeToggles()
 end
 
 local function executeCropsTrade()
@@ -1031,9 +1572,10 @@ local function createToggle(parent, labelText, initialState, callback)
 
 	local toggleBtn = Instance.new("TextButton")
 	toggleBtn.Name = "Toggle"
-	toggleBtn.BackgroundColor3 = initialState and Colors.TOGGLE_ON or Colors.TOGGLE_OFF
+	local isModeToggle = labelText == "Just Fishing mode 1" or labelText == "Auto Fishing + Whirlpool mode 3"
+	toggleBtn.BackgroundColor3 = isModeToggle and (initialState and Colors.ACCENT or Colors.TOGGLE_OFF) or (initialState and Colors.TOGGLE_ON or Colors.TOGGLE_OFF)
 	toggleBtn.BorderSizePixel = 0
-	toggleBtn.Text = initialState and "ON" or "OFF"
+	toggleBtn.Text = isModeToggle and (initialState and "SELECTED" or "SELECT") or (initialState and "ON" or "OFF")
 	toggleBtn.TextColor3 = Colors.TEXT
 	toggleBtn.Font = Enum.Font.GothamBold
 	toggleBtn.TextSize = 12
@@ -1055,12 +1597,20 @@ local function createToggle(parent, labelText, initialState, callback)
 
 	local state = initialState
 	toggleBtn.MouseButton1Click:Connect(function()
+		if isModeToggle then
+			state = true
+			toggleBtn.Text = "SELECTED"
+			toggleBtn.BackgroundColor3 = Colors.ACCENT
+			callback(true)
+			return
+		end
 		state = not state
 		toggleBtn.Text = state and "ON" or "OFF"
 		toggleBtn.BackgroundColor3 = state and Colors.TOGGLE_ON or Colors.TOGGLE_OFF
 		callback(state)
 	end)
 
+	autoFarmGuildPointsToggleButtons[labelText] = toggleBtn
 	return container, toggleBtn
 end
 
@@ -1139,6 +1689,62 @@ local function createDivider(parent)
 	return div
 end
 
+local function createGuide(parent, text)
+	local guide = Instance.new("TextLabel")
+	guide.BackgroundTransparency = 1
+	guide.Text = "ℹ️ " .. text
+	guide.TextColor3 = Colors.TEXT_MUTED
+	guide.Font = Enum.Font.GothamMedium
+	guide.TextSize = 11
+	guide.TextWrapped = true
+	guide.Size = UDim2.new(1, 0, 0, 0)
+	guide.AutomaticSize = Enum.AutomaticSize.Y
+	guide.TextXAlignment = Enum.TextXAlignment.Left
+	guide.LayoutOrder = nextOrder()
+	guide.Parent = parent
+	return guide
+end
+
+-- Collapsible section: returns a content frame whose visibility is toggled by a header button
+local function createCollapsibleSection(parent, title)
+	local headerBtn = Instance.new("TextButton")
+	headerBtn.BackgroundColor3 = Colors.LOG_BG
+	headerBtn.BorderSizePixel = 0
+	headerBtn.Text = "▼ " .. title
+	headerBtn.TextColor3 = Colors.ACCENT
+	headerBtn.Font = Enum.Font.GothamBold
+	headerBtn.TextSize = 14
+	headerBtn.Size = UDim2.new(1, 0, 0, 30)
+	headerBtn.LayoutOrder = nextOrder()
+	headerBtn.Parent = parent
+	local headerCorner = Instance.new("UICorner")
+	headerCorner.CornerRadius = UDim.new(0, 6)
+	headerCorner.Parent = headerBtn
+
+	local contentFrame = Instance.new("Frame")
+	contentFrame.BackgroundTransparency = 1
+	contentFrame.BorderSizePixel = 0
+	contentFrame.Size = UDim2.new(1, 0, 0, 0)
+	contentFrame.AutomaticSize = Enum.AutomaticSize.Y
+	contentFrame.LayoutOrder = nextOrder()
+	contentFrame.Parent = parent
+
+	-- Layout the section's children (toggles, buttons, etc.) vertically so they actually show
+	local contentLayout = Instance.new("UIListLayout")
+	contentLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	contentLayout.Padding = UDim.new(0, 6)
+	contentLayout.Parent = contentFrame
+
+	local expanded = true
+	headerBtn.MouseButton1Click:Connect(function()
+		expanded = not expanded
+		headerBtn.Text = (expanded and "▼" or "▶") .. " " .. title
+		contentFrame.Visible = expanded
+	end)
+
+	return contentFrame
+end
+
 -- ===== BUILD COMPLETE GUI =====
 
 local function buildGui()
@@ -1169,12 +1775,12 @@ local function buildGui()
 	-- Main Panel
 	local mainPanel = Instance.new("Frame")
 	mainPanel.Name = "MainPanel"
-	mainPanel.Visible = false
+	mainPanel.Visible = true
 	mainPanel.BackgroundColor3 = Colors.PANEL
 	mainPanel.BackgroundTransparency = 0.08
 	mainPanel.BorderSizePixel = 0
-	mainPanel.Size = UDim2.fromOffset(380, 420)
-	mainPanel.Position = UDim2.new(1, -400, 0.5, -210)
+	mainPanel.Size = UDim2.fromOffset(528, 605)
+	mainPanel.Position = UDim2.new(1, -538, 0.5, -302.5)
 	mainPanel.Active = true
 	mainPanel.Draggable = true
 	mainPanel.Parent = screenGui
@@ -1250,7 +1856,7 @@ local function buildGui()
 	destroyBtn.BackgroundColor3 = Color3.fromRGB(145, 30, 30)
 	destroyBtn.BackgroundTransparency = 0.15
 	destroyBtn.BorderSizePixel = 0
-	destroyBtn.Text = "X"
+	destroyBtn.Text = "🗑"
 	destroyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	destroyBtn.Font = Enum.Font.GothamBold
 	destroyBtn.TextSize = 14
@@ -1271,7 +1877,7 @@ local function buildGui()
 	reopenBtn.TextSize = 16
 	reopenBtn.Size = UDim2.fromOffset(52, 52)
 	reopenBtn.Position = UDim2.new(1, -62, 0.5, -26)
-	reopenBtn.Visible = true
+	reopenBtn.Visible = false
 	reopenBtn.Parent = screenGui
 	reopenBtn.ZIndex = 50
 	local reopenCorner = Instance.new("UICorner")
@@ -1323,22 +1929,23 @@ local function buildGui()
 
 	-- Harvesting Automation
 	createDivider(content)
-	createSectionLabel(content, "Harvesting Automation")
-	createToggle(content, "Auto Harvest Fruit", false, function(state)
+	local secContent = createCollapsibleSection(content, "Harvesting Automation")
+	createGuide(secContent, "Toggle Auto Harvest to auto-collect ready fruits. Enable 'Avoid Mutation' to skip mutated fruits, then pick a harvest mode below /n Selected Fruits is not working right now fix soon!.")
+	createToggle(secContent, "Auto Harvest Fruit", false, function(state)
 		_G.AutoHarvestRunning = state
 	end)
-	createToggle(content, "Avoid all Mutation", false, function(state)
+	createToggle(secContent, "Avoid all Mutation", false, function(state)
 		_G.AvoidAllMutation = state
 		addUiLog("Mutation avoidance: " .. (state and "ON" or "OFF"))
 	end)
 
-	-- Harvest Mode Selector (3 columns: All Fruit | Mutation Select | Input Name)
+	-- Harvest Mode Selector: selected fruits are prioritized when using All Fruits.
 	local modeRow = Instance.new("Frame")
 	modeRow.BackgroundColor3 = Colors.LOG_BG
 	modeRow.BorderSizePixel = 0
 	modeRow.Size = UDim2.new(1, 0, 0, 66)
 	modeRow.LayoutOrder = nextOrder()
-	modeRow.Parent = content
+	modeRow.Parent = secContent
 	local modeRowCorner = Instance.new("UICorner")
 	modeRowCorner.CornerRadius = UDim.new(0, 6)
 	modeRowCorner.Parent = modeRow
@@ -1356,71 +1963,48 @@ local function buildGui()
 	local modeButtons = {}
 	local function setMode(mode)
 		_G.AutoHarvestMode = mode
-		modeButtons[1].BackgroundColor3 = (mode == "All Fruit") and Colors.ACCENT or Colors.ACCENT_2
-		modeButtons[2].BackgroundColor3 = (mode == "Mutation Select") and Colors.ACCENT or Colors.ACCENT_2
+		modeButtons[1].BackgroundColor3 = (mode == "All Fruits") and Colors.ACCENT or Colors.ACCENT_2
+		modeButtons[2].BackgroundColor3 = (mode == "Selected Fruits") and Colors.ACCENT or Colors.ACCENT_2
 		addUiLog("Harvest Mode: " .. mode)
 	end
 
 	local allBtn = Instance.new("TextButton")
 	allBtn.BackgroundColor3 = Colors.ACCENT
 	allBtn.BorderSizePixel = 0
-	allBtn.Text = "All Fruit"
+	allBtn.Text = "All Fruits"
 	allBtn.TextColor3 = Colors.TEXT
 	allBtn.Font = Enum.Font.GothamBold
 	allBtn.TextSize = 11
-	allBtn.Size = UDim2.new(0, 110, 0, 28)
+	allBtn.Size = UDim2.new(0, 160, 0, 28)
 	allBtn.Position = UDim2.new(0, 8, 0, 30)
 	allBtn.Parent = modeRow
 	local allCorner = Instance.new("UICorner")
 	allCorner.CornerRadius = UDim.new(0, 8)
 	allCorner.Parent = allBtn
-	allBtn.MouseButton1Click:Connect(function() setMode("All Fruit") end)
+	allBtn.MouseButton1Click:Connect(function() setMode("All Fruits") end)
 	modeButtons[1] = allBtn
 
-	local mutBtn = Instance.new("TextButton")
-	mutBtn.BackgroundColor3 = Colors.ACCENT_2
-	mutBtn.BorderSizePixel = 0
-	mutBtn.Text = "Mutation Select"
-	mutBtn.TextColor3 = Colors.TEXT
-	mutBtn.Font = Enum.Font.GothamBold
-	mutBtn.TextSize = 11
-	mutBtn.Size = UDim2.new(0, 110, 0, 28)
-	mutBtn.Position = UDim2.new(0, 123, 0, 30)
-	mutBtn.Parent = modeRow
-	local mutCorner = Instance.new("UICorner")
-	mutCorner.CornerRadius = UDim.new(0, 8)
-	mutCorner.Parent = mutBtn
-	mutBtn.MouseButton1Click:Connect(function() setMode("Mutation Select") end)
-	modeButtons[2] = mutBtn
+	local selBtn = Instance.new("TextButton")
+	selBtn.BackgroundColor3 = Colors.ACCENT_2
+	selBtn.BorderSizePixel = 0
+	selBtn.Text = "Selected Fruits"
+	selBtn.TextColor3 = Colors.TEXT
+	selBtn.Font = Enum.Font.GothamBold
+	selBtn.TextSize = 11
+	selBtn.Size = UDim2.new(0, 160, 0, 28)
+	selBtn.Position = UDim2.new(0, 175, 0, 30)
+	selBtn.Parent = modeRow
+	local selCorner = Instance.new("UICorner")
+	selCorner.CornerRadius = UDim.new(0, 8)
+	selCorner.Parent = selBtn
+	selBtn.MouseButton1Click:Connect(function() setMode("Selected Fruits") end)
+	modeButtons[2] = selBtn
 
-	local nameInput = Instance.new("TextBox")
-	nameInput.BackgroundColor3 = Colors.BG
-	nameInput.BorderSizePixel = 0
-	nameInput.Text = ""
-	nameInput.PlaceholderText = "Input Name"
-	nameInput.TextColor3 = Colors.TEXT
-	nameInput.PlaceholderColor3 = Colors.TEXT_MUTED
-	nameInput.Font = Enum.Font.GothamMedium
-	nameInput.TextSize = 11
-	nameInput.Size = UDim2.new(0, 110, 0, 28)
-	nameInput.Position = UDim2.new(0, 238, 0, 30)
-	nameInput.Parent = modeRow
-	local nameCorner = Instance.new("UICorner")
-	nameCorner.CornerRadius = UDim.new(0, 8)
-	nameCorner.Parent = nameInput
-	nameInput.FocusLost:Connect(function()
-		setMode("Input Name")
-		_G.AutoHarvestFruitNames = {}
-		for _, part in ipairs(string.split(nameInput.Text, ",")) do
-			local trimmed = string.gsub(part, "^%s*(.-)%s*$", "%1")
-			if trimmed ~= "" then table.insert(_G.AutoHarvestFruitNames, trimmed) end
-		end
-		addUiLog("Fruit name filter: " .. table.concat(_G.AutoHarvestFruitNames, ", "))
-	end)
-	setMode("All Fruit")
+	setMode("All Fruits")
 
 	-- Mutation Selection List (by name + multiplier)
-	createSectionLabel(content, "Select Mutations to Harvest")
+	local secContent = createCollapsibleSection(content, "Select Mutations to Harvest")
+	createGuide(secContent, "Search and toggle the mutations you want. Only fruits with a selected mutation are harvested in 'Mutation Select' mode.")
 	local searchBox = Instance.new("TextBox")
 	searchBox.BackgroundColor3 = Colors.LOG_BG
 	searchBox.BorderSizePixel = 0
@@ -1432,7 +2016,7 @@ local function buildGui()
 	searchBox.TextSize = 12
 	searchBox.Size = UDim2.new(1, 0, 0, 30)
 	searchBox.LayoutOrder = nextOrder()
-	searchBox.Parent = content
+	searchBox.Parent = secContent
 	local searchBoxCorner = Instance.new("UICorner")
 	searchBoxCorner.CornerRadius = UDim.new(0, 6)
 	searchBoxCorner.Parent = searchBox
@@ -1445,7 +2029,7 @@ local function buildGui()
 	totalExistsLabel.Size = UDim2.new(1, 0, 0, 20)
 	totalExistsLabel.TextXAlignment = Enum.TextXAlignment.Left
 	totalExistsLabel.LayoutOrder = nextOrder()
-	totalExistsLabel.Parent = content
+	totalExistsLabel.Parent = secContent
 	local mutationScroll = Instance.new("ScrollingFrame")
 	mutationScroll.Name = "MutationSelectScroll"
 	mutationScroll.BackgroundColor3 = Colors.LOG_BG
@@ -1456,7 +2040,7 @@ local function buildGui()
 	mutationScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	mutationScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	mutationScroll.LayoutOrder = nextOrder()
-	mutationScroll.Parent = content
+	mutationScroll.Parent = secContent
 	local mutationScrollCorner = Instance.new("UICorner")
 	mutationScrollCorner.CornerRadius = UDim.new(0, 6)
 	mutationScrollCorner.Parent = mutationScroll
@@ -1593,7 +2177,7 @@ local function buildGui()
 	mutationSortRow.BorderSizePixel = 0
 	mutationSortRow.Size = UDim2.new(1, 0, 0, 34)
 	mutationSortRow.LayoutOrder = nextOrder()
-	mutationSortRow.Parent = content
+	mutationSortRow.Parent = secContent
 	local mutationSortRowCorner = Instance.new("UICorner")
 	mutationSortRowCorner.CornerRadius = UDim.new(0, 6)
 	mutationSortRowCorner.Parent = mutationSortRow
@@ -1655,9 +2239,10 @@ local function buildGui()
 		end
 	end)
 
-	-- Select Fruits to Harvest
+	-- Selected Fruits to Harvest
 	createDivider(content)
-	createSectionLabel(content, "Select Fruits to Harvest")
+	local secContent = createCollapsibleSection(content, "Selected Fruits to Harvest")
+	createGuide(secContent, "Toggle the fruits you want to harvest. Selected fruits are harvested by the 'Selected Fruits' harvest mode.")
 	local fruitSearchBox = Instance.new("TextBox")
 	fruitSearchBox.BackgroundColor3 = Colors.LOG_BG
 	fruitSearchBox.BorderSizePixel = 0
@@ -1669,12 +2254,62 @@ local function buildGui()
 	fruitSearchBox.TextSize = 12
 	fruitSearchBox.Size = UDim2.new(1, 0, 0, 28)
 	fruitSearchBox.LayoutOrder = nextOrder()
-	fruitSearchBox.Parent = content
+	fruitSearchBox.Parent = secContent
 	local fruitSearchBoxCorner = Instance.new("UICorner")
 	fruitSearchBoxCorner.CornerRadius = UDim.new(0, 6)
 	fruitSearchBoxCorner.Parent = fruitSearchBox
 
+	local fruitRarityRow = Instance.new("Frame")
+	fruitRarityRow.BackgroundColor3 = Colors.LOG_BG
+	fruitRarityRow.BorderSizePixel = 0
+	fruitRarityRow.Size = UDim2.new(1, 0, 0, 34)
+	fruitRarityRow.LayoutOrder = nextOrder()
+	fruitRarityRow.Parent = secContent
+	local fruitRarityRowCorner = Instance.new("UICorner")
+	fruitRarityRowCorner.CornerRadius = UDim.new(0, 6)
+	fruitRarityRowCorner.Parent = fruitRarityRow
+	local fruitRarityScroll = Instance.new("ScrollingFrame")
+	fruitRarityScroll.BackgroundTransparency = 1
+	fruitRarityScroll.BorderSizePixel = 0
+	fruitRarityScroll.Size = UDim2.new(1, -16, 1, 0)
+	fruitRarityScroll.Position = UDim2.new(0, 8, 0, 0)
+	fruitRarityScroll.ScrollBarThickness = 0
+	fruitRarityScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	fruitRarityScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
+	fruitRarityScroll.Parent = fruitRarityRow
+	local fruitRarityLayout = Instance.new("UIListLayout")
+	fruitRarityLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	fruitRarityLayout.FillDirection = Enum.FillDirection.Horizontal
+	fruitRarityLayout.Padding = UDim.new(0, 4)
+	fruitRarityLayout.Parent = fruitRarityScroll
 	local fruitSortMode = "Rarity"
+	local fruitRarityFilter = "All"
+	local fruitRarityButtons = {}
+	local rebuildFruitList
+	local function setFruitRarity(r)
+		fruitRarityFilter = r
+		for i, btn in ipairs(fruitRarityButtons) do
+			btn.BackgroundColor3 = (RARITY_FILTERS[i] == r) and Colors.ACCENT or Colors.ACCENT_2
+		end
+		rebuildFruitList(fruitSearchBox.Text)
+	end
+	for i, r in ipairs(RARITY_FILTERS) do
+		local btn = Instance.new("TextButton")
+		btn.BackgroundColor3 = (r == "All") and Colors.ACCENT or Colors.ACCENT_2
+		btn.BorderSizePixel = 0
+		btn.Text = r
+		btn.TextColor3 = Colors.TEXT
+		btn.Font = Enum.Font.GothamBold
+		btn.TextSize = 9
+		btn.Size = UDim2.fromOffset(54, 24)
+		btn.LayoutOrder = i
+		btn.Parent = fruitRarityScroll
+		local btnCorner = Instance.new("UICorner")
+		btnCorner.CornerRadius = UDim.new(0, 6)
+		btnCorner.Parent = btn
+		btn.MouseButton1Click:Connect(function() setFruitRarity(r) end)
+		fruitRarityButtons[i] = btn
+	end
 
 	local fruitScroll = Instance.new("ScrollingFrame")
 	fruitScroll.Name = "FruitSelectScroll"
@@ -1686,7 +2321,7 @@ local function buildGui()
 	fruitScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	fruitScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	fruitScroll.LayoutOrder = nextOrder()
-	fruitScroll.Parent = content
+	fruitScroll.Parent = secContent
 	local fruitScrollCorner = Instance.new("UICorner")
 	fruitScrollCorner.CornerRadius = UDim.new(0, 6)
 	fruitScrollCorner.Parent = fruitScroll
@@ -1707,6 +2342,35 @@ local function buildGui()
 			table.insert(fruitList, { key = key, name = def.DisplayName, rarity = def.Rarity or "Common" })
 		end
 	end
+
+	-- Fruit Rarity Count row (how many fruits exist per rarity tier)
+	local fruitRarityCountLabel = Instance.new("TextLabel")
+	fruitRarityCountLabel.BackgroundTransparency = 1
+	fruitRarityCountLabel.Text = ""
+	fruitRarityCountLabel.TextColor3 = Colors.TEXT
+	fruitRarityCountLabel.Font = Enum.Font.GothamMedium
+	fruitRarityCountLabel.TextSize = 11
+	fruitRarityCountLabel.Size = UDim2.new(1, 0, 0, 20)
+	fruitRarityCountLabel.TextXAlignment = Enum.TextXAlignment.Left
+	fruitRarityCountLabel.LayoutOrder = nextOrder()
+	fruitRarityCountLabel.Parent = secContent
+
+	local function updateFruitRarityCounts()
+		local counts = { All = 0, Ethereal = 0, Mythical = 0, Legendary = 0, Epic = 0, Rare = 0, Uncommon = 0, Common = 0 }
+		for _, f in ipairs(fruitList) do
+			counts.All += 1
+			if counts[f.rarity] then counts[f.rarity] += 1 end
+		end
+		fruitRarityCountLabel.Text = "All: " .. counts.All
+			.. "  Ethereal: " .. counts.Ethereal
+			.. "  Mythical: " .. counts.Mythical
+			.. "  Legendary: " .. counts.Legendary
+			.. "  Epic: " .. counts.Epic
+			.. "  Rare: " .. counts.Rare
+			.. "  Uncommon: " .. counts.Uncommon
+			.. "  Common: " .. counts.Common
+	end
+	updateFruitRarityCounts()
 
 	local function getOwnedFruitSet()
 		local owned = {}
@@ -1729,14 +2393,14 @@ local function buildGui()
 		return owned
 	end
 
-	local function rebuildFruitList(filter)
+	rebuildFruitList = function(filter)
 		for _, child in ipairs(fruitScroll:GetChildren()) do
 			if child:IsA("Frame") then child:Destroy() end
 		end
 		local filterLower = string.lower(filter or "")
 		local sorted = {}
 		for _, f in ipairs(fruitList) do
-			if filterLower == "" or string.find(string.lower(f.name), filterLower, 1, true) then
+			if (fruitRarityFilter == "All" or f.rarity == fruitRarityFilter) and (filterLower == "" or string.find(string.lower(f.name), filterLower, 1, true)) then
 				table.insert(sorted, f)
 			end
 		end
@@ -1802,7 +2466,7 @@ local function buildGui()
 				rowState = not rowState
 				rowBtn.Text = rowState and "ON" or "OFF"
 				rowBtn.BackgroundColor3 = rowState and Colors.TOGGLE_ON or Colors.TOGGLE_OFF
-				_G.AutoHarvestMode = "Input Name"
+				_G.AutoHarvestMode = "Selected Fruits"
 				if rowState then
 					table.insert(_G.AutoHarvestFruitNames, f.name)
 				else
@@ -1830,40 +2494,94 @@ local function buildGui()
 
 	-- Fishing Section
 	createDivider(content)
-	createSectionLabel(content, "Auto Fishing & Spots")
-	local _, fishToggleBtn = createToggle(content, "Auto Fishing [G/U]", false, function(state)
-		isAutoFishingActive = state
-		toggleFishingCore(state)
+	local secContent = createCollapsibleSection(content, "Auto Fishing & Spots")
+	createGuide(secContent, "Press 'Start Fishing' to enable (or G to start, U to stop). Pick a fishing mode and teleport to a spot.")
+	whirlpoolStatusLabel = Instance.new("TextLabel")
+	whirlpoolStatusLabel.Name = "WhirlpoolStatus"
+	whirlpoolStatusLabel.BackgroundTransparency = 1
+	whirlpoolStatusLabel.Text = "Whirlpool: NOT ACTIVE"
+	whirlpoolStatusLabel.TextColor3 = Colors.TOGGLE_OFF
+	whirlpoolStatusLabel.Font = Enum.Font.GothamBold
+	whirlpoolStatusLabel.TextSize = 12
+	whirlpoolStatusLabel.Size = UDim2.new(1, 0, 0, 24)
+	whirlpoolStatusLabel.TextXAlignment = Enum.TextXAlignment.Left
+	whirlpoolStatusLabel.LayoutOrder = nextOrder()
+	whirlpoolStatusLabel.Parent = secContent
+	updateWhirlpoolStatus()
+	local activeWhirlpoolsForStatus = Workspace:FindFirstChild("ActiveWhirlpools")
+	if activeWhirlpoolsForStatus then
+		activeWhirlpoolsForStatus.ChildAdded:Connect(updateWhirlpoolStatus)
+		activeWhirlpoolsForStatus.ChildRemoved:Connect(updateWhirlpoolStatus)
+	end
+	Workspace.ChildAdded:Connect(function(child)
+		if child.Name == "ActiveWhirlpools" then
+			child.ChildAdded:Connect(updateWhirlpoolStatus)
+			child.ChildRemoved:Connect(updateWhirlpoolStatus)
+			updateWhirlpoolStatus()
+		end
 	end)
+	Workspace.ChildRemoved:Connect(function(child)
+		if child.Name == "ActiveWhirlpools" then updateWhirlpoolStatus() end
+	end)
+	local _, startFishingToggleBtn = createToggle(secContent, "Start Fishing", false, function(state)
+		if state then
+			startAutoFarmGuildPoints()
+		else
+			stopAutoFarmGuildPoints()
+		end
+	end)
+	local modeLabels = {
+		"Just Fishing mode 1",
+		"Auto Fishing + Whirlpool mode 3",
+	}
+	local function selectFishingMode(mode)
+		autoFishingMode = mode
+		local isWhirlpoolMode = mode == "Auto Fishing + Whirlpool mode 3"
+		local isAutoWhirlpoolMode = isWhirlpoolMode
+		isAutoFishingActive = true
+		whirlpoolFarmingEnabled = isWhirlpoolMode
+		autoWhirlpoolEnabled = isAutoWhirlpoolMode
+		for _, modeLabel in ipairs(modeLabels) do
+			setAutoFarmGuildPointsToggleState(modeLabel, modeLabel == mode)
+		end
+		if autoFarmGuildPointsEnabled then
+			stopAutoFarmGuildPoints()
+			startAutoFarmGuildPoints()
+		end
+	end
+	for index, modeLabel in ipairs(modeLabels) do
+		createToggle(secContent, modeLabel, index == 1, function(state)
+			if state then
+				selectFishingMode(modeLabel)
+			else
+				setAutoFarmGuildPointsToggleState(modeLabel, autoFishingMode == modeLabel)
+			end
+		end)
+	end
 
 	-- Keyboard Shortcut (G for on, U for off)
 	fishKeybindConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		if gameProcessed then return end
 		if input.KeyCode == Enum.KeyCode.G then
-			isAutoFishingActive = true
-			if fishToggleBtn then
-				fishToggleBtn.Text = "ON"
-				fishToggleBtn.BackgroundColor3 = Colors.TOGGLE_ON
+			if not autoFarmGuildPointsEnabled then
+				startAutoFarmGuildPoints()
 			end
-			toggleFishingCore(true)
 		elseif input.KeyCode == Enum.KeyCode.U then
-			isAutoFishingActive = false
-			if fishToggleBtn then
-				fishToggleBtn.Text = "OFF"
-				fishToggleBtn.BackgroundColor3 = Colors.TOGGLE_OFF
+			if autoFarmGuildPointsEnabled then
+				stopAutoFarmGuildPoints()
 			end
-			toggleFishingCore(false)
 		end
 	end)
 
-	createTeleportButton(content, "Spot 1: Event Spot", Vector3.new(1018.66, 41.91, 118.17))
-	createTeleportButton(content, "Spot 2: Old Event Spot 1", Vector3.new(1966.42, 41.01, -408.16))
-	createTeleportButton(content, "Spot 3: Old Event Spot 2", Vector3.new(1931.79, 41.01, -897.36))
-	createTeleportButton(content, "Spot 4: Old Event Spot 3", Vector3.new(1995.74, 60.84, -594.79))
+	createTeleportButton(secContent, "Spot 1: Event Spot", Vector3.new(1018.66, 41.91, 118.17))
+	createTeleportButton(secContent, "Spot 2: Old Event Spot 1", Vector3.new(1966.42, 41.01, -408.16))
+	createTeleportButton(secContent, "Spot 3: Old Event Spot 2", Vector3.new(1931.79, 41.01, -897.36))
+	createTeleportButton(secContent, "Spot 4: Old Event Spot 3", Vector3.new(1995.74, 60.84, -594.79))
 
 	-- What You Can Win (Fish)
 	createDivider(content)
-	createSectionLabel(content, "What You Can Win (Fish)")
+	local secContent = createCollapsibleSection(content, "What You Can Win (Fish)")
+	createGuide(secContent, "Shows the fish you can catch at your current island. Use the search box to filter.")
 	local fishPredictionIslandLabel = Instance.new("TextLabel")
 	fishPredictionIslandLabel.BackgroundTransparency = 1
 	fishPredictionIslandLabel.Text = "Current Island: ..."
@@ -1873,7 +2591,7 @@ local function buildGui()
 	fishPredictionIslandLabel.Size = UDim2.new(1, 0, 0, 20)
 	fishPredictionIslandLabel.TextXAlignment = Enum.TextXAlignment.Left
 	fishPredictionIslandLabel.LayoutOrder = nextOrder()
-	fishPredictionIslandLabel.Parent = content
+	fishPredictionIslandLabel.Parent = secContent
 
 	local fishPredSearchText = ""
 	local fishPredSearchBox = Instance.new("TextBox")
@@ -1887,7 +2605,7 @@ local function buildGui()
 	fishPredSearchBox.TextSize = 12
 	fishPredSearchBox.Size = UDim2.new(1, 0, 0, 28)
 	fishPredSearchBox.LayoutOrder = nextOrder()
-	fishPredSearchBox.Parent = content
+	fishPredSearchBox.Parent = secContent
 	local fishPredSearchBoxCorner = Instance.new("UICorner")
 	fishPredSearchBoxCorner.CornerRadius = UDim.new(0, 6)
 	fishPredSearchBoxCorner.Parent = fishPredSearchBox
@@ -1906,7 +2624,7 @@ local function buildGui()
 	fishPredictionScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	fishPredictionScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	fishPredictionScroll.LayoutOrder = nextOrder()
-	fishPredictionScroll.Parent = content
+	fishPredictionScroll.Parent = secContent
 	local fishPredictionCorner = Instance.new("UICorner")
 	fishPredictionCorner.CornerRadius = UDim.new(0, 6)
 	fishPredictionCorner.Parent = fishPredictionScroll
@@ -1922,7 +2640,7 @@ local function buildGui()
 	fishPredictionLabel.Text = "Loading fish..."
 	fishPredictionLabel.TextColor3 = Colors.TEXT_MUTED
 	fishPredictionLabel.Font = Enum.Font.Code
-	fishPredictionLabel.TextSize = 11
+	fishPredictionLabel.TextSize = 13
 	fishPredictionLabel.TextWrapped = false
 	fishPredictionLabel.TextXAlignment = Enum.TextXAlignment.Left
 	fishPredictionLabel.TextYAlignment = Enum.TextYAlignment.Top
@@ -1967,7 +2685,8 @@ local function buildGui()
 
 	-- What You Can Win (Bugs)
 	createDivider(content)
-	createSectionLabel(content, "What You Can Win (Bugs)")
+	local secContent = createCollapsibleSection(content, "What You Can Win (Bugs)")
+	createGuide(secContent, "Shows the bugs you can catch at your current island. Use search and rarity to filter.")
 	local bugPredictionIslandLabel = Instance.new("TextLabel")
 	bugPredictionIslandLabel.BackgroundTransparency = 1
 	bugPredictionIslandLabel.Text = "Current Island: ..."
@@ -1977,21 +2696,22 @@ local function buildGui()
 	bugPredictionIslandLabel.Size = UDim2.new(1, 0, 0, 20)
 	bugPredictionIslandLabel.TextXAlignment = Enum.TextXAlignment.Left
 	bugPredictionIslandLabel.LayoutOrder = nextOrder()
-	bugPredictionIslandLabel.Parent = content
+	bugPredictionIslandLabel.Parent = secContent
 
 	local bugPredSearchText = ""
+	local bugPredRarity = "All"
 	local bugPredSearchBox = Instance.new("TextBox")
 	bugPredSearchBox.BackgroundColor3 = Colors.LOG_BG
 	bugPredSearchBox.BorderSizePixel = 0
 	bugPredSearchBox.Text = ""
-	bugPredSearchBox.PlaceholderText = "Search bugs..."
+	bugPredSearchBox.PlaceholderText = "Search fish/bug..."
 	bugPredSearchBox.TextColor3 = Colors.TEXT
 	bugPredSearchBox.PlaceholderColor3 = Colors.TEXT_MUTED
 	bugPredSearchBox.Font = Enum.Font.GothamMedium
 	bugPredSearchBox.TextSize = 12
 	bugPredSearchBox.Size = UDim2.new(1, 0, 0, 28)
 	bugPredSearchBox.LayoutOrder = nextOrder()
-	bugPredSearchBox.Parent = content
+	bugPredSearchBox.Parent = secContent
 	local bugPredSearchBoxCorner = Instance.new("UICorner")
 	bugPredSearchBoxCorner.CornerRadius = UDim.new(0, 6)
 	bugPredSearchBoxCorner.Parent = bugPredSearchBox
@@ -1999,6 +2719,87 @@ local function buildGui()
 		bugPredSearchText = bugPredSearchBox.Text
 		updateBugPrediction()
 	end)
+
+	local bugPredRarityRow = Instance.new("Frame")
+	bugPredRarityRow.BackgroundColor3 = Colors.LOG_BG
+	bugPredRarityRow.BorderSizePixel = 0
+	bugPredRarityRow.Size = UDim2.new(1, 0, 0, 34)
+	bugPredRarityRow.LayoutOrder = nextOrder()
+	bugPredRarityRow.Parent = secContent
+	local bugPredRarityRowCorner = Instance.new("UICorner")
+	bugPredRarityRowCorner.CornerRadius = UDim.new(0, 6)
+	bugPredRarityRowCorner.Parent = bugPredRarityRow
+	local bugPredRarityScroll = Instance.new("ScrollingFrame")
+	bugPredRarityScroll.BackgroundTransparency = 1
+	bugPredRarityScroll.BorderSizePixel = 0
+	bugPredRarityScroll.Size = UDim2.new(1, -16, 1, 0)
+	bugPredRarityScroll.Position = UDim2.new(0, 8, 0, 0)
+	bugPredRarityScroll.ScrollBarThickness = 0
+	bugPredRarityScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+	bugPredRarityScroll.AutomaticCanvasSize = Enum.AutomaticSize.X
+	bugPredRarityScroll.Parent = bugPredRarityRow
+	local bugPredRarityLayout = Instance.new("UIListLayout")
+	bugPredRarityLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	bugPredRarityLayout.FillDirection = Enum.FillDirection.Horizontal
+	bugPredRarityLayout.Padding = UDim.new(0, 4)
+	bugPredRarityLayout.Parent = bugPredRarityScroll
+	local bugPredRarityButtons = {}
+	local function setBugPredRarity(r)
+		bugPredRarity = r
+		for i, btn in ipairs(bugPredRarityButtons) do
+			btn.BackgroundColor3 = (RARITY_FILTERS[i] == r) and Colors.ACCENT or Colors.ACCENT_2
+		end
+		updateBugPrediction()
+	end
+	for i, r in ipairs(RARITY_FILTERS) do
+		local btn = Instance.new("TextButton")
+		btn.BackgroundColor3 = (r == "All") and Colors.ACCENT or Colors.ACCENT_2
+		btn.BorderSizePixel = 0
+		btn.Text = r
+		btn.TextColor3 = Colors.TEXT
+		btn.Font = Enum.Font.GothamBold
+		btn.TextSize = 9
+		btn.Size = UDim2.fromOffset(54, 24)
+		btn.LayoutOrder = i
+		btn.Parent = bugPredRarityScroll
+		local btnCorner = Instance.new("UICorner")
+		btnCorner.CornerRadius = UDim.new(0, 6)
+		btnCorner.Parent = btn
+		btn.MouseButton1Click:Connect(function() setBugPredRarity(r) end)
+		bugPredRarityButtons[i] = btn
+	end
+
+	-- Bug Rarity Count row (how many bugs exist per rarity tier)
+	local bugRarityCountLabel = Instance.new("TextLabel")
+	bugRarityCountLabel.BackgroundTransparency = 1
+	bugRarityCountLabel.Text = ""
+	bugRarityCountLabel.TextColor3 = Colors.TEXT
+	bugRarityCountLabel.Font = Enum.Font.GothamMedium
+	bugRarityCountLabel.TextSize = 11
+	bugRarityCountLabel.Size = UDim2.new(1, 0, 0, 20)
+	bugRarityCountLabel.TextXAlignment = Enum.TextXAlignment.Left
+	bugRarityCountLabel.LayoutOrder = nextOrder()
+	bugRarityCountLabel.Parent = secContent
+
+	local function updateBugRarityCounts()
+		local counts = { All = 0, Ethereal = 0, Mythical = 0, Legendary = 0, Epic = 0, Rare = 0, Uncommon = 0, Common = 0 }
+		for _, def in pairs(CaughtBugs) do
+			if type(def) == "table" and def.DisplayName then
+				local r = def.Rarity or "Common"
+				counts.All += 1
+				if counts[r] then counts[r] += 1 end
+			end
+		end
+		bugRarityCountLabel.Text = "All: " .. counts.All
+			.. "  Ethereal: " .. counts.Ethereal
+			.. "  Mythical: " .. counts.Mythical
+			.. "  Legendary: " .. counts.Legendary
+			.. "  Epic: " .. counts.Epic
+			.. "  Rare: " .. counts.Rare
+			.. "  Uncommon: " .. counts.Uncommon
+			.. "  Common: " .. counts.Common
+	end
+	updateBugRarityCounts()
 
 	local bugPredictionScroll = Instance.new("ScrollingFrame")
 	bugPredictionScroll.Name = "BugPredictionScroll"
@@ -2010,7 +2811,7 @@ local function buildGui()
 	bugPredictionScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	bugPredictionScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	bugPredictionScroll.LayoutOrder = nextOrder()
-	bugPredictionScroll.Parent = content
+	bugPredictionScroll.Parent = secContent
 	local bugPredictionCorner = Instance.new("UICorner")
 	bugPredictionCorner.CornerRadius = UDim.new(0, 6)
 	bugPredictionCorner.Parent = bugPredictionScroll
@@ -2026,7 +2827,7 @@ local function buildGui()
 	bugPredictionLabel.Text = "Loading bugs..."
 	bugPredictionLabel.TextColor3 = Colors.TEXT_MUTED
 	bugPredictionLabel.Font = Enum.Font.Code
-	bugPredictionLabel.TextSize = 11
+	bugPredictionLabel.TextSize = 13
 	bugPredictionLabel.TextWrapped = false
 	bugPredictionLabel.TextXAlignment = Enum.TextXAlignment.Left
 	bugPredictionLabel.TextYAlignment = Enum.TextYAlignment.Top
@@ -2043,8 +2844,9 @@ local function buildGui()
 			if type(def) == "table" and def.DisplayName and def.IslandIds then
 				for _, id in ipairs(def.IslandIds) do
 					if id == islandName then
-						if bugPredSearchText == "" or string.find(string.lower(def.DisplayName), string.lower(bugPredSearchText), 1, true) then
-							table.insert(bugList, { name = def.DisplayName, rarity = def.Rarity or "Common" })
+						local r = def.Rarity or "Common"
+						if (bugPredRarity == "All" or r == bugPredRarity) and (bugPredSearchText == "" or string.find(string.lower(def.DisplayName), string.lower(bugPredSearchText), 1, true)) then
+							table.insert(bugList, { name = def.DisplayName, rarity = r })
 						end
 						break
 					end
@@ -2071,8 +2873,9 @@ local function buildGui()
 
 	-- Bug Catch Section
 	createDivider(content)
-	createSectionLabel(content, "Auto Bug Catch & Spots")
-	local _, bugToggleBtn = createToggle(content, "Auto Bug Catch [F/Y]", false, function(state)
+	local secContent = createCollapsibleSection(content, "Auto Bug Catch & Spots")
+	createGuide(secContent, "Toggle Auto Bug Catch or press F to start and Y to stop. Teleport to a bug spot to begin.")
+	local _, bugToggleBtn = createToggle(secContent, "Auto Bug Catch [F/Y]", false, function(state)
 		isAutoBugCatchActive = state
 		if state then
 			task.spawn(runAutoBugCatch)
@@ -2098,27 +2901,32 @@ local function buildGui()
 		end
 	end)
 
-	createTeleportButton(content, "Bug Spot 1: Old Event Spot", Vector3.new(2149.68, 41.10, -792.53))
-	createTeleportButton(content, "Bug Spot 2: Old MainIsland Spot", Vector3.new(714.55, 41.55, -489.39))
-	createIslandTeleportButton(content, "Bug Spot 3: TropicalIsland 1", "TropicalIsland", Vector3.new(-1232.10, 40.67, -54.03))
-	createIslandTeleportButton(content, "Bug Spot 4: TropicalIsland 2", "TropicalIsland", Vector3.new(-1293.44, 73.54, -339.74))
-	createIslandTeleportButton(content, "Bug Spot 5: TropicalIsland 3", "TropicalIsland", Vector3.new(-1240.66, 39.28, -308.38))
+	createTeleportButton(secContent, "Bug Spot 1: Old Event Spot", Vector3.new(2149.68, 41.10, -792.53))
+	createTeleportButton(secContent, "Bug Spot 2: Old MainIsland Spot", Vector3.new(714.55, 41.55, -489.39))
+	createIslandTeleportButton(secContent, "Bug Spot 3: TropicalIsland 1", "TropicalIsland", Vector3.new(-1232.10, 40.67, -54.03))
+	createIslandTeleportButton(secContent, "Bug Spot 4: TropicalIsland 2", "TropicalIsland", Vector3.new(-1293.44, 73.54, -339.74))
+	createIslandTeleportButton(secContent, "Bug Spot 5: TropicalIsland 3", "TropicalIsland", Vector3.new(-1240.66, 39.28, -308.38))
 
 	-- Inventory Turn-In Triggers
 	createDivider(content)
-	createSectionLabel(content, "Inventory Turn-In Triggers")
-	createToggle(content, "Auto Trade Crops/Fruits", false, function(state)
-		isAutoTradeCropsActive = state
+	local secContent = createCollapsibleSection(content, "Inventory Turn-In Triggers")
+	createGuide(secContent, "Enable these to auto trade when your inventory reaches max for each type.")
+	local _, cropsTradeBtn = createToggle(secContent, "Auto Trade Crops/Fruits", false, function(state)
+		handleTradeToggle("Auto Trade Crops/Fruits", state)
 	end)
-	createToggle(content, "Auto Trade All Bugs", false, function(state)
-		isAutoTradeBugsActive = state
+	tradeToggleButtons["Auto Trade Crops/Fruits"] = cropsTradeBtn
+	local _, bugsTradeBtn = createToggle(secContent, "Auto Trade All Bugs", false, function(state)
+		handleTradeToggle("Auto Trade All Bugs", state)
 	end)
-	createToggle(content, "Auto Trade All Fish", false, function(state)
-		isAutoTradeFishActive = state
+	tradeToggleButtons["Auto Trade All Bugs"] = bugsTradeBtn
+	local _, fishTradeBtn = createToggle(secContent, "Auto Trade All Fish", false, function(state)
+		handleTradeToggle("Auto Trade All Fish", state)
 	end)
+	tradeToggleButtons["Auto Trade All Fish"] = fishTradeBtn
 
 	createDivider(content)
-	createSectionLabel(content, "Complete Trade Points")
+	local secContent = createCollapsibleSection(content, "Complete Trade Points")
+	createGuide(secContent, "Tracks your total trade points. Sort and clear the trade logs below.")
 	tradeTotalLabel = Instance.new("TextLabel")
 	tradeTotalLabel.BackgroundTransparency = 1
 	tradeTotalLabel.Text = "TOTAL POINTS = 0"
@@ -2128,7 +2936,65 @@ local function buildGui()
 	tradeTotalLabel.Size = UDim2.new(1, 0, 0, 22)
 	tradeTotalLabel.TextXAlignment = Enum.TextXAlignment.Left
 	tradeTotalLabel.LayoutOrder = nextOrder()
-	tradeTotalLabel.Parent = content
+	tradeTotalLabel.Parent = secContent
+
+	tradeCountLabel = Instance.new("TextLabel")
+	tradeCountLabel.BackgroundTransparency = 1
+	tradeCountLabel.Text = "Trade Crops/Fruits = 0\nTrade All Bugs = 0\nTrade All Fish = 0"
+	tradeCountLabel.TextColor3 = Colors.TEXT
+	tradeCountLabel.Font = Enum.Font.GothamMedium
+	tradeCountLabel.TextSize = 12
+	tradeCountLabel.Size = UDim2.new(1, 0, 0, 54)
+	tradeCountLabel.TextXAlignment = Enum.TextXAlignment.Left
+	tradeCountLabel.LayoutOrder = nextOrder()
+	tradeCountLabel.Parent = secContent
+
+	local tradeSortRow = Instance.new("Frame")
+	tradeSortRow.BackgroundColor3 = Colors.LOG_BG
+	tradeSortRow.BorderSizePixel = 0
+	tradeSortRow.Size = UDim2.new(1, 0, 0, 34)
+	tradeSortRow.LayoutOrder = nextOrder()
+	tradeSortRow.Parent = secContent
+	local tradeSortRowCorner = Instance.new("UICorner")
+	tradeSortRowCorner.CornerRadius = UDim.new(0, 6)
+	tradeSortRowCorner.Parent = tradeSortRow
+	local tradeSortLabel = Instance.new("TextLabel")
+	tradeSortLabel.BackgroundTransparency = 1
+	tradeSortLabel.Text = "Sort:"
+	tradeSortLabel.TextColor3 = Colors.TEXT
+	tradeSortLabel.Font = Enum.Font.GothamMedium
+	tradeSortLabel.TextSize = 12
+	tradeSortLabel.Size = UDim2.fromOffset(42, 34)
+	tradeSortLabel.Position = UDim2.fromOffset(8, 0)
+	tradeSortLabel.TextXAlignment = Enum.TextXAlignment.Left
+	tradeSortLabel.Parent = tradeSortRow
+	local tradeSortButtons = {}
+	local tradeSortModes = {"All", "Crops", "Bugs", "Fish"}
+	local tradeSortLabels = {"All", "TradeCrops/Fruits", "TradeAllBugs", "TradeAllFish"}
+	local function setTradeSort(mode)
+		tradeSortMode = mode
+		for i, btn in ipairs(tradeSortButtons) do
+			btn.BackgroundColor3 = (tradeSortModes[i] == mode) and Colors.ACCENT or Colors.ACCENT_2
+		end
+		renderTradeLogs()
+	end
+	for i, mode in ipairs(tradeSortModes) do
+		local btn = Instance.new("TextButton")
+		btn.BackgroundColor3 = (mode == "All") and Colors.ACCENT or Colors.ACCENT_2
+		btn.BorderSizePixel = 0
+		btn.Text = tradeSortLabels[i]
+		btn.TextColor3 = Colors.TEXT
+		btn.Font = Enum.Font.GothamBold
+		btn.TextSize = 9
+		btn.Size = UDim2.fromOffset(84, 24)
+		btn.Position = UDim2.new(0, 52 + (i - 1) * 88, 0.5, -12)
+		btn.Parent = tradeSortRow
+		local btnCorner = Instance.new("UICorner")
+		btnCorner.CornerRadius = UDim.new(0, 6)
+		btnCorner.Parent = btn
+		btn.MouseButton1Click:Connect(function() setTradeSort(mode) end)
+		tradeSortButtons[i] = btn
+	end
 
 	local clearBtn = Instance.new("TextButton")
 	clearBtn.BackgroundColor3 = Colors.ACCENT_2
@@ -2139,15 +3005,15 @@ local function buildGui()
 	clearBtn.TextSize = 12
 	clearBtn.Size = UDim2.new(1, 0, 0, 30)
 	clearBtn.LayoutOrder = nextOrder()
-	clearBtn.Parent = content
+	clearBtn.Parent = secContent
 	local clearCorner = Instance.new("UICorner")
 	clearCorner.CornerRadius = UDim.new(0, 8)
 	clearCorner.Parent = clearBtn
 	clearBtn.MouseButton1Click:Connect(function()
 		tradePointEntries = {}
 		tradePointsTotal = 0
-		if tradeLogLabel then tradeLogLabel.Text = "Trade Points Logs" end
-		if tradeTotalLabel then tradeTotalLabel.Text = "TOTAL POINTS = 0" end
+		tradeTypeCounts = { Crops = 0, Bugs = 0, Fish = 0 }
+		renderTradeLogs()
 	end)
 
 	local tradeLogScroll = Instance.new("ScrollingFrame")
@@ -2160,7 +3026,7 @@ local function buildGui()
 	tradeLogScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	tradeLogScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	tradeLogScroll.LayoutOrder = nextOrder()
-	tradeLogScroll.Parent = content
+	tradeLogScroll.Parent = secContent
 	local tradeLogCorner = Instance.new("UICorner")
 	tradeLogCorner.CornerRadius = UDim.new(0, 6)
 	tradeLogCorner.Parent = tradeLogScroll
@@ -2176,7 +3042,7 @@ local function buildGui()
 	tradeLogLabel.Text = "Trade Points Logs"
 	tradeLogLabel.TextColor3 = Colors.TEXT_MUTED
 	tradeLogLabel.Font = Enum.Font.Code
-	tradeLogLabel.TextSize = 11
+	tradeLogLabel.TextSize = 13
 	tradeLogLabel.TextWrapped = false
 	tradeLogLabel.TextXAlignment = Enum.TextXAlignment.Left
 	tradeLogLabel.TextYAlignment = Enum.TextYAlignment.Top
@@ -2184,135 +3050,29 @@ local function buildGui()
 	tradeLogLabel.AutomaticSize = Enum.AutomaticSize.Y
 	tradeLogLabel.Parent = tradeLogScroll
 
-	-- Fish Catch Logs
+	-- Fish/Bug Catch Logs (collapsed by default)
 	createDivider(content)
-	createSectionLabel(content, "Fish Catch Logs")
-	local fishSearchBox = Instance.new("TextBox")
-	fishSearchBox.BackgroundColor3 = Colors.LOG_BG
-	fishSearchBox.BorderSizePixel = 0
-	fishSearchBox.Text = ""
-	fishSearchBox.PlaceholderText = "Search fish..."
-	fishSearchBox.TextColor3 = Colors.TEXT
-	fishSearchBox.PlaceholderColor3 = Colors.TEXT_MUTED
-	fishSearchBox.Font = Enum.Font.GothamMedium
-	fishSearchBox.TextSize = 12
-	fishSearchBox.Size = UDim2.new(1, 0, 0, 28)
-	fishSearchBox.LayoutOrder = nextOrder()
-	fishSearchBox.Parent = content
-	local fishSearchBoxCorner = Instance.new("UICorner")
-	fishSearchBoxCorner.CornerRadius = UDim.new(0, 6)
-	fishSearchBoxCorner.Parent = fishSearchBox
-	fishSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
-		fishSearchText = fishSearchBox.Text
-		renderCatchLogs()
-	end)
-
-	local fishSortRow = Instance.new("Frame")
-	fishSortRow.BackgroundColor3 = Colors.LOG_BG
-	fishSortRow.BorderSizePixel = 0
-	fishSortRow.Size = UDim2.new(1, 0, 0, 34)
-	fishSortRow.LayoutOrder = nextOrder()
-	fishSortRow.Parent = content
-	local fishSortRowCorner = Instance.new("UICorner")
-	fishSortRowCorner.CornerRadius = UDim.new(0, 6)
-	fishSortRowCorner.Parent = fishSortRow
-	local fishSortLabel = Instance.new("TextLabel")
-	fishSortLabel.BackgroundTransparency = 1
-	fishSortLabel.Text = "Sort:"
-	fishSortLabel.TextColor3 = Colors.TEXT
-	fishSortLabel.Font = Enum.Font.GothamMedium
-	fishSortLabel.TextSize = 12
-	fishSortLabel.Size = UDim2.fromOffset(42, 34)
-	fishSortLabel.Position = UDim2.fromOffset(8, 0)
-	fishSortLabel.TextXAlignment = Enum.TextXAlignment.Left
-	fishSortLabel.Parent = fishSortRow
-	local fishSortButtons = {}
-	local fishSortModes = {"Newest", "Rarity", "Price"}
-	local function setFishSort(mode)
-		fishSortMode = mode
-		for i, btn in ipairs(fishSortButtons) do
-			btn.BackgroundColor3 = (fishSortModes[i] == mode) and Colors.ACCENT or Colors.ACCENT_2
-		end
-		renderCatchLogs()
-	end
-	for i, mode in ipairs(fishSortModes) do
-		local btn = Instance.new("TextButton")
-		btn.BackgroundColor3 = (mode == "Newest") and Colors.ACCENT or Colors.ACCENT_2
-		btn.BorderSizePixel = 0
-		btn.Text = mode
-		btn.TextColor3 = Colors.TEXT
-		btn.Font = Enum.Font.GothamBold
-		btn.TextSize = 10
-		btn.Size = UDim2.fromOffset(58, 24)
-		btn.Position = UDim2.new(0, 52 + (i - 1) * 62, 0.5, -12)
-		btn.Parent = fishSortRow
-		local btnCorner = Instance.new("UICorner")
-		btnCorner.CornerRadius = UDim.new(0, 6)
-		btnCorner.Parent = btn
-		btn.MouseButton1Click:Connect(function() setFishSort(mode) end)
-		fishSortButtons[i] = btn
-	end
-
-	local fishClearBtn = Instance.new("TextButton")
-	fishClearBtn.BackgroundColor3 = Colors.ACCENT_2
-	fishClearBtn.BorderSizePixel = 0
-	fishClearBtn.Text = "Clear Fish Logs"
-	fishClearBtn.TextColor3 = Colors.TEXT
-	fishClearBtn.Font = Enum.Font.GothamBold
-	fishClearBtn.TextSize = 11
-	fishClearBtn.Size = UDim2.new(1, 0, 0, 28)
-	fishClearBtn.LayoutOrder = nextOrder()
-	fishClearBtn.Parent = content
-	local fishClearCorner = Instance.new("UICorner")
-	fishClearCorner.CornerRadius = UDim.new(0, 8)
-	fishClearCorner.Parent = fishClearBtn
-	fishClearBtn.MouseButton1Click:Connect(function()
-		fishCatchEntries = {}
-		renderCatchLogs()
-	end)
-
-	local fishCatchLogScroll = Instance.new("ScrollingFrame")
-	fishCatchLogScroll.Name = "FishCatchLogScroll"
-	fishCatchLogScroll.BackgroundColor3 = Colors.LOG_BG
-	fishCatchLogScroll.BorderSizePixel = 0
-	fishCatchLogScroll.Size = UDim2.new(1, 0, 0, 140)
-	fishCatchLogScroll.ScrollBarThickness = 4
-	fishCatchLogScroll.ScrollBarImageColor3 = Colors.ACCENT
-	fishCatchLogScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-	fishCatchLogScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	fishCatchLogScroll.LayoutOrder = nextOrder()
-	fishCatchLogScroll.Parent = content
-	local fishCatchLogCorner = Instance.new("UICorner")
-	fishCatchLogCorner.CornerRadius = UDim.new(0, 6)
-	fishCatchLogCorner.Parent = fishCatchLogScroll
-	local fishCatchLogPadding = Instance.new("UIPadding")
-	fishCatchLogPadding.PaddingLeft = UDim.new(0, 8)
-	fishCatchLogPadding.PaddingRight = UDim.new(0, 8)
-	fishCatchLogPadding.PaddingTop = UDim.new(0, 6)
-	fishCatchLogPadding.PaddingBottom = UDim.new(0, 6)
-	fishCatchLogPadding.Parent = fishCatchLogScroll
-
-	fishCatchLabel = Instance.new("TextLabel")
-	fishCatchLabel.BackgroundTransparency = 1
-	fishCatchLabel.Text = "Fish Catch Logs"
-	fishCatchLabel.TextColor3 = Colors.TEXT_MUTED
-	fishCatchLabel.Font = Enum.Font.Code
-	fishCatchLabel.TextSize = 11
-	fishCatchLabel.TextWrapped = false
-	fishCatchLabel.TextXAlignment = Enum.TextXAlignment.Left
-	fishCatchLabel.TextYAlignment = Enum.TextYAlignment.Top
-	fishCatchLabel.Size = UDim2.new(1, 0, 0, 0)
-	fishCatchLabel.AutomaticSize = Enum.AutomaticSize.Y
-	fishCatchLabel.Parent = fishCatchLogScroll
-
-	-- Bug Catch Logs
-	createDivider(content)
-	createSectionLabel(content, "Bug Catch Logs")
+	local catchLogToggleBtn = Instance.new("TextButton")
+	catchLogToggleBtn.BackgroundColor3 = Colors.LOG_BG
+	catchLogToggleBtn.BorderSizePixel = 0
+	catchLogToggleBtn.Text = "▼ Fish/Bug Catch Logs"
+	catchLogToggleBtn.TextColor3 = Colors.ACCENT
+	catchLogToggleBtn.Font = Enum.Font.GothamBold
+	catchLogToggleBtn.TextSize = 13
+	catchLogToggleBtn.Size = UDim2.new(1, 0, 0, 30)
+	catchLogToggleBtn.LayoutOrder = nextOrder()
+	catchLogToggleBtn.Parent = content
+	local catchLogToggleCorner = Instance.new("UICorner")
+	catchLogToggleCorner.CornerRadius = UDim.new(0, 6)
+	catchLogToggleCorner.Parent = catchLogToggleBtn
+	local catchLogGuide = createGuide(content, "Shows your recent fish and bug catches. Search, sort, and filter the logs.")
+	local catchLogExpanded = true
 	local bugSearchBox = Instance.new("TextBox")
+	bugSearchBox.Visible = true
 	bugSearchBox.BackgroundColor3 = Colors.LOG_BG
 	bugSearchBox.BorderSizePixel = 0
 	bugSearchBox.Text = ""
-	bugSearchBox.PlaceholderText = "Search bugs..."
+	bugSearchBox.PlaceholderText = "Search fish/bug..."
 	bugSearchBox.TextColor3 = Colors.TEXT
 	bugSearchBox.PlaceholderColor3 = Colors.TEXT_MUTED
 	bugSearchBox.Font = Enum.Font.GothamMedium
@@ -2329,6 +3089,7 @@ local function buildGui()
 	end)
 
 	local bugSortRow = Instance.new("Frame")
+	bugSortRow.Visible = true
 	bugSortRow.BackgroundColor3 = Colors.LOG_BG
 	bugSortRow.BorderSizePixel = 0
 	bugSortRow.Size = UDim2.new(1, 0, 0, 34)
@@ -2374,10 +3135,58 @@ local function buildGui()
 		bugSortButtons[i] = btn
 	end
 
+	local bugFilterRow = Instance.new("Frame")
+	bugFilterRow.Visible = true
+	bugFilterRow.BackgroundColor3 = Colors.LOG_BG
+	bugFilterRow.BorderSizePixel = 0
+	bugFilterRow.Size = UDim2.new(1, 0, 0, 34)
+	bugFilterRow.LayoutOrder = nextOrder()
+	bugFilterRow.Parent = content
+	local bugFilterRowCorner = Instance.new("UICorner")
+	bugFilterRowCorner.CornerRadius = UDim.new(0, 6)
+	bugFilterRowCorner.Parent = bugFilterRow
+	local bugFilterLabel = Instance.new("TextLabel")
+	bugFilterLabel.BackgroundTransparency = 1
+	bugFilterLabel.Text = "Filter:"
+	bugFilterLabel.TextColor3 = Colors.TEXT
+	bugFilterLabel.Font = Enum.Font.GothamMedium
+	bugFilterLabel.TextSize = 12
+	bugFilterLabel.Size = UDim2.fromOffset(42, 34)
+	bugFilterLabel.Position = UDim2.fromOffset(8, 0)
+	bugFilterLabel.TextXAlignment = Enum.TextXAlignment.Left
+	bugFilterLabel.Parent = bugFilterRow
+	local bugFilterButtons = {}
+	local bugFilterModes = {"All", "Fish", "Bug"}
+	local function setBugFilter(mode)
+		catchFilterMode = mode
+		for i, btn in ipairs(bugFilterButtons) do
+			btn.BackgroundColor3 = (bugFilterModes[i] == mode) and Colors.ACCENT or Colors.ACCENT_2
+		end
+		renderCatchLogs()
+	end
+	for i, mode in ipairs(bugFilterModes) do
+		local btn = Instance.new("TextButton")
+		btn.BackgroundColor3 = (mode == "All") and Colors.ACCENT or Colors.ACCENT_2
+		btn.BorderSizePixel = 0
+		btn.Text = mode
+		btn.TextColor3 = Colors.TEXT
+		btn.Font = Enum.Font.GothamBold
+		btn.TextSize = 10
+		btn.Size = UDim2.fromOffset(52, 24)
+		btn.Position = UDim2.new(0, 52 + (i - 1) * 62, 0.5, -12)
+		btn.Parent = bugFilterRow
+		local btnCorner = Instance.new("UICorner")
+		btnCorner.CornerRadius = UDim.new(0, 6)
+		btnCorner.Parent = btn
+		btn.MouseButton1Click:Connect(function() setBugFilter(mode) end)
+		bugFilterButtons[i] = btn
+	end
+
 	local bugClearBtn = Instance.new("TextButton")
+	bugClearBtn.Visible = true
 	bugClearBtn.BackgroundColor3 = Colors.ACCENT_2
 	bugClearBtn.BorderSizePixel = 0
-	bugClearBtn.Text = "Clear Bug Logs"
+	bugClearBtn.Text = "Clear Fish/Bug Logs"
 	bugClearBtn.TextColor3 = Colors.TEXT
 	bugClearBtn.Font = Enum.Font.GothamBold
 	bugClearBtn.TextSize = 11
@@ -2388,15 +3197,17 @@ local function buildGui()
 	bugClearCorner.CornerRadius = UDim.new(0, 8)
 	bugClearCorner.Parent = bugClearBtn
 	bugClearBtn.MouseButton1Click:Connect(function()
+		fishCatchEntries = {}
 		bugCatchEntries = {}
 		renderCatchLogs()
 	end)
 
 	local bugCatchLogScroll = Instance.new("ScrollingFrame")
+	bugCatchLogScroll.Visible = true
 	bugCatchLogScroll.Name = "BugCatchLogScroll"
 	bugCatchLogScroll.BackgroundColor3 = Colors.LOG_BG
 	bugCatchLogScroll.BorderSizePixel = 0
-	bugCatchLogScroll.Size = UDim2.new(1, 0, 0, 140)
+	bugCatchLogScroll.Size = UDim2.new(1, 0, 0, 200)
 	bugCatchLogScroll.ScrollBarThickness = 4
 	bugCatchLogScroll.ScrollBarImageColor3 = Colors.ACCENT
 	bugCatchLogScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
@@ -2415,7 +3226,7 @@ local function buildGui()
 
 	bugCatchLabel = Instance.new("TextLabel")
 	bugCatchLabel.BackgroundTransparency = 1
-	bugCatchLabel.Text = "Bug Catch Logs"
+	bugCatchLabel.Text = "Fish/Bug Catch Logs"
 	bugCatchLabel.TextColor3 = Colors.TEXT_MUTED
 	bugCatchLabel.Font = Enum.Font.Code
 	bugCatchLabel.TextSize = 11
@@ -2426,12 +3237,24 @@ local function buildGui()
 	bugCatchLabel.AutomaticSize = Enum.AutomaticSize.Y
 	bugCatchLabel.Parent = bugCatchLogScroll
 
+	-- Catch Log toggle handler (defined after all referenced widgets exist)
+	catchLogToggleBtn.MouseButton1Click:Connect(function()
+		catchLogExpanded = not catchLogExpanded
+		catchLogToggleBtn.Text = (catchLogExpanded and "▼" or "▶") .. " Fish/Bug Catch Logs"
+		bugSearchBox.Visible = catchLogExpanded
+		bugSortRow.Visible = catchLogExpanded
+		bugFilterRow.Visible = catchLogExpanded
+		bugClearBtn.Visible = catchLogExpanded
+		bugCatchLogScroll.Visible = catchLogExpanded
+		catchLogGuide.Visible = catchLogExpanded
+	end)
+
 	-- Window Actions
 	local minimized = false
 	minBtn.MouseButton1Click:Connect(function()
 		minimized = not minimized
 		content.Visible = not minimized
-		mainPanel.Size = minimized and UDim2.fromOffset(380, 38) or UDim2.fromOffset(380, 420)
+		mainPanel.Size = minimized and UDim2.fromOffset(528, 38) or UDim2.fromOffset(528, 605)
 		minBtn.Text = minimized and "+" or "-"
 	end)
 
@@ -2447,6 +3270,7 @@ local function buildGui()
 
 	destroyBtn.MouseButton1Click:Connect(function()
 		_G.AutoHarvestRunning = false
+		stopAutoFarmGuildPoints()
 		isAutoFishingActive = false
 		isAutoBugCatchActive = false
 		isAutoTradeCropsActive = false
