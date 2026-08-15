@@ -4068,7 +4068,7 @@ local BUILD_OK, BUILD_ERR = pcall(function()
 				AfkIntLbl.Parent = Page1
 				createAmtInputBox(UDim2.new(0, 330, 0, CfgY + 254), 30, Page1, function(v) antiAfkInterval = math.clamp(math.floor(v), 5, 300) end)
 
-				local PROMO_CODES = {"RELEASEDAY", "HAPPYBIRTHDAYGQ", "FISHQUEST", "BIGSPOON", "MAGICFOREST", "ORB", "CABBAGE", "FOX", "ROCKET", "SPACE", "HAPPY1MONTH", "WILLOW", "TEAM"}
+				local PROMO_CODES = {"RELEASEDAY", "HAPPYBIRTHDAYGQ", "FISHQUEST", "BIGSPOON", "MAGICFOREST", "ORB", "CABBAGE", "FOX", "ROCKET", "SPACE", "HAPPY1MONTH", "WILLOW", "TEAM", "BEACH"}
 				local PROMO_DESCRIPTIONS = {
 					RELEASEDAY = "x5 Premium Flower Pack 🌱 ",
 					HAPPYBIRTHDAYGQ = "x1 Birthday Cow 🐾 ",
@@ -4082,7 +4082,8 @@ local BUILD_OK, BUILD_ERR = pcall(function()
 					SPACE = " 1x Gold Watering Can 🧺 ",
 					HAPPY1MONTH = "2x Premium Magic Pack 🌱 ",
 					WILLOW = "x1 Protection Lock 🔒 ", -- TEAM for
-					TEAM = "x2 Ultimate sprinklers ⚙️ "
+					TEAM = "x2 Ultimate sprinklers ⚙️ ", 
+                    BEACH = "x2 Premium Cabbage Seed Packs 🌱 "
 				}
 				local CodeLog
 				autoRedeemCodes = false
