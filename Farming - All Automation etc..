@@ -1,7 +1,7 @@
 local S = {}
 -- ==========================================
 -- RdDr Premium Framework: Farming Panel FARMING PANEL DISPLAY GARDEN COMMAND
--- track mode PLANTING SELL AUTO HARVEST PLUS START AUTO PLANT SMART PLANT ⚡ Farming Panel ⚡ FARMINGPANEL_MinimizeButton RANDOM PLANT SPECIFIC MUT
+-- track mode PLANTING SELL AUTO HARVEST PLUS AUTO PLANT SMART PLANT ⚡ Farming Panel ⚡ FARMINGPANEL_MinimizeButton TP: TP TO PLANT water fruit
 -- ==========================================
 S.Players = game:GetService("Players")
 S.Player = S.Players.LocalPlayer
@@ -155,8 +155,8 @@ S.ScreenGui.Parent = S.PlayerGui
 S.ToggleButton = Instance.new("ImageButton")
 S.ToggleButton.Name = "FARMINGPANEL_MinimizeButton"
 S.ToggleButton.Size = UDim2.fromOffset(42, 42)
-S.ToggleButton.Position = UDim2.new(1, -945, 0, 13)
-S.ToggleButton.AnchorPoint = Vector2.new(0, 0)
+S.ToggleButton.Position = UDim2.new(0.5, 0, 0.5, 0)
+S.ToggleButton.AnchorPoint = Vector2.new(0.5, 0.5)
 S.ToggleButton.BackgroundColor3 = Color3.fromRGB(14, 16, 22)
 S.ToggleButton.BorderSizePixel = 0
 S.ToggleButton.Image = "rbxassetid://13580435133"
@@ -170,7 +170,7 @@ S.ToggleGradient.Color = ColorSequence.new(Color3.fromRGB(20, 24, 34), Color3.fr
 S.ToggleGradient.Rotation = 45
 S.ToggleGradient.Parent = S.ToggleButton
 S.ToggleStroke = Instance.new("UIStroke")
-S.ToggleStroke.Color = Color3.fromRGB(72, 210, 140)
+S.ToggleStroke.Color = Color3.fromRGB(70, 165, 115)
 S.ToggleStroke.Thickness = 3
 S.ToggleStroke.Transparency = 0.15
 S.ToggleStroke.Parent = S.ToggleButton
@@ -193,19 +193,19 @@ S.MainGradient.Color = ColorSequence.new(Color3.fromRGB(16, 18, 28), Color3.from
 S.MainGradient.Rotation = 115
 S.MainGradient.Parent = S.MainFrame
 S.HubStroke = Instance.new("UIStroke")
-S.HubStroke.Color = Color3.fromRGB(72, 210, 140)
+S.HubStroke.Color = Color3.fromRGB(70, 165, 115)
 S.HubStroke.Thickness = 2
 S.HubStroke.Transparency = 0.35
 S.HubStroke.Parent = S.MainFrame
 S.AccentDot = Instance.new("Frame")
 S.AccentDot.Size = UDim2.fromOffset(9, 9)
 S.AccentDot.Position = UDim2.fromOffset(14, 16)
-S.AccentDot.BackgroundColor3 = Color3.fromRGB(72, 210, 140)
+S.AccentDot.BackgroundColor3 = Color3.fromRGB(70, 165, 115)
 S.AccentDot.BorderSizePixel = 0
 S.AccentDot.Parent = S.MainFrame
 Instance.new("UICorner", S.AccentDot).CornerRadius = UDim.new(1, 0)
 S.AccentDotGlow = Instance.new("UIStroke")
-S.AccentDotGlow.Color = Color3.fromRGB(72, 210, 140)
+S.AccentDotGlow.Color = Color3.fromRGB(70, 165, 115)
 S.AccentDotGlow.Thickness = 1.5
 S.AccentDotGlow.Transparency = 0.3
 S.AccentDotGlow.Parent = S.AccentDot
@@ -261,7 +261,7 @@ S.CloseBtn = Instance.new("TextButton")
 S.CloseBtn.Size = UDim2.fromOffset(35, 32)
 S.CloseBtn.Position = UDim2.new(1, -82, 0, 10)
 S.CloseBtn.Text = "X"
-S.CloseBtn.TextColor3 = Color3.fromRGB(200, 120, 130)
+S.CloseBtn.TextColor3 = Color3.fromRGB(175, 115, 120)
 S.CloseBtn.Font = Enum.Font.GothamBold
 S.CloseBtn.TextSize = 17
 S.CloseBtn.BackgroundColor3 = Color3.fromRGB(24, 28, 38)
@@ -274,15 +274,17 @@ S.CloseBtnStroke.Transparency = 0.4
 S.CloseBtnStroke.Parent = S.CloseBtn
 S.CloseBtn.Parent = S.MainFrame
 S.CloseBtn.MouseButton1Click:Connect(function()
-	-- Close: hide the panel and reveal the reopen (toggle) button. Does NOT destroy.
+	-- Close: hide the panel and reveal the reopen (toggle) button at the panel's position.
 	S.MainFrame.Visible = false
 	S.ToggleButton.Visible = true
+	local absPos = S.MainFrame.AbsolutePosition
+	S.ToggleButton.Position = UDim2.fromOffset(absPos.X, absPos.Y)
 end)
 S.TrashBtn = Instance.new("TextButton")
 S.TrashBtn.Size = UDim2.fromOffset(35, 32)
 S.TrashBtn.Position = UDim2.new(1, -42, 0, 10)
 S.TrashBtn.Text = "🗑"
-S.TrashBtn.TextColor3 = Color3.fromRGB(255, 130, 130)
+S.TrashBtn.TextColor3 = Color3.fromRGB(175, 105, 105)
 S.TrashBtn.Font = Enum.Font.GothamBold
 S.TrashBtn.TextSize = 17
 S.TrashBtn.BackgroundColor3 = Color3.fromRGB(24, 28, 38)
@@ -336,12 +338,12 @@ S.AccentBar = Instance.new("Frame")
 S.AccentBar.Name = "AccentBar"
 S.AccentBar.Size = UDim2.new(1, -28, 0, 2)
 S.AccentBar.Position = UDim2.new(0, 14, 0, 42)
-S.AccentBar.BackgroundColor3 = Color3.fromRGB(72, 210, 140)
+S.AccentBar.BackgroundColor3 = Color3.fromRGB(70, 165, 115)
 S.AccentBar.BorderSizePixel = 0
 S.AccentBar.Parent = S.MainFrame
 Instance.new("UICorner", S.AccentBar).CornerRadius = UDim.new(1, 0)
 S.AccentBarGradient = Instance.new("UIGradient")
-S.AccentBarGradient.Color = ColorSequence.new(Color3.fromRGB(72, 210, 140), Color3.fromRGB(0, 170, 255))
+S.AccentBarGradient.Color = ColorSequence.new(Color3.fromRGB(50, 170, 120), Color3.fromRGB(80, 115, 170))
 S.AccentBarGradient.Parent = S.AccentBar
 function S.applyButtonEffects(btn, defaultColor, hoverColor)
 	btn.MouseEnter:Connect(function() S.TweenService:Create(btn, TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = hoverColor}):Play() end)
@@ -365,7 +367,7 @@ function S.AddSectionHeader(parent, text, yoffset)
 	H.Size = UDim2.new(1, -20, 0, 30)
 	H.Position = UDim2.new(0, 10, 0, yoffset)
 	H.Text = text:upper()
-	H.TextColor3 = Color3.fromRGB(0, 210, 255)
+	H.TextColor3 = Color3.fromRGB(80, 115, 170)
 	H.Font = Enum.Font.SourceSansBold
 	H.TextSize = 18
 	H.TextXAlignment = Enum.TextXAlignment.Left
@@ -377,16 +379,84 @@ function S.createActionButton(label, pos, size, parent, callback)
 	local B = Instance.new("TextButton")
 	B.Size = size or UDim2.new(0, 188, 0, 51)
 	B.Position = pos
-	B.BackgroundColor3 = Color3.fromRGB(0, 160, 120)
+	B.BackgroundColor3 = Color3.fromRGB(0, 140, 110)
 	B.Text = label
 	B.TextColor3 = Color3.fromRGB(255, 255, 255)
 	B.Font = Enum.Font.SourceSansBold
 	B.TextSize = 17
 	B.Parent = parent
 	Instance.new("UICorner", B).CornerRadius = UDim.new(0, 8)
-	S.applyButtonEffects(B, Color3.fromRGB(0, 160, 120), Color3.fromRGB(0, 200, 150))
+	S.applyButtonEffects(B, Color3.fromRGB(0, 140, 110), Color3.fromRGB(0, 165, 125))
 	B.MouseButton1Click:Connect(callback)
 	return B
+end
+function S.addPageGuide(parent, yoffset, lines)
+	local guide = Instance.new("Frame")
+	guide.Name = "PageGuide"
+	guide.Size = UDim2.new(1, -16, 0, 20 + #lines * 18)
+	guide.Position = UDim2.new(0, 8, 0, yoffset)
+	guide.BackgroundColor3 = Color3.fromRGB(20, 26, 34)
+	guide.BorderSizePixel = 0
+	guide.Parent = parent
+	Instance.new("UICorner", guide).CornerRadius = UDim.new(0, 8)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = Color3.fromRGB(70, 165, 115)
+	stroke.Thickness = 1
+	stroke.Transparency = 0.6
+	stroke.Parent = guide
+	local titleLbl = Instance.new("TextLabel")
+	titleLbl.Size = UDim2.new(1, -12, 0, 18)
+	titleLbl.Position = UDim2.new(0, 6, 0, 2)
+	titleLbl.BackgroundTransparency = 1
+	titleLbl.Text = "📖 HOW TO USE"
+	titleLbl.TextColor3 = Color3.fromRGB(200, 205, 210)
+	titleLbl.TextSize = 12
+	titleLbl.Font = Enum.Font.GothamBold
+	titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+	titleLbl.Parent = guide
+	for i, line in ipairs(lines) do
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(1, -12, 0, 18)
+		lbl.Position = UDim2.new(0, 6, 0, 20 + (i - 1) * 20)
+		lbl.BackgroundTransparency = 1
+		lbl.Text = "• " .. line
+		lbl.TextColor3 = Color3.fromRGB(200, 205, 210)
+		lbl.TextSize = 11
+		lbl.Font = Enum.Font.Gotham
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.TextWrapped = true
+		lbl.Parent = guide
+	end
+	return yoffset + 20 + #lines * 20 + 8
+end
+function S.addPageGuideToTop(page, lines)
+	if not page then return end
+	local guideBottom = S.addPageGuide(page, 0, lines)
+	local shift = guideBottom
+	for _, child in ipairs(page:GetChildren()) do
+		if child.Name ~= "PageGuide" and child:IsA("GuiObject") then
+			local pos = child.Position
+			child.Position = UDim2.new(pos.X.Scale, pos.X.Offset, pos.Y.Scale, pos.Y.Offset + shift)
+			local sz = child.Size
+			if sz.Y.Offset < 0 then
+				child.Size = UDim2.new(sz.X.Scale, sz.X.Offset, sz.Y.Scale, sz.Y.Offset - shift)
+			end
+		end
+	end
+	page.CanvasSize = UDim2.new(0, 0, 0, page.CanvasSize.Y.Offset + shift)
+end
+function S.addModeHint(parent, yoffset, text)
+	local H = Instance.new("TextLabel")
+	H.Size = UDim2.new(1, -16, 0, 16)
+	H.Position = UDim2.new(0, 8, 0, yoffset)
+	H.Text = "ℹ️ " .. text
+	H.TextColor3 = Color3.fromRGB(120, 160, 190)
+	H.Font = Enum.Font.Gotham
+	H.TextSize = 10
+	H.TextXAlignment = Enum.TextXAlignment.Left
+	H.BackgroundTransparency = 1
+	H.Parent = parent
+	return H
 end
 -- Create the Notification UI Guide on execution
 S.guideGui = Instance.new("ScreenGui")
@@ -408,7 +478,7 @@ S.guideText.Name = "GuideText"
 S.guideText.Size = UDim2.new(1, -20, 0, 60)
 S.guideText.Position = UDim2.new(0, 10, 0, 10)
 S.guideText.BackgroundTransparency = 1
-S.guideText.Text = "DOUBLE CLICK THE SCREEN TO TOGGLE/VISIBLE/SHOW/OPEN\n⚡ Farming Panel ⚡!"
+S.guideText.Text = "Double-click the screen to open the Farming Panel ⚡"
 S.guideText.TextColor3 = Color3.fromRGB(255, 255, 255)
 S.guideText.TextWrapped = true
 S.guideText.TextSize = 16
@@ -418,7 +488,7 @@ S.closeButton = Instance.new("TextButton")
 S.closeButton.Name = "CloseButton"
 S.closeButton.Size = UDim2.new(0, 120, 0, 32)
 S.closeButton.Position = UDim2.new(0.5, -60, 1, -42)
-S.closeButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+S.closeButton.BackgroundColor3 = Color3.fromRGB(175, 60, 60)
 S.closeButton.Text = "CLOSE"
 S.closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 S.closeButton.TextSize = 15
@@ -457,23 +527,42 @@ S.harvestSpeedInput = 0
 S.shovelTargetType = "Plant"
 S.wateringSpeedInput = 0
 S.autoWateringActive = false
-S.wateringMode = "POSITION"
+S.wateringMode = "ALL"
+S.wateringGrowthSubMode = "GROWING"
 S.wateringSpecificName = ""
 S.waterAllMode = "NOT GROWN"
+S.wateringTargetType = "Plant"
+S.wateringTpMode = "NO_TP"
 S.growthSpeedMultiplier = 1
 S.wateringGrowthBonus = 1.5
 S.lastWateringSummarySignature = ""
+S.weatherOnlyTools = false
+S.weatherOnlyHarvest = false
 S.potatoMode = false
 S.plotRenderRadius = 180
 S.automationSpeedMultiplier = 1000
-S.automationActionMultiplier = 50
-S.MAX_AUTOMATION_DELAY = 0.0005
-S.REMOTE_BATCH_SIZE = 50
-S.PLANT_REMOTE_INTERVAL = 0
-S.RANDOM_PLANT_REMOTE_INTERVAL = 0
-S.PLANT_BATCH_SIZE = 500
+S.automationActionMultiplier = 100
+S.MAX_AUTOMATION_DELAY = 0.01
+S.FRAME_SMOOTH_INTERVAL = 120
+S.lowFpsMode = true
+S.REMOTE_BATCH_SIZE = 40
+S.PLANT_REMOTE_INTERVAL = 0.001
+S.RANDOM_PLANT_REMOTE_INTERVAL = 0.001
+S.PLANT_BATCH_SIZE = 120
+S.PLANT_PREVIEW_PERSIST = true
+S.PLANT_PREVIEW_CAP = 500
 S.MAX_LOG_ENTRIES = 120
 S.MAX_HIGHLIGHTS = math.huge
+S.MAX_ACTION_HIGHLIGHTS = 20
+S.activeActionHighlights = {}
+S.highlightDuration = 1.5
+-- Highlighting modes for tools/shoveling, harvest, and planting preview
+S.toolHighlightEnabled = true
+S.harvestHighlightEnabled = true
+S.plantPreviewEnabled = true
+S.forceActionHighlights = false
+S.waterHighlightEnabled = true
+S.HARVEST_MAX_ACTION_REMOTES = 20
 S.highlightConnections = {}
 S.highlightCount = 0
 S.highlightRefreshQueued = false
@@ -485,6 +574,7 @@ S.autoOpenSeedPack = false
 S.autoPlantActive = false
 S.plantMethod = "Seed"
 S.plantMode = "POSITION"
+S.plantPattern = "STRAIGHT"
 S.plantTpMode = "NO_TP"
 S.plantSpecificSeedName = ""
 S.autoHarvestPlus = false
@@ -492,6 +582,7 @@ S.maxCropsReached = false
 S.harvestMode = "HARVEST ALL FRUITS"
 S.harvestTargetName = ""
 S.harvestTargetMutName = ""
+S.harvestNearbyRadius = 15
 S.avoidAllMutations = false
 S.avoidSpecificMutationsText = "" 
 S.logCategoryTitles = {
@@ -545,16 +636,36 @@ function S.getAutomationDelay(value, fallback)
 	if not delay or delay <= 0 then delay = fallback end
 	return math.max(delay / math.clamp(S.automationSpeedMultiplier, 1, 1000), S.MAX_AUTOMATION_DELAY)
 end
-function S.fireRemoteBatch(remote, payload, amount, secondPayload)
+-- ==========================================
+-- HEARTBEAT FRAME PACING (super smooth, no lag)
+-- ==========================================
+-- Cap how many redundant remotes we fire per action. The server only needs a
+-- few to register a harvest/use; firing 1000 floods it and causes lag.
+S.MAX_ACTION_REMOTES = 100
+-- Max remotes fired per rendered frame before yielding to the next frame.
+S.REMOTES_PER_FRAME = 80
+S._remoteBudget = 0
+function S.paceRemotes()
+	S._remoteBudget += 1
+	if S._remoteBudget >= S.REMOTES_PER_FRAME then
+		S._remoteBudget = 0
+		S.RunService.Heartbeat:Wait()
+	end
+end
+function S.fireRemoteBatch(remote, payload, amount, secondPayload, cap)
 	if not remote then return end
 	local total = math.max(1, math.floor(tonumber(amount) or 1))
+	-- Cap redundant bursts so the server isn't flooded and the client stays smooth.
+	total = math.min(total, cap or S.MAX_ACTION_REMOTES)
 	for index = 1, total do
 		if secondPayload == nil then
 			remote:FireServer(payload)
 		else
 			remote:FireServer(payload, secondPayload)
 		end
-		if index % S.REMOTE_BATCH_SIZE == 0 then task.wait() end
+		-- Heartbeat pacing: yield to the next rendered frame every
+		-- REMOTES_PER_FRAME remotes so the render thread never blocks.
+		S.paceRemotes()
 	end
 end
 function S.firePlantRemote(remote, payload, interval)
@@ -562,6 +673,7 @@ function S.firePlantRemote(remote, payload, interval)
 	local ok = pcall(function()
 		remote:FireServer(payload)
 	end)
+	S.paceRemotes()
 	local delay = interval or S.PLANT_REMOTE_INTERVAL
 	if delay and delay > 0 then task.wait(delay) end
 	return ok
@@ -583,7 +695,7 @@ function S.isOwnedPlot(plot)
 	end
 	return false
 end
-function S.getOwnedPlots()
+function S.getOwnedPlots(ignoreDistance)
 	local owned = {}
 	local plots = S.getPlotFolder()
 	if not plots then return owned end
@@ -591,7 +703,7 @@ function S.getOwnedPlots()
 	for _, plot in ipairs(plots:GetChildren()) do
 		if S.isOwnedPlot(plot) then
 			local position = plot:GetPivot().Position
-			if not root or (position - root.Position).Magnitude <= S.plotRenderRadius then
+			if ignoreDistance or not root or (position - root.Position).Magnitude <= S.plotRenderRadius then
 				table.insert(owned, plot)
 			end
 		end
@@ -616,6 +728,13 @@ function S.getCropPercent(crop)
 end
 function S.getActiveTargetName()
 	return (S.targetMode == "ALL PLANTS") and "ALL" or S.customTargetName
+end
+function S.isWeatherActive()
+	local state = S.ReplicatedStorage:FindFirstChild("WorldState")
+	if state then
+		return state:GetAttribute("WeatherActive") == true
+	end
+	return false
 end
 S.addUiLog = function(msg) end
 task.spawn(function()
@@ -720,16 +839,24 @@ end
 -- Returns ONLY the player's own soil parts that auto-plant is allowed to target.
 -- These are the BasePart children of Plot1.Soil (Soil.Part and Soil:GetChildren()[2]).
 function S.getPlantSoilParts()
-	local soil = S.Workspace:FindFirstChild("Map")
-	soil = soil and soil:FindFirstChild("MainIsland")
-	soil = soil and soil:FindFirstChild("PlayerGardens")
-	soil = soil and soil:FindFirstChild("Plots")
-	soil = soil and soil:FindFirstChild("Plot1")
-	soil = soil and soil:FindFirstChild("Soil")
-	if not soil then return {} end
 	local parts = {}
-	for _, child in ipairs(soil:GetChildren()) do
-		if child:IsA("BasePart") then table.insert(parts, child) end
+	for _, plot in ipairs(S.getOwnedPlots(true)) do
+		local soil = plot:FindFirstChild("Soil")
+		if soil then
+			for _, child in ipairs(soil:GetChildren()) do
+				if child:IsA("BasePart") then table.insert(parts, child) end
+			end
+		end
+	end
+	-- Deterministic order: plant 1st soil, then 2nd, then 3rd (X then Z).
+	table.sort(parts, function(a, b)
+		local pa, pb = a.Position, b.Position
+		if math.abs(pa.X - pb.X) > 0.01 then return pa.X < pb.X end
+		return pa.Z < pb.Z
+	end)
+	-- Custom fill order: plant the 3rd soil part first, then the 1st, then the 2nd.
+	if #parts >= 3 then
+		parts[1], parts[2], parts[3] = parts[3], parts[1], parts[2]
 	end
 	return parts
 end
@@ -746,7 +873,7 @@ end
 function S.getEmptyPlantTargets()
 	local targets = {}
 	local occupied = {}
-	for _, plot in ipairs(S.getOwnedPlots()) do
+	for _, plot in ipairs(S.getOwnedPlots(true)) do
 		local planted = plot:FindFirstChild("PlantedSeeds")
 		if planted then
 			for _, seed in ipairs(planted:GetChildren()) do
@@ -813,7 +940,7 @@ task.spawn(function()
 		plantCache = {}
 		occupiedCells = {}
 		-- Mark every existing plant cell as occupied
-		for _, plot in ipairs(S.getOwnedPlots()) do
+		for _, plot in ipairs(S.getOwnedPlots(true)) do
 			local planted = plot:FindFirstChild("PlantedSeeds")
 			if planted then
 				for _, seed in ipairs(planted:GetChildren()) do
@@ -845,24 +972,105 @@ task.spawn(function()
 				local j = math.random(1, i)
 				empty[i], empty[j] = empty[j], empty[i]
 			end
-			-- SMART / POSITION mode: sort nearest-first so we fill outward from the character
-			if S.plantMode == "SMART" or S.plantMode == "POSITION" then
-				local hrp = S.LocalPlayer.Character and S.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-				local origin = hrp and hrp.Position or Vector3.zero
+			-- PATTERN-DRIVEN LAYOUT: the selected plant pattern (STRAIGHT / CIRCLE /
+			-- SPIRAL / DIAGONAL / RANDOM) ALWAYS controls the layout, regardless of
+			-- which plant mode (POSITION / RANDOM / SMART / SIDE BY SIDE) is active.
+			-- Switching the pattern instantly changes the fill order for every mode.
+			if S.plantPattern == "STRAIGHT" then
+				-- Side-by-side straight fill: plant in three-column groups (three columns
+				-- at a time), front-to-back then left-to-right, so rows stay tidy and aligned.
 				table.sort(empty, function(a, b)
-					local pa = Vector3.new(a.x, 0, a.z)
-					local pb = Vector3.new(b.x, 0, b.z)
-					return (pa - origin).Magnitude < (pb - origin).Magnitude
+					local ca = math.floor(a.x / 3)
+					local cb = math.floor(b.x / 3)
+					if ca == cb then
+						if a.z == b.z then return a.x < b.x end
+						return a.z < b.z
+					end
+					return ca < cb
 				end)
-			end
-			-- SIDE BY SIDE mode: sort by distance from plot center so plants fill in concentric circles
-			if S.plantMode == "SIDE BY SIDE" then
+			elseif S.plantPattern == "CIRCLE" then
 				local center = Vector3.new(floorPos.X, 0, floorPos.Z)
 				table.sort(empty, function(a, b)
 					local pa = Vector3.new(a.x, 0, a.z)
 					local pb = Vector3.new(b.x, 0, b.z)
 					return (pa - center).Magnitude < (pb - center).Magnitude
 				end)
+			elseif S.plantPattern == "SPIRAL" then
+				local center = Vector3.new(floorPos.X, 0, floorPos.Z)
+				table.sort(empty, function(a, b)
+					local da = Vector3.new(a.x - center.X, 0, a.z - center.Z)
+					local db = Vector3.new(b.x - center.X, 0, b.z - center.Z)
+					local ra, rb = da.Magnitude, db.Magnitude
+					local aa = math.atan2(da.Z, da.X)
+					local ab = math.atan2(db.Z, db.X)
+					-- Proper Archimedean spiral: angle dominates so the planting path
+					-- winds outward in a smooth spiral, with radius as a tiebreaker.
+					local ka = aa + ra * 0.15
+					local kb = ab + rb * 0.15
+					if math.abs(ka - kb) < 0.001 then return ra < rb end
+					return ka < kb
+				end)
+			elseif S.plantPattern == "DIAGONAL" then
+				table.sort(empty, function(a, b)
+					if a.x + a.z == b.x + b.z then return a.x < b.x end
+					return a.x + a.z < b.x + b.z
+				end)
+			elseif S.plantPattern == "SIDE BY SIDE" then
+				-- SIDE BY SIDE: solid 2-column bands, both columns filled together top-to-bottom
+				table.sort(empty, function(a, b)
+					local ca = math.floor(a.x / 2)
+					local cb = math.floor(b.x / 2)
+					if ca ~= cb then return ca < cb end
+					if a.z == b.z then return a.x < b.x end
+					return a.z < b.z
+				end)
+			elseif S.plantPattern == "SNAKE" then
+				-- SNAKE: 3-column serpentine, snakes through 3-column-wide vertical bands
+				table.sort(empty, function(a, b)
+					local ca = math.floor(a.x / 3)
+					local cb = math.floor(b.x / 3)
+					if ca ~= cb then return ca < cb end
+					if a.z == b.z then
+						if (ca % 2) == 0 then return a.x < b.x end
+						return a.x > b.x
+					end
+					return a.z < b.z
+				end)
+			elseif S.plantPattern == "CHECKER" then
+				-- CHECKER: 3-column checkerboard, alternating cells within each 3-column band
+				table.sort(empty, function(a, b)
+					local ca = math.floor(a.x / 3)
+					local cb = math.floor(b.x / 3)
+					if ca ~= cb then return ca < cb end
+					local pa = (a.x + a.z) % 2
+					local pb = (b.x + b.z) % 2
+					if pa ~= pb then return pa < pb end
+					if a.z == b.z then return a.x < b.x end
+					return a.z < b.z
+				end)
+			elseif S.plantPattern == "RINGS" then
+				local center = Vector3.new(floorPos.X, 0, floorPos.Z)
+				table.sort(empty, function(a, b)
+					local da = Vector3.new(a.x - center.X, 0, a.z - center.Z)
+					local db = Vector3.new(b.x - center.X, 0, b.z - center.Z)
+					local ra, rb = da.Magnitude, db.Magnitude
+					if math.abs(ra - rb) < 0.01 then
+						local aa = math.atan2(da.Z, da.X)
+						local ab = math.atan2(db.Z, db.X)
+						return aa < ab
+					end
+					return ra < rb
+				end)
+			elseif S.plantPattern == "COLUMNS" then
+				-- Single columns: fill one column at a time, alternating top-to-bottom /
+				-- bottom-to-top on each column so it differs from the paired-column pattern.
+				table.sort(empty, function(a, b)
+					if a.x ~= b.x then return a.x < b.x end
+					if (a.x % 2) == 0 then return a.z < b.z end
+					return a.z > b.z
+				end)
+			elseif S.plantPattern == "RANDOM" then
+				-- already shuffled
 			end
 			table.insert(plantCache, {
 				part = soilPart,
@@ -878,14 +1086,18 @@ task.spawn(function()
 			if S.plantMode == "POSITION" then
 				-- SMART POSITION: plant ONLY on the player's own soil parts, filling a grid
 				-- outward from the character. When TP is enabled, teleport to the soil cell.
-				if not plantCache or #plantCache == 0 or plantCacheMode ~= "POSITION" then
-					plantCacheMode = "POSITION"
+				if not plantCache or #plantCache == 0 or plantCacheMode ~= ("POSITION|" .. S.plantPattern) then
+					plantCacheMode = "POSITION|" .. S.plantPattern
 					rebuildPlantCache()
 				end
 				local planted = 0
 				local batchPlanted = false
-				for _, cache in ipairs(plantCache) do
-					if not S.autoPlantActive or S.maxPlantsReached then break end
+				-- SEQUENTIAL: fully plant the 1st soil part, then the next (+1), then the next.
+				local cache = nil
+				for _, c in ipairs(plantCache) do
+					if c.index <= #c.empty then cache = c break end
+				end
+				if cache then
 					while cache.index <= #cache.empty and planted < S.PLANT_BATCH_SIZE do
 						if not S.autoPlantActive or S.maxPlantsReached then break end
 						local cell = cache.empty[cache.index]
@@ -894,19 +1106,20 @@ task.spawn(function()
 						if occupiedCells[key] then continue end
 						occupiedCells[key] = true
 						if not S.equipSeedForPlanting(false) then
-							S.addUiLog("Auto plant: no seed tools found")
+							S.addUiLog("Planting: no seed tools found")
 							task.wait(0.5)
 							break
 						end
 						local position = cache.part.CFrame:PointToWorldSpace(Vector3.new(cell.x - cache.floorPos.X, cache.halfSize.Y + 0.05, cell.z - cache.floorPos.Z))
 						if S.plantTpMode == "TP_TO_PLANT" then S.teleportToPosition(position) end
+						S.showPlantPreview(position)
 						S.firePlantRemote(Event, {
 							TargetPart = cache.part,
 							WorldPosition = position,
 						}, S.PLANT_REMOTE_INTERVAL)
 						planted += 1
 						batchPlanted = true
-						if planted % 20 == 0 then task.wait() end
+						if planted % S.FRAME_SMOOTH_INTERVAL == 0 then task.wait() end
 					end
 				end
 				local allExhausted = true
@@ -914,17 +1127,22 @@ task.spawn(function()
 					if cache.index <= #cache.empty then allExhausted = false break end
 				end
 				if allExhausted then plantCache = nil end
-				if not batchPlanted then task.wait(0.001) end
+				-- Always yield between batches so the network + server can breathe.
+				if batchPlanted then task.wait(0.05) else task.wait(0.02) end
 			else
 				-- RANDOM / SMART: use the persistent grid cache
-				if not plantCache or #plantCache == 0 or plantCacheMode ~= S.plantMode then
-					plantCacheMode = S.plantMode
+				if not plantCache or #plantCache == 0 or plantCacheMode ~= (S.plantMode .. "|" .. S.plantPattern) then
+					plantCacheMode = S.plantMode .. "|" .. S.plantPattern
 					rebuildPlantCache()
 				end
 				local planted = 0
 				local batchPlanted = false
-				for _, cache in ipairs(plantCache) do
-					if not S.autoPlantActive or S.maxPlantsReached then break end
+				-- SEQUENTIAL: fully plant the 1st soil part, then the next (+1), then the next.
+				local cache = nil
+				for _, c in ipairs(plantCache) do
+					if c.index <= #c.empty then cache = c break end
+				end
+				if cache then
 					while cache.index <= #cache.empty and planted < S.PLANT_BATCH_SIZE do
 						if not S.autoPlantActive or S.maxPlantsReached then break end
 						local cell = cache.empty[cache.index]
@@ -933,19 +1151,20 @@ task.spawn(function()
 						if occupiedCells[key] then continue end
 						occupiedCells[key] = true
 						if not S.equipSeedForPlanting(S.plantMode == "RANDOM") then
-							S.addUiLog("Auto plant: no seed tools found")
+							S.addUiLog("Planting: no seed tools found")
 							task.wait(0.5)
 							break
 						end
 						local position = cache.part.CFrame:PointToWorldSpace(Vector3.new(cell.x - cache.floorPos.X, cache.halfSize.Y + 0.05, cell.z - cache.floorPos.Z))
 						if S.plantTpMode == "TP_TO_PLANT" then S.teleportToPosition(position) end
+						S.showPlantPreview(position)
 						S.firePlantRemote(Event, {
 							TargetPart = cache.part,
 							WorldPosition = position,
 						}, S.plantMode == "RANDOM" and S.RANDOM_PLANT_REMOTE_INTERVAL or S.PLANT_REMOTE_INTERVAL)
 						planted += 1
 						batchPlanted = true
-						if planted % 20 == 0 then task.wait() end
+						if planted % S.FRAME_SMOOTH_INTERVAL == 0 then task.wait() end
 					end
 				end
 				-- Rebuild the cache once every cell has been attempted
@@ -954,10 +1173,11 @@ task.spawn(function()
 					if cache.index <= #cache.empty then allExhausted = false break end
 				end
 				if allExhausted then plantCache = nil end
-				if not batchPlanted then task.wait(0.001) end
+				-- Always yield to the next frame so the render thread stays smooth.
+				if batchPlanted then task.wait(0.05) else task.wait(0.02) end
 			end
 		else
-			task.wait(0.001)
+			task.wait(0.1)
 		end
 	end
 end)
@@ -975,6 +1195,7 @@ S.clearAllHighlights = function()
 	end
 	table.clear(S.HighlightedCache)
 	S.highlightCount = 0
+	S.clearPlantPreviews()
 end
 S.destroyFarmingPanel = function()
 	_G.FarmingPanelDestroyed = true
@@ -1031,11 +1252,11 @@ function S.createFruitHighlight(targetObj, label, color)
 	if not targetObj or S.HighlightedCache[targetObj] then return false end
 	local hl = Instance.new("Highlight")
 	hl.Name = "FruitAutoHighlight"
-	hl.FillColor = color or Color3.fromRGB(0, 255, 127)
-	hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-	hl.FillTransparency = 0.35
+	hl.FillColor = color or Color3.fromRGB(50, 170, 120)
+	hl.OutlineColor = Color3.fromRGB(200, 205, 210)
+	hl.FillTransparency = 0.0
 	hl.OutlineTransparency = 0
-	hl.DepthMode = Enum.HighlightDepthMode.Occluded
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 	hl.Parent = targetObj
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "FruitNameTag"
@@ -1049,7 +1270,7 @@ function S.createFruitHighlight(targetObj, label, color)
 	txt.Text = label
 	txt.TextColor3 = hl.FillColor
 	txt.TextStrokeTransparency = 0
-	txt.TextSize = 10
+	txt.TextSize = 12
 	txt.Font = Enum.Font.SourceSansBold
 	txt.Parent = bb
 	bb.Parent = targetObj
@@ -1090,34 +1311,127 @@ function S.connectFruitHighlightRefresh()
 		end))
 	end
 end
-function S.applyActionHighlight(instance, textMsg, color)
+function S.applyActionHighlight(instance, textMsg, color, category, persist)
 	if not instance then return end
-	local hl = Instance.new("Highlight")
-	hl.Name = "ActionHighlight"
-	hl.FillColor = color or Color3.fromRGB(255, 50, 50)
-	hl.OutlineColor = Color3.fromRGB(255, 255, 255)
-	hl.FillTransparency = 0.3
+	local enabled = true
+	if category == "tool" then enabled = S.toolHighlightEnabled
+	elseif category == "harvest" then enabled = S.harvestHighlightEnabled
+	elseif category == "water" then enabled = S.waterHighlightEnabled
+	end
+	if not enabled then return end
+	-- Reuse an existing highlight so auto loops never flicker or leak garbage.
+	local hl = instance:FindFirstChild("ActionHighlight")
+	if not hl then
+		hl = Instance.new("Highlight")
+		hl.Name = "ActionHighlight"
+		hl.Parent = instance
+	end
+	hl.FillColor = color or Color3.fromRGB(175, 95, 85)
+	hl.OutlineColor = Color3.fromRGB(200, 205, 210)
+	hl.FillTransparency = 0.68
 	hl.OutlineTransparency = 0
-	hl.Parent = instance
-	local bb = Instance.new("BillboardGui")
-	bb.Name = "FruitNameTag"
-	bb.Size = UDim2.new(0, 150, 0, 30)
-	bb.StudsOffset = Vector3.new(0, 3, 0)
-	bb.AlwaysOnTop = true
-	local txt = Instance.new("TextLabel")
-	txt.Size = UDim2.new(1, 0, 1, 0)
-	txt.BackgroundTransparency = 1
-	txt.Text = textMsg
-	txt.TextColor3 = color or Color3.fromRGB(255, 50, 50)
-	txt.TextStrokeTransparency = 0
-	txt.TextSize = 12
-	txt.Font = Enum.Font.SourceSansBold
-	txt.Parent = bb
-	bb.Parent = instance
-	task.delay(1.5, function()
-		if hl then hl:Destroy() end
-		if bb then bb:Destroy() end
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	local bb = instance:FindFirstChild("FruitNameTag")
+	if not bb then
+		bb = Instance.new("BillboardGui")
+		bb.Name = "FruitNameTag"
+		bb.Size = UDim2.new(0, 150, 0, 30)
+		bb.StudsOffset = Vector3.new(0, 3, 0)
+		bb.AlwaysOnTop = true
+		bb.Parent = instance
+		local txt = Instance.new("TextLabel")
+		txt.Size = UDim2.new(1, 0, 1, 0)
+		txt.BackgroundTransparency = 1
+		txt.TextStrokeTransparency = 0
+		txt.TextSize = 12
+		txt.Font = Enum.Font.SourceSansBold
+		txt.Parent = bb
+	end
+	local txt = bb:FindFirstChildOfClass("TextLabel")
+	if txt then
+		txt.Text = textMsg
+		txt.TextColor3 = color or Color3.fromRGB(175, 95, 85)
+	end
+	-- Cap simultaneous action highlights so auto loops don't tank the FPS.
+	table.insert(S.activeActionHighlights, hl)
+	if #S.activeActionHighlights > S.MAX_ACTION_HIGHLIGHTS then
+		local oldest = table.remove(S.activeActionHighlights, 1)
+		if oldest and oldest.Parent then oldest:Destroy() end
+	end
+	task.delay(S.highlightDuration or 1.5, function()
+		for i, h in ipairs(S.activeActionHighlights) do
+			if h == hl then table.remove(S.activeActionHighlights, i) break end
+		end
+		if hl and hl.Parent then hl:Destroy() end
+		if bb and bb.Parent then bb:Destroy() end
 	end)
+end
+S.plantPreviewPart = nil
+S.plantPreviewParts = {}
+function S.clearPlantPreviews()
+	if S.plantPreviewParts then
+		for _, part in ipairs(S.plantPreviewParts) do
+			if part and part.Parent then part:Destroy() end
+		end
+		table.clear(S.plantPreviewParts)
+	end
+	if S.plantPreviewPart and S.plantPreviewPart.Parent then S.plantPreviewPart:Destroy() end
+	S.plantPreviewPart = nil
+end
+function S.showPlantPreview(position)
+	if not S.plantPreviewEnabled then return end
+	if not position then return end
+	if not S.PLANT_PREVIEW_PERSIST then
+		-- Legacy single moving preview (lightweight)
+		if not S.plantPreviewPart then
+			S.plantPreviewPart = Instance.new("Part")
+			S.plantPreviewPart.Name = "PlantPreview"
+			S.plantPreviewPart.Anchored = true
+			S.plantPreviewPart.CanCollide = false
+			S.plantPreviewPart.CanQuery = false
+			S.plantPreviewPart.CanTouch = false
+			S.plantPreviewPart.Size = Vector3.new(1, 0.1, 1)
+			S.plantPreviewPart.Material = Enum.Material.ForceField
+			S.plantPreviewPart.Color = Color3.fromRGB(100, 255, 180)
+			S.plantPreviewPart.Parent = S.Workspace
+			local hl = Instance.new("Highlight")
+			hl.Name = "PlantPreviewHighlight"
+			hl.FillColor = Color3.fromRGB(50, 170, 120)
+			hl.FillTransparency = 0.15
+			hl.OutlineTransparency = 0
+			hl.Parent = S.plantPreviewPart
+		end
+		S.plantPreviewPart.CFrame = CFrame.new(position)
+		S.plantPreviewPart.Transparency = 0.15
+		return
+	end
+	-- Persistent preview: one highlighted cell per target position so the
+	-- player can see exactly where each plant will be placed.
+	local part = Instance.new("Part")
+	part.Name = "PlantPreview"
+	part.Anchored = true
+	part.CanCollide = false
+	part.CanQuery = false
+	part.CanTouch = false
+	part.Size = Vector3.new(1, 0.1, 1)
+	part.Material = Enum.Material.ForceField
+	part.Color = Color3.fromRGB(100, 255, 180)
+	part.Transparency = 0
+	part.CFrame = CFrame.new(position)
+	part.Parent = S.Workspace
+	local hl = Instance.new("Highlight")
+	hl.Name = "PlantPreviewHighlight"
+	hl.FillColor = Color3.fromRGB(50, 170, 120)
+	hl.FillTransparency = 0.0
+	hl.OutlineTransparency = 0
+	hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+	hl.Parent = part
+	table.insert(S.plantPreviewParts, part)
+	-- Cap the number of live preview cells so memory stays flat.
+	if #S.plantPreviewParts > (S.PLANT_PREVIEW_CAP or 60) then
+		local old = table.remove(S.plantPreviewParts, 1)
+		if old and old.Parent then old:Destroy() end
+	end
 end
 function S.getMutationValuesFromFolder(mutationsTarget)
 	local foundValues = {}
@@ -1206,20 +1520,31 @@ function S.ensureToolEquipped(toolName)
 end
 function S.getTargetPlants()
 	local matchedPlants = {}
+	-- CUSTOM target mode with an empty/blank name must not act on anything.
+	if S.targetMode == "CUSTOM" and (not S.customTargetName or S.customTargetName:gsub("%s", "") == "") then
+		return matchedPlants
+	end
 	local query = S.getActiveTargetName():lower()
 	local plots = S.Workspace:FindFirstChild("Map")
 	if plots then plots = plots:FindFirstChild("MainIsland") end
 	if plots then plots = plots:FindFirstChild("PlayerGardens") end
 	if plots then plots = plots:FindFirstChild("Plots") end
 	if not plots then return matchedPlants end
-	for _, plot in ipairs(S.getOwnedPlots()) do
+	for _, plot in ipairs(S.getOwnedPlots(true)) do
 		local plantedSeeds = plot:FindFirstChild("PlantedSeeds")
 		if plantedSeeds then
 			for _, seed in ipairs(plantedSeeds:GetChildren()) do
 				if not _G.FarmScriptRunning then break end
 				if not S.RecentlyProcessedTool[seed] then
 					local plantKey = seed:GetAttribute("PlantKey") or seed.Name
-					if query == "all" or query == "" or string.find(plantKey:lower(), query) then
+					local passesTarget = false
+					if S.targetMode == "SELECTED IN CROP FILTER" then
+						local cleanType = S.getCleanPlantType(plantKey)
+						passesTarget = (S.cropFilterSelection and S.cropFilterSelection[cleanType] == true)
+					else
+						passesTarget = (query == "all" or query == "" or string.find(S.getPlantType(seed):lower(), query))
+					end
+					if passesTarget then
 						-- SUPER FAST CHECK FOR FAVORITE / LOCKED / CAN HARVEST MODES
 						local skipDueToLockOrFav = false
 						local harvestConditionMet = false
@@ -1254,9 +1579,23 @@ function S.getTargetPlants()
 						end
 						if skipDueToLockOrFav then continue end 
 						if not harvestConditionMet then continue end
+						-- Fruit shoveling: only target plants that have at least one harvestable fruit
+						if S.selectedMode == "Shovel" and S.shovelTargetType == "Fruit" then
+							local hasHarvestableFruit = false
+							local serverConfig = seed:FindFirstChild("ServerConfiguration")
+							local fruitsConfig = serverConfig and serverConfig:FindFirstChild("Fruits")
+							if fruitsConfig then
+								for _, fruitCfg in ipairs(fruitsConfig:GetChildren()) do
+									local ch = fruitCfg:FindFirstChild("CanHarvest")
+									local canHarvest = (ch and ch:IsA("BoolValue") and ch.Value) or (fruitCfg:FindFirstChild("GrowthPercentage") and typeof(fruitCfg.GrowthPercentage.Value) == "number" and fruitCfg.GrowthPercentage.Value >= 100)
+									if canHarvest then hasHarvestableFruit = true break end
+								end
+							end
+							if not hasHarvestableFruit then continue end
+						end
 						local skipDueToMutation = false
 						if S.avoidAllMutations and S.plantHasMutations(seed) then skipDueToMutation = true end
-						if not skipDueToMutation then table.insert(matchedPlants, {Instance = seed, PlantKey = plantKey}) end
+						if not skipDueToMutation then table.insert(matchedPlants, {Instance = seed, PlantKey = plantKey, PlantType = S.getPlantType(seed)}) end
 					end
 				end
 			end
@@ -1275,7 +1614,7 @@ function S.getHarvestableFruits(targetNameFilter, modeFilter, isHarvestCall)
 	if not plots then return results end
 	local gardenMutationCounts, specificFruitMutationCounts = {}, {}
 	local noMutationCount, hasMutationCount = 0, 0
-	for _, plot in ipairs(S.getOwnedPlots()) do
+	for _, plot in ipairs(S.getOwnedPlots(true)) do
 		local plantedSeeds = plot:FindFirstChild("PlantedSeeds")
 		if plantedSeeds then
 			for _, seed in ipairs(plantedSeeds:GetChildren()) do
@@ -1326,11 +1665,11 @@ function S.getHarvestableFruits(targetNameFilter, modeFilter, isHarvestCall)
 							local targetFruitCheck = ""
 							if modeFilter == "SPECIFIC" then
 								targetFruitCheck = S.hlMutFruitNameText
-							elseif modeFilter == "SPECIFIC NAME" or modeFilter == "SPECIFIC MUTATION" then
+							elseif modeFilter == "SPECIFIC NAME" or modeFilter == "SPECIFIC MUT" then
 								targetFruitCheck = query 
 								if modeFilter == "SPECIFIC NAME" and S.hlSpecificFruitName ~= "" then targetFruitCheck = S.hlSpecificFruitName end
 							end
-							if targetFruitCheck ~= "" and string.find(plantKey:lower(), targetFruitCheck:lower()) ~= nil then
+							if targetFruitCheck ~= "" and string.find(S.getPlantType(seed):lower(), targetFruitCheck:lower()) ~= nil then
 								local targetMutCheck = S.hlMutationValueText:lower():gsub("%s+", "")
 								local mutClean = mutName:lower():gsub("%s+", "")
 								if targetMutCheck == "" or string.find(mutClean, targetMutCheck) then specificFruitMutationCounts[mutName] = (specificFruitMutationCounts[mutName] or 0) + 1 end
@@ -1356,6 +1695,9 @@ function S.getHarvestableFruits(targetNameFilter, modeFilter, isHarvestCall)
 							local fruitNameMatch = (S.hlMutFruitNameText == "" or string.find(plantKey:lower(), S.hlMutFruitNameText:lower()) ~= nil)
 							local mutMatch = (S.hlMutationValueText == "" and anyMutFound) or (seedHasMutFilter or fruitHasMutFilter)
 							isMatch = fruitNameMatch and mutMatch
+						elseif modeFilter == "SELECTED IN CROP FILTER" then
+							local cleanType = S.getCleanPlantType(plantKey)
+							isMatch = (S.cropFilterSelection and S.cropFilterSelection[cleanType] == true)
 						end
 						local isAvoided = S.isMutationAvoided(combinedMuts)
 						local physicalFruit = nil
@@ -1391,6 +1733,9 @@ function S.getHarvestableFruits(targetNameFilter, modeFilter, isHarvestCall)
 end
 function S.getCleanPlantType(plantName)
 	return tostring(plantName or "Unknown"):gsub(":%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x", ""):gsub(":.*$", "")
+end
+function S.getPlantType(seed)
+	return tostring(seed and (seed:GetAttribute("PlantType") or seed:GetAttribute("PlantName") or seed.Name) or "Unknown")
 end
 function S.logMutationSummary(mutationCounts, plantName)
 	local plantType = S.getCleanPlantType(plantName)
@@ -1443,7 +1788,7 @@ function S.applyGrowthTimeHighlights(mode, filterName)
 			for _, seed in ipairs(planted:GetChildren()) do
 				local seedGrowthText = S.getGrowthText(seed)
 				if mode == "GROWTH ALL PLANTS" and seedGrowthText then
-					if S.createFruitHighlight(seed, string.format("%s: %s", tostring(seed:GetAttribute("PlantKey") or seed.Name), seedGrowthText), Color3.fromRGB(0, 210, 255)) then count += 1 end
+					if S.createFruitHighlight(seed, string.format("%s: %s", S.getPlantType(seed), seedGrowthText), Color3.fromRGB(80, 115, 170)) then count += 1 end
 					reportGrowth(tostring(seed:GetAttribute("PlantKey") or seed.Name), seedGrowthText)
 				end
 				local serverConfig = seed:FindFirstChild("ServerConfiguration")
@@ -1456,7 +1801,7 @@ function S.applyGrowthTimeHighlights(mode, filterName)
 							if growthText and physicalFruit and (physicalFruit:IsA("Model") or physicalFruit:IsA("BasePart")) then
 								local fruitName = S.getFruitDisplayName(fruitCfg)
 								local label = string.format("%s FRUIT: %s", fruitName, growthText)
-								if S.createFruitHighlight(physicalFruit, label, Color3.fromRGB(255, 190, 0)) then count += 1 end
+								if S.createFruitHighlight(physicalFruit, label, Color3.fromRGB(185, 155, 75)) then count += 1 end
 								reportGrowth(fruitName, growthText)
 							end
 						end
@@ -1498,7 +1843,7 @@ S.applyFruitHighlights = function()
 									local ch = fruitCfg:FindFirstChild("CanHarvest")
 									if ch and ch:IsA("BoolValue") and ch.Value then pct = 100 end
 									local label = string.format("Fruit %s: 📊%d%%📊", tostring(fruitCfg.Name), pct)
-									if S.createFruitHighlight(physicalFruit, label, Color3.fromRGB(0, 255, 127)) then
+									if S.createFruitHighlight(physicalFruit, label, Color3.fromRGB(50, 170, 120)) then
 										count += 1
 									end
 								end
@@ -1516,11 +1861,15 @@ S.applyFruitHighlights = function()
 	local allMutCounts = targetFruits.GardenMutationCounts or {}
 	local specificMutCounts = targetFruits.SpecificFruitMutationCounts or {}
 	for _, fruitData in ipairs(targetFruits) do
+		if S.highlightMode == "SELECTED IN CROP FILTER" then
+			if S.highlightFilterSub == "FRUITS" and fruitData.HasMutation then continue end
+			if S.highlightFilterSub == "MUTATIONS" and not fruitData.HasMutation then continue end
+		end
 		local targetObj = fruitData.PhysicalInstance or fruitData.SeedInstance
 		if targetObj and (targetObj:IsA("Model") or targetObj:IsA("BasePart")) then
 			local mutTag = (fruitData.MutationNameText ~= "") and ("[" .. fruitData.MutationNameText .. "] ") or ""
-			local label = mutTag .. S.getCleanPlantType(fruitData.PlantName) .. " F" .. tostring(fruitData.FruitNumber)
-			local color = fruitData.HasMutation and Color3.fromRGB(255, 140, 0) or Color3.fromRGB(0, 255, 127)
+			local label = mutTag .. S.getPlantType(fruitData.SeedInstance) .. " F" .. tostring(fruitData.FruitNumber)
+			local color = fruitData.HasMutation and Color3.fromRGB(185, 110, 70) or Color3.fromRGB(50, 170, 120)
 			S.createFruitHighlight(targetObj, label, color)
 		end
 	end
@@ -1621,7 +1970,7 @@ function S.showNameMutationFruits()
 					local allMuts = {}
 					for _, m in ipairs(muts) do table.insert(allMuts, m) end
 					for _, m in ipairs(fruitMutNames) do table.insert(allMuts, m) end
-					S.addUiLog(string.format("Plant: %s | Key: %s | Mutations: %s", seed.Name, plantKey, table.concat(allMuts, ", ")))
+					S.addUiLog(string.format("Plant: %s | Type: %s | Mutations: %s", seed.Name, S.getPlantType(seed), table.concat(allMuts, ", ")))
 				end
 			end
 		end
@@ -1630,6 +1979,10 @@ function S.showNameMutationFruits()
 end
 function S.runToolAutoLoop(updateStatus)
 	if not _G.FarmScriptRunning then return 0 end
+	if S.weatherOnlyTools and not S.isWeatherActive() then
+		updateStatus("Tool Loop: Waiting for active weather...")
+		return 0
+	end
 	local targets = S.getTargetPlants()
 	if #targets == 0 then
 		updateStatus("Tool Loop: Searching smart alternative plants...")
@@ -1646,15 +1999,38 @@ function S.runToolAutoLoop(updateStatus)
 			return 0
 		end
 		local actionText = "[COLLECTING]"
-		local actionColor = Color3.fromRGB(0, 255, 127)
+		local actionColor = Color3.fromRGB(50, 170, 120)
 		if S.selectedMode == "Shovel" then
-			actionText = "[DESTROYING]"
-			actionColor = Color3.fromRGB(255, 60, 60)
+			if S.shovelTargetType == "Fruit" then
+				actionText = "[SHOVEL FRUIT]"
+				actionColor = Color3.fromRGB(175, 95, 85)
+			else
+				actionText = "[SHOVEL PLANT]"
+				actionColor = Color3.fromRGB(185, 110, 70)
+			end
 		elseif S.selectedMode == "Scythe" then
 			actionText = "[HARVESTING]"
-			actionColor = Color3.fromRGB(255, 200, 0)
+			actionColor = Color3.fromRGB(185, 155, 75)
+		elseif S.selectedMode == "Retriever" then
+			actionText = "[RETRIEVING]"
+			actionColor = Color3.fromRGB(80, 115, 170)
 		end
-		S.applyActionHighlight(target.Instance, actionText .. " " .. target.PlantKey, actionColor)
+		S.applyActionHighlight(target.Instance, actionText .. " " .. (target.PlantType or target.PlantKey), actionColor, "tool", true)
+		if S.selectedMode == "Shovel" and S.shovelTargetType == "Fruit" then
+			local serverConfig = target.Instance:FindFirstChild("ServerConfiguration")
+			local fruitsConfig = serverConfig and serverConfig:FindFirstChild("Fruits")
+			if fruitsConfig then
+				for _, fruitCfg in ipairs(fruitsConfig:GetChildren()) do
+					local canHarvest = fruitCfg:FindFirstChild("CanHarvest")
+					if canHarvest and canHarvest:IsA("BoolValue") and canHarvest.Value == true then
+						local physicalFruit = S.getPhysicalFruit(target.Instance, fruitCfg)
+						if physicalFruit then
+							S.applyActionHighlight(physicalFruit, "[SHOVEL FRUIT] " .. S.getFruitDisplayName(fruitCfg), actionColor, "tool", true)
+						end
+					end
+				end
+			end
+		end
 		if S.selectedMode == "Shovel" and S.shovelTargetType == "Fruit" then
 			local serverConfig = target.Instance:FindFirstChild("ServerConfiguration")
 			local fruitsConfig = serverConfig and serverConfig:FindFirstChild("Fruits")
@@ -1677,10 +2053,10 @@ function S.runToolAutoLoop(updateStatus)
 		-- SUPER FAST VALIDATION CHECK (Retry until 100% harvest success)
 		local success = false
 		local attempts = 0
-		local maxAttempts = 6
+		local maxAttempts = 3
 		while not success and attempts < maxAttempts do
 			attempts = attempts + 1
-			local timeout = 0.25
+			local timeout = 0.1
 			local elapsed = 0
 			while elapsed < timeout do
 				if not _G.FarmScriptRunning then break end
@@ -1713,7 +2089,22 @@ function S.runToolAutoLoop(updateStatus)
 				elapsed = elapsed + 0.05
 			end
 			if not success and attempts < maxAttempts then
-				S.fireRemoteBatch(S.UseEquippedTool, {Action = "Use", PlantKey = target.PlantKey, TargetPlantName = target.Instance.Name, TargetType = S.selectedMode == "Shovel" and "Plant" or S.selectedMode, InputMode = "GardenTarget"}, S.automationActionMultiplier)
+				if S.selectedMode == "Shovel" and S.shovelTargetType == "Fruit" then
+					local config = target.Instance:FindFirstChild("ServerConfiguration")
+					local serverFruits = config and config:FindFirstChild("Fruits")
+					if serverFruits then
+						local remaining = serverFruits:GetChildren()
+						for index = 1, math.min(#remaining, 10) do
+							if not _G.FarmScriptRunning then break end
+							local fruitCfg = remaining[index]
+							local canHarvest = fruitCfg:FindFirstChild("CanHarvest")
+							if not (canHarvest and canHarvest:IsA("BoolValue") and canHarvest.Value == true) then continue end
+							S.fireRemoteBatch(S.UseEquippedTool, {Action = "Use", PlantKey = target.PlantKey, TargetPlantName = target.Instance.Name, TargetType = "Fruit", InputMode = "GardenTarget", FruitNumber = fruitCfg.Name}, S.automationActionMultiplier)
+						end
+					end
+				else
+					S.fireRemoteBatch(S.UseEquippedTool, {Action = "Use", PlantKey = target.PlantKey, TargetPlantName = target.Instance.Name, TargetType = S.selectedMode == "Shovel" and "Plant" or S.selectedMode, InputMode = "GardenTarget"}, S.automationActionMultiplier)
+				end
 			end
 		end
 		if success then
@@ -1729,7 +2120,7 @@ function S.runToolAutoLoop(updateStatus)
 			S.RecentlyProcessedTool[target.Instance] = nil
 		end
 		local delay = S.getDelayInSeconds()
-		if delay > 0 then task.wait(delay) end
+		if delay > 0 then task.wait(delay) else task.wait() end
 	end    
 	return count
 end
@@ -1796,6 +2187,10 @@ function S.sellAllCropsAndWait()
 end
 function S.runAutoHarvest(updateStatus)
 	if not _G.AutoHarvestRunning then return 0 end
+	if S.weatherOnlyHarvest and not S.isWeatherActive() then
+		updateStatus("Harvest: Waiting for active weather...")
+		return 0
+	end
 	if S.autoHarvestPlus and S.maxCropsSelling then return 0 end
 	if S.autoHarvestPlus then
 		S.canHarvestMode = "TRUE"
@@ -1811,28 +2206,103 @@ function S.runAutoHarvest(updateStatus)
 		return 0
 	end
 	local count = 0
+	local processedKeys = {}
+	local function fruitPosition(fd)
+		if fd.PhysicalInstance then
+			local ok, pos = pcall(function() return fd.PhysicalInstance:GetPivot().Position end)
+			if ok and pos then return pos end
+		end
+		if fd.SeedInstance then
+			local ok, pos = pcall(function() return fd.SeedInstance:GetPivot().Position end)
+			if ok and pos then return pos end
+		end
+		return nil
+	end
 	for i, fruitData in ipairs(fruits) do
 		if not _G.AutoHarvestRunning then break end
 		if S.autoHarvestPlus and S.maxCropsSelling then break end
-		S.RecentlyProcessedHarvest[fruitData.UniqueKey] = true
-		local targetObj = fruitData.PhysicalInstance or fruitData.SeedInstance
-		S.applyActionHighlight(targetObj, "[COLLECTING] " .. fruitData.PlantName, Color3.fromRGB(0, 255, 127))
-		if fruitData.PhysicalInstance then S.teleportToInstance(fruitData.PhysicalInstance) elseif fruitData.SeedInstance then S.teleportToInstance(fruitData.SeedInstance) end
-		S.fireRemoteBatch(S.HarvestCropRemote, fruitData.PlantKey, S.automationActionMultiplier, tostring(fruitData.FruitNumber))
-		if i == 1 then
-			S.addUiLog(string.format("✅ [HARVEST x%d] Batch sent: %s | Fruit #%s", S.automationActionMultiplier, fruitData.PlantName, tostring(fruitData.FruitNumber)))
+		if processedKeys[fruitData.UniqueKey] then continue end
+		-- NEARBY EXPANSION: harvest this fruit + all nearby harvestable fruits together
+		local batch = {fruitData}
+		processedKeys[fruitData.UniqueKey] = true
+		local centerPos = fruitPosition(fruitData)
+		if centerPos then
+			for _, other in ipairs(fruits) do
+				if not processedKeys[other.UniqueKey] then
+					local otherPos = fruitPosition(other)
+					if otherPos and (otherPos - centerPos).Magnitude <= S.harvestNearbyRadius then
+						table.insert(batch, other)
+						processedKeys[other.UniqueKey] = true
+					end
+				end
+			end
 		end
-		if S.autoHarvestPlus and S.maxCropsReached and not S.maxCropsSelling then
-			task.spawn(S.sellAllCropsAndWait)
-			break
+		for _, fd in ipairs(batch) do
+			if not _G.AutoHarvestRunning then break end
+			if S.autoHarvestPlus and S.maxCropsSelling then break end
+			local targetObj = fd.PhysicalInstance or fd.SeedInstance
+			local hlTarget = fd.SeedInstance or targetObj
+			S.applyActionHighlight(hlTarget, "[COLLECTED] " .. S.getPlantType(fd.SeedInstance), Color3.fromRGB(50, 170, 120), "harvest", true)
+			if fd.PhysicalInstance then S.teleportToInstance(fd.PhysicalInstance) elseif fd.SeedInstance then S.teleportToInstance(fd.SeedInstance) end
+			S.fireRemoteBatch(S.HarvestCropRemote, fd.PlantKey, S.automationActionMultiplier, tostring(fd.FruitNumber))
+			if i == 1 then
+				S.addUiLog(string.format("✅ [HARVEST x%d] Batch: %s | Fruit #%s", S.automationActionMultiplier, fd.PlantName, tostring(fd.FruitNumber)))
+			end
+			-- SUPER FAST VALIDATION: confirm the fruit was actually harvested before marking it processed
+			local success = false
+			local attempts = 0
+			local maxAttempts = 3
+			while not success and attempts < maxAttempts do
+				attempts = attempts + 1
+				local timeout = 0.1
+				local elapsed = 0
+				while elapsed < timeout do
+					if not _G.AutoHarvestRunning then break end
+					local harvested = false
+					local seed = fd.SeedInstance
+					if seed and seed.Parent then
+						local serverConfig = seed:FindFirstChild("ServerConfiguration")
+						local fruitsConfig = serverConfig and serverConfig:FindFirstChild("Fruits")
+						if fruitsConfig then
+							local fruitCfg = fruitsConfig:FindFirstChild(fd.FruitNumber)
+							if not fruitCfg then
+								harvested = true
+							else
+								local ch = fruitCfg:FindFirstChild("CanHarvest")
+								if ch and ch:IsA("BoolValue") and not ch.Value then harvested = true end
+							end
+						else
+							harvested = true
+						end
+					else
+						harvested = true
+					end
+					if harvested then success = true break end
+					task.wait()
+					elapsed = elapsed + 0.05
+				end
+				if not success and attempts < maxAttempts then
+					S.fireRemoteBatch(S.HarvestCropRemote, fd.PlantKey, S.automationActionMultiplier, tostring(fd.FruitNumber))
+				end
+			end
+			if success then
+				S.RecentlyProcessedHarvest[fd.UniqueKey] = true
+				count = count + 1
+			else
+				S.RecentlyProcessedHarvest[fd.UniqueKey] = nil
+				S.addUiLog(string.format("⚠️ [HARVEST] Failed to harvest %s | Fruit #%s. Will retry next loop.", fd.PlantName, tostring(fd.FruitNumber)))
+			end
+			if S.autoHarvestPlus and S.maxCropsReached and not S.maxCropsSelling then
+				task.spawn(S.sellAllCropsAndWait)
+				break
+			end
+			if S.actionLimit > 0 and count >= S.actionLimit then
+				if S.stopHarvestLoop then S.stopHarvestLoop() end
+				S.addUiLog("🛑 Harvest Limit Reached (" .. S.actionLimit .. "). Auto Harvest Stopped.")
+				break
+			end
+			if i % S.REMOTE_BATCH_SIZE == 0 then task.wait() end
 		end
-		count = count + 1
-		if S.actionLimit > 0 and count >= S.actionLimit then
-			if S.stopHarvestLoop then S.stopHarvestLoop() end
-			S.addUiLog("🛑 Harvest Limit Reached (" .. S.actionLimit .. "). Auto Harvest Stopped.")
-			break
-		end
-		if i % S.REMOTE_BATCH_SIZE == 0 then task.wait() end
 	end
 	return count
 end
@@ -1844,6 +2314,227 @@ S.FarmingVisible, S.LogsVisible, updateStatus, S.TabPages = nil
 function S.buildFarmingShell(parentPage)
 	if not parentPage then return end
 	S.AutoFarmMainFrame = Instance.new("Frame")
+	-- ===== REUSABLE CROP FILTER PANEL =====
+	local RARITY_ORDER = {"All", "Ethereal", "Mythical", "Legendary", "Epic", "Rare", "Uncommon", "Common"}
+	local function cleanCropName(name)
+		return tostring(name or ""):gsub(":%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x", "")
+	end
+	local function getCropList()
+		local crops = {}
+		local seen = {}
+		local owned = {}
+		local ok, hc = pcall(function()
+			return require(game:GetService("ReplicatedStorage").Modules.ItemDisplayDataCategories.HarvestedCrops)
+		end)
+		if ok and type(hc) == "table" then
+			for name, cfg in pairs(hc) do
+				if type(cfg) == "table" then
+					local clean = cleanCropName(name)
+					if not seen[clean] then
+						seen[clean] = true
+						table.insert(crops, {Name = clean, Rarity = tostring(cfg.Rarity or "Common"), Owned = false})
+					end
+				end
+			end
+		end
+		local ws = game:GetService("Workspace")
+		local map = ws:FindFirstChild("Map")
+		local mi = map and map:FindFirstChild("MainIsland")
+		local pg = mi and mi:FindFirstChild("PlayerGardens")
+		if pg then
+			local plots = pg:FindFirstChild("Plots")
+			if plots then
+				for _, plot in ipairs(plots:GetChildren()) do
+					local ps = plot:FindFirstChild("PlantedSeeds")
+					if ps then
+						for _, seed in ipairs(ps:GetChildren()) do
+							local clean = cleanCropName(seed.Name)
+							if clean ~= "" then
+								owned[clean] = true
+								if not seen[clean] then
+									seen[clean] = true
+									table.insert(crops, {Name = clean, Rarity = "Common", Owned = true})
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+		for _, crop in ipairs(crops) do
+			if owned[crop.Name] then crop.Owned = true end
+		end
+		table.sort(crops, function(a, b)
+			local ra, rb = 0, 0
+			for i, r in ipairs(RARITY_ORDER) do
+				if a.Rarity == r then ra = i end
+				if b.Rarity == r then rb = i end
+			end
+			if ra ~= rb then return ra < rb end
+			return a.Name < b.Name
+		end)
+		return crops
+	end
+	S.getCropList = getCropList
+	function S.buildCropFilterPanel(parent, yOffset, height)
+		local frame = Instance.new("Frame")
+		frame.Name = "CropFilterPanel"
+		frame.Size = UDim2.new(1, 0, 0, height or 170)
+		frame.Position = UDim2.new(0, 0, 0, yOffset or 0)
+		frame.BackgroundColor3 = Color3.fromRGB(14, 16, 22)
+		frame.BorderSizePixel = 0
+		frame.Parent = parent
+		Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 10)
+		local title = Instance.new("TextLabel")
+		title.Size = UDim2.new(1, 0, 0, 16)
+		title.Position = UDim2.new(0, 8, 0, 3)
+		title.Text = "CROP FILTER (rarity / EXIST) — tap crops to toggle"
+		title.TextColor3 = Color3.fromRGB(80, 115, 170)
+		title.TextSize = 11
+		title.Font = Enum.Font.GothamBold
+		title.TextXAlignment = Enum.TextXAlignment.Left
+		title.BackgroundTransparency = 1
+		title.Parent = frame
+		local sortFrame = Instance.new("Frame")
+		sortFrame.Size = UDim2.new(1, 0, 0, 20)
+		sortFrame.Position = UDim2.new(0, 0, 0, 20)
+		sortFrame.BackgroundTransparency = 1
+		sortFrame.Parent = frame
+		local sortBtns = {}
+		local selectedType = "All"
+		local selectedRarity = nil
+		local sortOptions = {"All", "Ethereal", "Mythical", "Legendary", "Epic", "Rare", "Uncommon", "Common", "Exist"}
+		local scroll = Instance.new("ScrollingFrame")
+		scroll.Size = UDim2.new(1, -8, 1, -44)
+		scroll.Position = UDim2.new(0, 4, 0, 42)
+		scroll.BackgroundTransparency = 1
+		scroll.ScrollBarThickness = 3
+		scroll.ScrollBarImageColor3 = Color3.fromRGB(70, 165, 115)
+		scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+		scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		scroll.Parent = frame
+		local layout = Instance.new("UIListLayout")
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(0, 2)
+		layout.Parent = scroll
+		S.cropFilterSelection = S.cropFilterSelection or {}
+		local selectedCrops = S.cropFilterSelection
+		local function refresh()
+			for _, child in ipairs(scroll:GetChildren()) do
+				if child:IsA("Frame") then child:Destroy() end
+			end
+			local crops = getCropList()
+			-- Count crops per rarity (owned counts when Exist mode is active)
+			local counts = {}
+			for _, r in ipairs(sortOptions) do counts[r] = 0 end
+			local ownedTotal = 0
+			for _, crop in ipairs(crops) do
+				if crop.Owned then ownedTotal = ownedTotal + 1 end
+				if selectedType == "Exist" then
+					if crop.Owned then
+						counts["All"] = counts["All"] + 1
+						if counts[crop.Rarity] then counts[crop.Rarity] = counts[crop.Rarity] + 1 end
+					end
+				else
+					counts["All"] = counts["All"] + 1
+					if counts[crop.Rarity] then counts[crop.Rarity] = counts[crop.Rarity] + 1 end
+				end
+			end
+			counts["Exist"] = ownedTotal
+			for r, btn in pairs(sortBtns) do
+				local cl = btn:FindFirstChild("CountLabel")
+				if cl then cl.Text = tostring(counts[r] or 0) end
+			end
+			for _, crop in ipairs(crops) do
+				local show = false
+				if selectedRarity then
+					show = (crop.Rarity == selectedRarity)
+				else
+					show = true
+				end
+				if selectedType == "Exist" then show = show and crop.Owned end
+				if show then
+					local row = Instance.new("Frame")
+					row.Size = UDim2.new(1, 0, 0, 20)
+					row.BackgroundColor3 = Color3.fromRGB(30, 23, 32)
+					row.BorderSizePixel = 0
+					row.Parent = scroll
+					Instance.new("UICorner", row).CornerRadius = UDim.new(0, 4)
+					local toggle = Instance.new("TextButton")
+					toggle.Size = UDim2.new(0, 34, 0, 16)
+					toggle.Position = UDim2.new(0, 4, 0.5, -8)
+					toggle.BackgroundColor3 = selectedCrops[crop.Name] and Color3.fromRGB(70, 165, 115) or Color3.fromRGB(40, 44, 56)
+					toggle.Text = selectedCrops[crop.Name] and "ON" or "OFF"
+					toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+					toggle.TextSize = 9
+					toggle.Font = Enum.Font.GothamBold
+					toggle.AutoButtonColor = false
+					toggle.Parent = row
+					Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 4)
+					toggle.MouseButton1Click:Connect(function()
+						selectedCrops[crop.Name] = not selectedCrops[crop.Name]
+						toggle.BackgroundColor3 = selectedCrops[crop.Name] and Color3.fromRGB(70, 165, 115) or Color3.fromRGB(40, 44, 56)
+						toggle.Text = selectedCrops[crop.Name] and "ON" or "OFF"
+					end)
+					local lbl = Instance.new("TextLabel")
+					lbl.Size = UDim2.new(1, -40, 0, 20)
+					lbl.Position = UDim2.new(0, 42, 0, 0)
+					lbl.BackgroundTransparency = 1
+					lbl.Text = crop.Name .. "  [" .. crop.Rarity .. "]" .. (crop.Owned and "  ✓OWNED" or "")
+					lbl.TextColor3 = crop.Owned and Color3.fromRGB(120, 220, 150) or Color3.fromRGB(170, 200, 220)
+					lbl.TextSize = 11
+					lbl.Font = Enum.Font.Code
+					lbl.TextXAlignment = Enum.TextXAlignment.Left
+					lbl.Parent = row
+				end
+			end
+		end
+		for i, r in ipairs(sortOptions) do
+			local btn = Instance.new("TextButton")
+			btn.Size = UDim2.new(1 / 9, -2, 1, 0)
+			btn.Position = UDim2.new((i - 1) * (1 / 9), 0, 0, 0)
+			btn.BackgroundColor3 = (r == "All") and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+			btn.TextColor3 = Color3.fromRGB(160, 168, 184)
+			btn.Text = r
+			btn.TextSize = 7
+			btn.Font = Enum.Font.GothamBold
+			btn.AutoButtonColor = false
+			btn.TextYAlignment = Enum.TextYAlignment.Top
+			btn.Parent = sortFrame
+			Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+			local countLbl = Instance.new("TextLabel")
+			countLbl.Name = "CountLabel"
+			countLbl.Size = UDim2.new(1, -4, 0, 9)
+			countLbl.Position = UDim2.new(0, 2, 1, -10)
+			countLbl.BackgroundTransparency = 1
+			countLbl.TextColor3 = Color3.fromRGB(120, 200, 160)
+			countLbl.Text = "0"
+			countLbl.TextSize = 7
+			countLbl.Font = Enum.Font.GothamBold
+			countLbl.Parent = btn
+			sortBtns[r] = btn
+			btn.MouseButton1Click:Connect(function()
+				if r == "All" or r == "Exist" then
+					selectedType = r
+					selectedRarity = nil
+				else
+					selectedRarity = r
+				end
+				for name, b in pairs(sortBtns) do
+					local active = false
+					if name == "All" or name == "Exist" then
+						active = (name == selectedType and selectedRarity == nil)
+					else
+						active = (name == selectedRarity)
+					end
+					b.BackgroundColor3 = active and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+				end
+				refresh()
+			end)
+		end
+		refresh()
+		return frame
+	end
 	S.AutoFarmMainFrame.Name = "FarmingPanelRoot"
 	S.AutoFarmMainFrame.Size = UDim2.fromScale(1, 1)
 	S.AutoFarmMainFrame.Position = UDim2.fromScale(0, 0)
@@ -1866,7 +2557,7 @@ function S.buildFarmingShell(parentPage)
 	S.TabPages = {}
 	local tabOrder = {"Tools", "Harvest", "Highlight", "Plant", "Utility", "Logs"}
 	local tabButtons = {}
-	local activeTabColor = Color3.fromRGB(72, 210, 140)
+	local activeTabColor = Color3.fromRGB(70, 165, 115)
 	local idleTabColor = Color3.fromRGB(22, 26, 36)
 	local PageContainer = Instance.new("Frame")
 	PageContainer.Name = "PageContainer"
@@ -1885,7 +2576,7 @@ function S.buildFarmingShell(parentPage)
 		page.BackgroundTransparency = 0.05
 		page.BorderSizePixel = 0
 		page.ScrollBarThickness = 2
-		page.ScrollBarImageColor3 = Color3.fromRGB(72, 210, 140)
+		page.ScrollBarImageColor3 = Color3.fromRGB(70, 165, 115)
 		page.CanvasSize = UDim2.new(0, 0, 0, canvasHeight or 520)
 		page.Visible = false
 		page.ClipsDescendants = true
@@ -1899,19 +2590,19 @@ function S.buildFarmingShell(parentPage)
 		S.TabPages[tabName] = page
 		return page
 	end
-	createTabPage("Tools", 244)
-	createTabPage("Harvest", 316)
-	createTabPage("Highlight", 130)
-	createTabPage("Plant", 173)
-	createTabPage("Utility", 331)
-	createTabPage("Logs", 431)
+	createTabPage("Tools", 500)
+	createTabPage("Harvest", 480)
+	createTabPage("Highlight", 540)
+	createTabPage("Plant", 710)
+	createTabPage("Utility", 260)
+	createTabPage("Logs", 400)
 	local function switchTab(tabName)
 		for name, page in pairs(S.TabPages) do
 			page.Visible = name == tabName
 		end
 		for name, btn in pairs(tabButtons) do
 			btn.BackgroundColor3 = name == tabName and activeTabColor or idleTabColor
-			btn.TextColor3 = name == tabName and Color3.fromRGB(12, 14, 20) or Color3.fromRGB(160, 168, 184)
+			btn.TextColor3 = name == tabName and Color3.fromRGB(200, 205, 210) or Color3.fromRGB(160, 168, 184)
 		end
 	end
 	for _, tabName in ipairs(tabOrder) do
@@ -1957,7 +2648,7 @@ function S.buildFarmingShell(parentPage)
 	S.StatusLabel.Size = UDim2.new(1, -8, 1, 0)
 	S.StatusLabel.Position = UDim2.new(0, 4, 0, 0)
 	S.StatusLabel.Text = "Idle"
-	S.StatusLabel.TextColor3 = Color3.fromRGB(72, 210, 140)
+	S.StatusLabel.TextColor3 = Color3.fromRGB(70, 165, 115)
 	S.StatusLabel.TextSize = 16
 	S.StatusLabel.Font = Enum.Font.GothamMedium
 	S.StatusLabel.TextXAlignment = Enum.TextXAlignment.Center
@@ -1965,7 +2656,7 @@ function S.buildFarmingShell(parentPage)
 	S.StatusLabel.Parent = StatusBar
 	updateStatus = function(msg) S.StatusLabel.Text = msg end
 	task.spawn(function()
-		while task.wait(0.1) do
+		while task.wait(0.05) do
 			if S.autoWateringActive then
 				S.PerformanceState.SetWateringActive(true, S.wateringGrowthBonus)
 				local targets = {}
@@ -1993,43 +2684,86 @@ function S.buildFarmingShell(parentPage)
 						}
 						S.UseEquippedTool:FireServer(unpack(waterArgs))
 					end
-					task.wait(0.25)
+					task.wait(0.05)
 				else
-					local plots = S.getOwnedPlots()
+					local plots = S.getOwnedPlots(true)
 					for _, plot in ipairs(plots) do
 						local planted = plot:FindFirstChild("PlantedSeeds")
 						if planted then
 							for _, crop in ipairs(planted:GetChildren()) do
 								local plantType = tostring(crop:GetAttribute("PlantType") or crop:GetAttribute("PlantName") or crop.Name)
-								local passesNameFilter = S.wateringMode ~= "SPECIFIC" or (S.wateringSpecificName ~= "" and string.find(plantType:lower(), S.wateringSpecificName, 1, true))
-								if passesNameFilter then
-									local isGrown = S.getCropPercent(crop) >= 100
-									if not isGrown then
-										local serverConfig = crop:FindFirstChild("ServerConfiguration")
-										local fruitsConfig = serverConfig and serverConfig:FindFirstChild("Fruits")
-										if fruitsConfig then
+								local serverConfig = crop:FindFirstChild("ServerConfiguration")
+								local fruitsConfig = serverConfig and serverConfig:FindFirstChild("Fruits")
+								if S.wateringTargetType == "Fruit" and fruitsConfig then
+									-- Water EVERY fruit individually
+									for _, fruitCfg in ipairs(fruitsConfig:GetChildren()) do
+										local fruitName = S.getFruitDisplayName(fruitCfg)
+										local nameMatch = string.find(plantType:lower(), S.wateringSpecificName, 1, true) ~= nil or string.find(fruitName:lower(), S.wateringSpecificName, 1, true) ~= nil or string.find(fruitCfg.Name:lower(), S.wateringSpecificName, 1, true) ~= nil
+										local passesNameFilter = S.wateringMode ~= "SPECIFIC" or (S.wateringSpecificName ~= "" and nameMatch)
+										if passesNameFilter then
+											local isGrown = false
+											local ch = fruitCfg:FindFirstChild("CanHarvest")
+											if ch and ch:IsA("BoolValue") and ch.Value then isGrown = true end
+											if isGrown then
+												fullyGrownCount += 1
+												table.insert(fullyGrownNames, plantType)
+											end
+											local shouldWater = false
+											if S.wateringMode == "SPECIFIC" then
+												shouldWater = (S.wateringSpecificName ~= "" and passesNameFilter) and not isGrown
+											elseif S.wateringMode == "POSITION" then
+												shouldWater = false
+											elseif S.wateringMode == "NOT_GROWN" then
+												shouldWater = not isGrown
+											elseif S.wateringMode == "ALL FRUITS" then
+												shouldWater = not isGrown
+											elseif S.wateringMode == "ALL" then
+												shouldWater = not isGrown
+											elseif S.wateringMode == "IN CROP FILTER" then
+												local cleanType = S.getCleanPlantType(plantType)
+												shouldWater = (S.cropFilterSelection and S.cropFilterSelection[cleanType] == true)
+											end
+											if shouldWater then
+												local physicalFruit = S.getPhysicalFruit(crop, fruitCfg)
+												local targetInst = physicalFruit or fruitCfg
+												local pos = physicalFruit and physicalFruit:GetPivot().Position or crop:GetPivot().Position
+												table.insert(targets, {Instance = targetInst, Position = pos, IsGrown = isGrown})
+											end
+										end
+									end
+								else
+									local nameMatch = string.find(plantType:lower(), S.wateringSpecificName, 1, true) ~= nil
+									local passesNameFilter = S.wateringMode ~= "SPECIFIC" or (S.wateringSpecificName ~= "" and nameMatch)
+									if passesNameFilter then
+										local isGrown = S.getCropPercent(crop) >= 100
+										if not isGrown and fruitsConfig then
 											for _, fruitCfg in ipairs(fruitsConfig:GetChildren()) do
 												local ch = fruitCfg:FindFirstChild("CanHarvest")
 												if ch and ch:IsA("BoolValue") and ch.Value then isGrown = true break end
 											end
 										end
-									end
-									if isGrown then
-										fullyGrownCount += 1
-										table.insert(fullyGrownNames, plantType)
-									end
-									local shouldWater = not isGrown
-									if S.wateringMode == "SPECIFIC" then
-										shouldWater = S.wateringSpecificName ~= "" and passesNameFilter
-									elseif S.wateringMode == "POSITION" then
-										shouldWater = false
-									elseif S.wateringMode == "TP_NOT_GROWN" then
-										shouldWater = not isGrown
-									elseif S.waterAllMode == "ALL" then
-										shouldWater = true
-									end
-									if shouldWater then
-										table.insert(targets, {Instance = crop, Position = crop:GetPivot().Position, IsGrown = isGrown})
+										if isGrown then
+											fullyGrownCount += 1
+											table.insert(fullyGrownNames, plantType)
+										end
+										local shouldWater = false
+										if S.wateringMode == "SPECIFIC" then
+											shouldWater = (S.wateringSpecificName ~= "" and passesNameFilter) and not isGrown
+										elseif S.wateringMode == "POSITION" then
+											shouldWater = false
+										elseif S.wateringMode == "NOT_GROWN" then
+											shouldWater = not isGrown
+										elseif S.wateringMode == "ALL FRUITS" then
+											shouldWater = not isGrown
+										elseif S.wateringMode == "ALL" then
+											shouldWater = not isGrown
+										elseif S.wateringMode == "IN CROP FILTER" then
+											local cleanType = S.getCleanPlantType(plantType)
+											shouldWater = (S.cropFilterSelection and S.cropFilterSelection[cleanType] == true)
+										end
+										if shouldWater then
+											table.insert(targets, {Instance = crop, Position = crop:GetPivot().Position, IsGrown = isGrown})
+										end
 									end
 								end
 							end
@@ -2069,8 +2803,8 @@ function S.buildFarmingShell(parentPage)
 					end
 				end
 				for index, target in ipairs(targets) do
-					if index > 20 then break end
-					if S.wateringMode == "TP_NOT_GROWN" then
+					if index > 100 then break end
+					if S.wateringTpMode == "TP_TO_PLANT" then
 						local character = S.LocalPlayer.Character
 						if character then
 							character:PivotTo(CFrame.new(target.Position + Vector3.new(0, 3, 0)))
@@ -2078,26 +2812,26 @@ function S.buildFarmingShell(parentPage)
 						end
 					end
 					if not S.autoWateringActive then break end
-					local waterActions = math.min(S.automationActionMultiplier, 3)
+					local waterActions = math.min(S.automationActionMultiplier, 5)
 					S.growthSpeedMultiplier = S.PerformanceState.GetGrowthSpeedMultiplier()
 					if S.autoWateringActive then
 						S.fireRemoteBatch(S.UseEquippedTool, {TargetPosition = target.Position, Action = "Water", TargetInstance = target.Instance, Material = "Plastic", InputMode = "WorldPoint", TargetNormal = Vector3.yAxis}, waterActions)
 					end
 					local plantType = tostring(target.Instance:GetAttribute("PlantType") or target.Instance:GetAttribute("PlantName") or target.Instance.Name)
-					S.applyActionHighlight(target.Instance, "[WATERING x" .. S.automationActionMultiplier .. "] " .. plantType, Color3.fromRGB(0, 170, 255))
+					S.applyActionHighlight(target.Instance, "[WATERING x" .. S.automationActionMultiplier .. "] " .. plantType, Color3.fromRGB(255, 170, 0), "water")
 					if index == 1 then
 						S.addUiLog(string.format("Auto water batch: %s at (%.2f, %.2f, %.2f)", plantType, target.Position.X, target.Position.Y, target.Position.Z))
 					end
 					task.wait(S.getAutomationDelay(S.wateringSpeedInput, 0.01))
 				end
-				task.wait(math.max(S.getAutomationDelay(S.wateringSpeedInput, 0.05), 0.25))
+				task.wait(math.max(S.getAutomationDelay(S.wateringSpeedInput, 0.01), 0.01))
 			else
 				S.PerformanceState.SetWateringActive(false, S.wateringGrowthBonus)
 			end
 		end
 	end)
 	task.spawn(function()
-		while task.wait(S.MAX_AUTOMATION_DELAY) do
+		while task.wait(0.1) do
 			if S.autoDeleteSpecific and S.autoDeleteName ~= "" then
 				local inventory = S.PlayerGui:FindFirstChild("InventoryGui")
 				local main = inventory and inventory:FindFirstChild("MainFrame")
@@ -2135,25 +2869,35 @@ function S.buildFarmingShell(parentPage)
 	TargetBtnFrame.BackgroundTransparency = 1
 	TargetBtnFrame.Parent = S.Body
 	local TargetBtnCustom = Instance.new("TextButton")
-	TargetBtnCustom.Size = UDim2.new(0.48, 0, 1, 0)
+	TargetBtnCustom.Size = UDim2.new(0.32, 0, 1, 0)
 	TargetBtnCustom.Position = UDim2.new(0, 0, 0, 0)
-	TargetBtnCustom.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+	TargetBtnCustom.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
 	TargetBtnCustom.TextColor3 = Color3.fromRGB(255, 255, 255)
 	TargetBtnCustom.Text = "CUSTOM TARGET"
-	TargetBtnCustom.TextSize = 10
+	TargetBtnCustom.TextSize = 9
 	TargetBtnCustom.Font = Enum.Font.SourceSansBold
 	TargetBtnCustom.Parent = TargetBtnFrame
 	Instance.new("UICorner", TargetBtnCustom).CornerRadius = UDim.new(0, 4)
 	local TargetBtnAll = Instance.new("TextButton")
-	TargetBtnAll.Size = UDim2.new(0.48, 0, 1, 0)
-	TargetBtnAll.Position = UDim2.new(0.52, 0, 0, 0)
+	TargetBtnAll.Size = UDim2.new(0.32, 0, 1, 0)
+	TargetBtnAll.Position = UDim2.new(0.34, 0, 0, 0)
 	TargetBtnAll.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	TargetBtnAll.TextColor3 = Color3.fromRGB(255, 255, 255)
 	TargetBtnAll.Text = "ALL PLANTS"
-	TargetBtnAll.TextSize = 10
+	TargetBtnAll.TextSize = 9
 	TargetBtnAll.Font = Enum.Font.SourceSansBold
 	TargetBtnAll.Parent = TargetBtnFrame
 	Instance.new("UICorner", TargetBtnAll).CornerRadius = UDim.new(0, 4)
+	local TargetBtnInFilter = Instance.new("TextButton")
+	TargetBtnInFilter.Size = UDim2.new(0.32, 0, 1, 0)
+	TargetBtnInFilter.Position = UDim2.new(0.68, 0, 0, 0)
+	TargetBtnInFilter.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+	TargetBtnInFilter.TextColor3 = Color3.fromRGB(255, 255, 255)
+	TargetBtnInFilter.Text = "IN CROP FILTER"
+	TargetBtnInFilter.TextSize = 9
+	TargetBtnInFilter.Font = Enum.Font.SourceSansBold
+	TargetBtnInFilter.Parent = TargetBtnFrame
+	Instance.new("UICorner", TargetBtnInFilter).CornerRadius = UDim.new(0, 4)
 	local CustomTargetInput = Instance.new("TextBox")
 	CustomTargetInput.Size = UDim2.new(1, 0, 0, 22)
 	CustomTargetInput.Position = UDim2.new(0, 0, 0, 42)
@@ -2167,8 +2911,9 @@ function S.buildFarmingShell(parentPage)
 	Instance.new("UICorner", CustomTargetInput).CornerRadius = UDim.new(0, 5)
 	TargetBtnCustom.MouseButton1Click:Connect(function()
 		S.targetMode = "CUSTOM"
-		TargetBtnCustom.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+		TargetBtnCustom.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
 		TargetBtnAll.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+		TargetBtnInFilter.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		CustomTargetInput.Visible = true
 		S.addUiLog("🎯 Tool Target Mode ➔ CUSTOM ('" .. S.customTargetName .. "')")
 	end)
@@ -2176,8 +2921,17 @@ function S.buildFarmingShell(parentPage)
 		S.targetMode = "ALL PLANTS"
 		TargetBtnAll.BackgroundColor3 = Color3.fromRGB(0, 150, 130)
 		TargetBtnCustom.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+		TargetBtnInFilter.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		CustomTargetInput.Visible = false
 		S.addUiLog("🎯 Tool Target Mode ➔ ALL PLANTS")
+	end)
+	TargetBtnInFilter.MouseButton1Click:Connect(function()
+		S.targetMode = "SELECTED IN CROP FILTER"
+		TargetBtnInFilter.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
+		TargetBtnCustom.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+		TargetBtnAll.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+		CustomTargetInput.Visible = false
+		S.addUiLog("🎯 Tool Mode ➔ SELECTED IN CROP FILTER")
 	end)
 	CustomTargetInput.FocusLost:Connect(function() S.customTargetName = CustomTargetInput.Text end)
 	local SpeedInput = Instance.new("TextBox")
@@ -2208,7 +2962,7 @@ function S.buildFarmingShell(parentPage)
 	local ShovelTargetPlantBtn = Instance.new("TextButton")
 	ShovelTargetPlantBtn.Size = UDim2.new(0.24, 0, 0, 22)
 	ShovelTargetPlantBtn.Position = UDim2.new(0, 0, 0, 120)
-	ShovelTargetPlantBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+	ShovelTargetPlantBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
 	ShovelTargetPlantBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	ShovelTargetPlantBtn.Text = "SHOVEL: PLANT"
 	ShovelTargetPlantBtn.TextSize = 8
@@ -2217,7 +2971,7 @@ function S.buildFarmingShell(parentPage)
 	Instance.new("UICorner", ShovelTargetPlantBtn).CornerRadius = UDim.new(0, 5)
 	ShovelTargetPlantBtn.MouseButton1Click:Connect(function()
 		S.shovelTargetType = "Plant"
-		ShovelTargetPlantBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+		ShovelTargetPlantBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
 		ShovelTargetFruitBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		S.addUiLog("Shovel TargetType: Plant")
 	end)
@@ -2233,7 +2987,7 @@ function S.buildFarmingShell(parentPage)
 	Instance.new("UICorner", ShovelTargetFruitBtn).CornerRadius = UDim.new(0, 5)
 	ShovelTargetFruitBtn.MouseButton1Click:Connect(function()
 		S.shovelTargetType = "Fruit"
-		ShovelTargetFruitBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+		ShovelTargetFruitBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
 		ShovelTargetPlantBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		S.addUiLog("Shovel TargetType: Fruit")
 	end)
@@ -2247,7 +3001,7 @@ function S.buildFarmingShell(parentPage)
 		local btn = Instance.new("TextButton")
 		btn.Size = UDim2.new(0.31, 0, 1, 0)
 		btn.Position = UDim2.new((i - 1) * 0.345, 0, 0, 0)
-		btn.BackgroundColor3 = (S.selectedMode == toolName) and Color3.fromRGB(0, 122, 255) or Color3.fromRGB(28, 32, 42)
+		btn.BackgroundColor3 = (S.selectedMode == toolName) and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
 		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
 		btn.Text = toolName
 		btn.TextSize = 11
@@ -2257,7 +3011,7 @@ function S.buildFarmingShell(parentPage)
 		toolBtns[toolName] = btn
 		btn.MouseButton1Click:Connect(function()
 			S.selectedMode = toolName
-			for name, b in pairs(toolBtns) do b.BackgroundColor3 = (name == S.selectedMode) and Color3.fromRGB(0, 122, 255) or Color3.fromRGB(28, 32, 42) end
+			for name, b in pairs(toolBtns) do b.BackgroundColor3 = (name == S.selectedMode) and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42) end
 			S.addUiLog("🛠️ Selected Active Tool: " .. S.selectedMode)
 		end)
 	end
@@ -2267,25 +3021,25 @@ function S.buildFarmingShell(parentPage)
 	local CanHarvestFilterBtn = Instance.new("TextButton")
 	CanHarvestFilterBtn.Size = UDim2.new(0.48, 0, 0, 22)
 	CanHarvestFilterBtn.Position = UDim2.new(0.52, 0, 0, 120)
-	CanHarvestFilterBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+	CanHarvestFilterBtn.BackgroundColor3 = Color3.fromRGB(70, 160, 100)
 	CanHarvestFilterBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	CanHarvestFilterBtn.Text = "CANHARVEST: TRUE"
+	CanHarvestFilterBtn.Text = "CAN HARVEST: TRUE"
 	CanHarvestFilterBtn.TextSize = 9
 	CanHarvestFilterBtn.Font = Enum.Font.SourceSansBold
 	CanHarvestFilterBtn.Parent = S.Body
 	Instance.new("UICorner", CanHarvestFilterBtn).CornerRadius = UDim.new(0, 5)
 	CanHarvestFilterBtn.MouseButton1Click:Connect(function()
 		S.canHarvestMode = (S.canHarvestMode == "TRUE") and "FALSE" or "TRUE"
-		CanHarvestFilterBtn.Text = "CANHARVEST: " .. S.canHarvestMode
-		CanHarvestFilterBtn.BackgroundColor3 = S.canHarvestMode == "TRUE" and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(231, 76, 60)
+		CanHarvestFilterBtn.Text = "CAN HARVEST: " .. S.canHarvestMode
+		CanHarvestFilterBtn.BackgroundColor3 = S.canHarvestMode == "TRUE" and Color3.fromRGB(70, 160, 100) or Color3.fromRGB(190, 85, 75)
 		S.addUiLog("CanHarvest filter: " .. S.canHarvestMode)
 	end)
 	S.MainToolToggleBtn = Instance.new("TextButton")
 	S.MainToolToggleBtn.Size = UDim2.new(1, 0, 0, 28)
 	S.MainToolToggleBtn.Position = UDim2.new(0, 0, 0, 146)
-	S.MainToolToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+	S.MainToolToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 160, 100)
 	S.MainToolToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	S.MainToolToggleBtn.Text = "START ACTIVE TOOL LOOP"
+	S.MainToolToggleBtn.Text = "START TOOL LOOP"
 	S.MainToolToggleBtn.TextSize = 13
 	S.MainToolToggleBtn.Font = Enum.Font.SourceSansBold
 	S.MainToolToggleBtn.Parent = S.Body
@@ -2293,8 +3047,8 @@ function S.buildFarmingShell(parentPage)
 	S.stopToolLoop = function()
 		_G.FarmScriptRunning = false
 		if S.MainToolToggleBtn then
-			S.MainToolToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
-			S.MainToolToggleBtn.Text = "START ACTIVE TOOL LOOP"
+			S.MainToolToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 160, 100)
+			S.MainToolToggleBtn.Text = "START TOOL LOOP"
 			updateStatus("Tool Loop: Stopped")
 		end
 	end
@@ -2304,16 +3058,51 @@ function S.buildFarmingShell(parentPage)
 		else
 			_G.FarmScriptRunning = true
 			S.RecentlyProcessedTool = {}
-			S.MainToolToggleBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
-			S.MainToolToggleBtn.Text = "STOP ACTIVE TOOL LOOP"
+			S.MainToolToggleBtn.BackgroundColor3 = Color3.fromRGB(190, 85, 75)
+			S.MainToolToggleBtn.Text = "STOP TOOL LOOP"
 			task.spawn(function()
 				while _G.FarmScriptRunning do
 					local actionsPerformed = S.runToolAutoLoop(updateStatus)
-					if actionsPerformed == 0 then task.wait(S.MAX_AUTOMATION_DELAY) else task.wait(S.getDelayInSeconds()) end
+					if actionsPerformed == 0 then task.wait(0.02) else task.wait(math.max(S.getDelayInSeconds(), 0.02)) end
 				end
 			end)
 		end
 	end)
+	local WeatherToolToggleBtn = Instance.new("TextButton")
+	WeatherToolToggleBtn.Size = UDim2.new(1, 0, 0, 22)
+	WeatherToolToggleBtn.Position = UDim2.new(0, 0, 0, 178)
+	WeatherToolToggleBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+	WeatherToolToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WeatherToolToggleBtn.Text = "WEATHER ONLY TOOLS: OFF"
+	WeatherToolToggleBtn.TextSize = 10
+	WeatherToolToggleBtn.Font = Enum.Font.SourceSansBold
+	WeatherToolToggleBtn.Parent = S.Body
+	Instance.new("UICorner", WeatherToolToggleBtn).CornerRadius = UDim.new(0, 5)
+	WeatherToolToggleBtn.MouseButton1Click:Connect(function()
+		S.weatherOnlyTools = not S.weatherOnlyTools
+		WeatherToolToggleBtn.Text = S.weatherOnlyTools and "WEATHER ONLY TOOLS: ON" or "WEATHER ONLY TOOLS: OFF"
+		WeatherToolToggleBtn.BackgroundColor3 = S.weatherOnlyTools and Color3.fromRGB(0, 122, 130) or Color3.fromRGB(28, 32, 42)
+		S.addUiLog("Weather Only Tools: " .. (S.weatherOnlyTools and "ON" or "OFF"))
+	end)
+	local AvoidAllMutationsToolsBtn = Instance.new("TextButton")
+	AvoidAllMutationsToolsBtn.Size = UDim2.new(1, 0, 0, 22)
+	AvoidAllMutationsToolsBtn.Position = UDim2.new(0, 0, 0, 204)
+	AvoidAllMutationsToolsBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+	AvoidAllMutationsToolsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	AvoidAllMutationsToolsBtn.Text = "AVOID MUTATIONS: OFF"
+	AvoidAllMutationsToolsBtn.TextSize = 10
+	AvoidAllMutationsToolsBtn.Font = Enum.Font.SourceSansBold
+	AvoidAllMutationsToolsBtn.Parent = S.Body
+	Instance.new("UICorner", AvoidAllMutationsToolsBtn).CornerRadius = UDim.new(0, 5)
+	AvoidAllMutationsToolsBtn.MouseButton1Click:Connect(function()
+		S.avoidAllMutations = not S.avoidAllMutations
+		AvoidAllMutationsToolsBtn.Text = S.avoidAllMutations and "AVOID MUTATIONS: ON" or "AVOID MUTATIONS: OFF"
+		AvoidAllMutationsToolsBtn.BackgroundColor3 = S.avoidAllMutations and Color3.fromRGB(195, 110, 55) or Color3.fromRGB(28, 32, 42)
+		S.addUiLog("🛡️ Avoid All Mutations: " .. (S.avoidAllMutations and "ON" or "OFF"))
+	end)
+	S.buildCropFilterPanel(S.Body, 250, 210)
+	S.addModeHint(S.Body, 462, "TOOLS: Pick a tool (Scythe/Shovel/Retriever) → set target mode → press START TOOL LOOP")
+	S.addModeHint(S.Body, 480, "CROP FILTER: Tap crops below to toggle ON/OFF. 'IN CROP FILTER' targets only selected crops.")
 	S.Body = S.TabPages.Harvest
 	local HarvestLabel = Instance.new("TextLabel")
 	HarvestLabel.Size = UDim2.new(1, 0, 0, 14)
@@ -2328,16 +3117,16 @@ function S.buildFarmingShell(parentPage)
 	local SuperHarvestBtn = Instance.new("TextButton")
 	SuperHarvestBtn.Size = UDim2.new(0.48, 0, 0, 22)
 	SuperHarvestBtn.Position = UDim2.new(0.52, 0, 0, 18)
-	SuperHarvestBtn.BackgroundColor3 = Color3.fromRGB(230, 126, 34)
+	SuperHarvestBtn.BackgroundColor3 = Color3.fromRGB(195, 110, 55)
 	SuperHarvestBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	SuperHarvestBtn.Text = "SUPER! 100x / 10x"
+	SuperHarvestBtn.Text = "SUPER 100x/10x"
 	SuperHarvestBtn.TextSize = 11
 	SuperHarvestBtn.Font = Enum.Font.SourceSansBold
 	SuperHarvestBtn.Parent = S.Body
 	Instance.new("UICorner", SuperHarvestBtn).CornerRadius = UDim.new(0, 5)
 	SuperHarvestBtn.MouseButton1Click:Connect(function()
 		S.harvestSpeedInput = 0.05
-		SuperHarvestBtn.Text = "SUPER! ACTIVE"
+		SuperHarvestBtn.Text = "SUPER ACTIVE"
 		S.addUiLog("SUPER! auto harvest rate enabled: 100x speed / 10x actions")
 	end)
 	local HarvestSpeedInput = Instance.new("TextBox")
@@ -2358,9 +3147,9 @@ function S.buildFarmingShell(parentPage)
 	HarvestBtnFrame.BackgroundTransparency = 1
 	HarvestBtnFrame.Parent = S.Body
 	local HarvestBtnAll = Instance.new("TextButton")
-	HarvestBtnAll.Size = UDim2.new(0.32, 0, 1, 0)
+	HarvestBtnAll.Size = UDim2.new(0.24, 0, 1, 0)
 	HarvestBtnAll.Position = UDim2.new(0, 0, 0, 0)
-	HarvestBtnAll.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+	HarvestBtnAll.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
 	HarvestBtnAll.TextColor3 = Color3.fromRGB(255, 255, 255)
 	HarvestBtnAll.Text = "ALL FRUITS"
 	HarvestBtnAll.TextSize = 9
@@ -2368,8 +3157,8 @@ function S.buildFarmingShell(parentPage)
 	HarvestBtnAll.Parent = HarvestBtnFrame
 	Instance.new("UICorner", HarvestBtnAll).CornerRadius = UDim.new(0, 4)
 	local HarvestBtnSpec = Instance.new("TextButton")
-	HarvestBtnSpec.Size = UDim2.new(0.32, 0, 1, 0)
-	HarvestBtnSpec.Position = UDim2.new(0.34, 0, 0, 0)
+	HarvestBtnSpec.Size = UDim2.new(0.24, 0, 1, 0)
+	HarvestBtnSpec.Position = UDim2.new(0.26, 0, 0, 0)
 	HarvestBtnSpec.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	HarvestBtnSpec.TextColor3 = Color3.fromRGB(255, 255, 255)
 	HarvestBtnSpec.Text = "SPECIFIC NAME"
@@ -2378,15 +3167,25 @@ function S.buildFarmingShell(parentPage)
 	HarvestBtnSpec.Parent = HarvestBtnFrame
 	Instance.new("UICorner", HarvestBtnSpec).CornerRadius = UDim.new(0, 4)
 	local HarvestBtnMut = Instance.new("TextButton")
-	HarvestBtnMut.Size = UDim2.new(0.32, 0, 1, 0)
-	HarvestBtnMut.Position = UDim2.new(0.68, 0, 0, 0)
+	HarvestBtnMut.Size = UDim2.new(0.24, 0, 1, 0)
+	HarvestBtnMut.Position = UDim2.new(0.52, 0, 0, 0)
 	HarvestBtnMut.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	HarvestBtnMut.TextColor3 = Color3.fromRGB(255, 255, 255)
-	HarvestBtnMut.Text = "SPECIFIC MUTATION"
+	HarvestBtnMut.Text = "SPECIFIC MUT"
 	HarvestBtnMut.TextSize = 9
 	HarvestBtnMut.Font = Enum.Font.SourceSansBold
 	HarvestBtnMut.Parent = HarvestBtnFrame
 	Instance.new("UICorner", HarvestBtnMut).CornerRadius = UDim.new(0, 4)
+	local HarvestBtnIn = Instance.new("TextButton")
+	HarvestBtnIn.Size = UDim2.new(0.24, 0, 1, 0)
+	HarvestBtnIn.Position = UDim2.new(0.78, 0, 0, 0)
+	HarvestBtnIn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+	HarvestBtnIn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	HarvestBtnIn.Text = "IN CROP FILTER"
+	HarvestBtnIn.TextSize = 8
+	HarvestBtnIn.Font = Enum.Font.SourceSansBold
+	HarvestBtnIn.Parent = HarvestBtnFrame
+	Instance.new("UICorner", HarvestBtnIn).CornerRadius = UDim.new(0, 4)
 	local HarvestNameInput = Instance.new("TextBox")
 	HarvestNameInput.Size = UDim2.new(1, 0, 0, 22)
 	HarvestNameInput.Position = UDim2.new(0, 0, 0, 70)
@@ -2413,9 +3212,10 @@ function S.buildFarmingShell(parentPage)
 	Instance.new("UICorner", HarvestMutInput).CornerRadius = UDim.new(0, 5)
 	HarvestBtnAll.MouseButton1Click:Connect(function()
 		S.harvestMode = "HARVEST ALL FRUITS"
-		HarvestBtnAll.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+		HarvestBtnAll.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
 		HarvestBtnSpec.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HarvestBtnMut.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+		HarvestBtnIn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HarvestNameInput.Visible = false
 		HarvestMutInput.Visible = false
 	end)
@@ -2424,16 +3224,27 @@ function S.buildFarmingShell(parentPage)
 		HarvestBtnSpec.BackgroundColor3 = Color3.fromRGB(155, 89, 182)
 		HarvestBtnAll.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HarvestBtnMut.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+		HarvestBtnIn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HarvestNameInput.Visible = true
 		HarvestMutInput.Visible = false
 	end)
 	HarvestBtnMut.MouseButton1Click:Connect(function()
-		S.harvestMode = "SPECIFIC MUTATION"
-		HarvestBtnMut.BackgroundColor3 = Color3.fromRGB(230, 126, 34)
+		S.harvestMode = "SPECIFIC MUT"
+		HarvestBtnMut.BackgroundColor3 = Color3.fromRGB(195, 110, 55)
 		HarvestBtnSpec.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HarvestBtnAll.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+		HarvestBtnIn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HarvestNameInput.Visible = false
 		HarvestMutInput.Visible = true
+	end)
+	HarvestBtnIn.MouseButton1Click:Connect(function()
+		S.harvestMode = "SELECTED IN CROP FILTER"
+		HarvestBtnIn.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
+		HarvestBtnAll.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+		HarvestBtnSpec.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+		HarvestBtnMut.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+		HarvestNameInput.Visible = false
+		HarvestMutInput.Visible = false
 	end)
 	HarvestNameInput.FocusLost:Connect(function() S.harvestTargetName = HarvestNameInput.Text end)
 	HarvestMutInput.FocusLost:Connect(function() S.harvestTargetMutName = HarvestMutInput.Text end)
@@ -2447,7 +3258,7 @@ function S.buildFarmingShell(parentPage)
 	AvoidAllMutBtn.Position = UDim2.new(0, 0, 0, 0)
 	AvoidAllMutBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	AvoidAllMutBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	AvoidAllMutBtn.Text = "🛡️ AVOID ALL MUTATIONS"
+	AvoidAllMutBtn.Text = "🛡️ AVOID MUTS"
 	AvoidAllMutBtn.TextSize = 8
 	AvoidAllMutBtn.Font = Enum.Font.SourceSansBold
 	AvoidAllMutBtn.Parent = AvoidFrame
@@ -2465,7 +3276,7 @@ function S.buildFarmingShell(parentPage)
 	Instance.new("UICorner", AvoidSpecificInput).CornerRadius = UDim.new(0, 4)
 	AvoidAllMutBtn.MouseButton1Click:Connect(function()
 		S.avoidAllMutations = not S.avoidAllMutations
-		if S.avoidAllMutations then AvoidAllMutBtn.BackgroundColor3 = Color3.fromRGB(230, 126, 34) S.addUiLog("🛡️ Avoid All Mutations Activated!")
+		if S.avoidAllMutations then AvoidAllMutBtn.BackgroundColor3 = Color3.fromRGB(195, 110, 55) S.addUiLog("🛡️ Avoid All Mutations Activated!")
 		else AvoidAllMutBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42) S.addUiLog("🛡️ Avoid All Mutations Disabled.") end
 	end)
 	AvoidSpecificInput.FocusLost:Connect(function() S.avoidSpecificMutationsText = AvoidSpecificInput.Text end)
@@ -2474,23 +3285,23 @@ function S.buildFarmingShell(parentPage)
 	HarvestPlusBtn.Position = UDim2.new(0, 0, 0, 122)
 	HarvestPlusBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	HarvestPlusBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	HarvestPlusBtn.Text = "AUTO SELL WHEN MAX CROPS/FRUITS: OFF"
+	HarvestPlusBtn.Text = "SELL WHEN MAX FRUITS: OFF"
 	HarvestPlusBtn.TextSize = 10
 	HarvestPlusBtn.Font = Enum.Font.SourceSansBold
 	HarvestPlusBtn.Parent = S.Body
 	Instance.new("UICorner", HarvestPlusBtn).CornerRadius = UDim.new(0, 5)
 	HarvestPlusBtn.MouseButton1Click:Connect(function()
 		S.autoHarvestPlus = not S.autoHarvestPlus
-		HarvestPlusBtn.Text = S.autoHarvestPlus and "AUTO SELL WHEN MAX CROPS/FRUITS: ON" or "AUTO SELL WHEN MAX CROPS/FRUITS: OFF"
+		HarvestPlusBtn.Text = S.autoHarvestPlus and "SELL WHEN MAX FRUITS: ON" or "SELL WHEN MAX FRUITS: OFF"
 		HarvestPlusBtn.BackgroundColor3 = S.autoHarvestPlus and Color3.fromRGB(0, 150, 130) or Color3.fromRGB(28, 32, 42)
 		S.addUiLog("AUTO SELL WHEN MAX CROPS/FRUITS: " .. (S.autoHarvestPlus and "ON" or "OFF"))
 	end)
 	S.HarvestToggleBtn = Instance.new("TextButton")
 	S.HarvestToggleBtn.Size = UDim2.new(1, 0, 0, 28)
 	S.HarvestToggleBtn.Position = UDim2.new(0, 0, 0, 148)
-	S.HarvestToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+	S.HarvestToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 160, 100)
 	S.HarvestToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	S.HarvestToggleBtn.Text = "START SUPER FAST AUTO HARVEST"
+	S.HarvestToggleBtn.Text = "START AUTO HARVEST"
 	S.HarvestToggleBtn.TextSize = 13
 	S.HarvestToggleBtn.Font = Enum.Font.SourceSansBold
 	S.HarvestToggleBtn.Parent = S.Body
@@ -2498,7 +3309,7 @@ function S.buildFarmingShell(parentPage)
 	S.stopHarvestLoop = function()
 		_G.AutoHarvestRunning = false
 		if S.HarvestToggleBtn then
-			S.HarvestToggleBtn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+			S.HarvestToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 160, 100)
 			S.HarvestToggleBtn.Text = "START AUTO HARVEST"
 			updateStatus("Auto Harvest: Stopped")
 		end
@@ -2509,15 +3320,31 @@ function S.buildFarmingShell(parentPage)
 		else
 			_G.AutoHarvestRunning = true
 			S.RecentlyProcessedHarvest = {}
-			S.HarvestToggleBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+			S.HarvestToggleBtn.BackgroundColor3 = Color3.fromRGB(190, 85, 75)
 			S.HarvestToggleBtn.Text = "STOP AUTO HARVEST"
 			task.spawn(function()
 				while _G.AutoHarvestRunning do
 					local actionsPerformed = S.runAutoHarvest(updateStatus)
-					if actionsPerformed == 0 then task.wait(S.MAX_AUTOMATION_DELAY) else task.wait(S.getHarvestDelayInSeconds()) end
+					if actionsPerformed == 0 then task.wait(0.02) else task.wait(math.max(S.getHarvestDelayInSeconds(), 0.02)) end
 				end
 			end)
 		end
+	end)
+	local WeatherHarvestToggleBtn = Instance.new("TextButton")
+	WeatherHarvestToggleBtn.Size = UDim2.new(1, 0, 0, 22)
+	WeatherHarvestToggleBtn.Position = UDim2.new(0, 0, 0, 180)
+	WeatherHarvestToggleBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+	WeatherHarvestToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WeatherHarvestToggleBtn.Text = "WEATHER ONLY HARVEST: OFF"
+	WeatherHarvestToggleBtn.TextSize = 10
+	WeatherHarvestToggleBtn.Font = Enum.Font.SourceSansBold
+	WeatherHarvestToggleBtn.Parent = S.Body
+	Instance.new("UICorner", WeatherHarvestToggleBtn).CornerRadius = UDim.new(0, 5)
+	WeatherHarvestToggleBtn.MouseButton1Click:Connect(function()
+		S.weatherOnlyHarvest = not S.weatherOnlyHarvest
+		WeatherHarvestToggleBtn.Text = S.weatherOnlyHarvest and "WEATHER ONLY HARVEST: ON" or "WEATHER ONLY HARVEST: OFF"
+		WeatherHarvestToggleBtn.BackgroundColor3 = S.weatherOnlyHarvest and Color3.fromRGB(0, 122, 130) or Color3.fromRGB(28, 32, 42)
+		S.addUiLog("Weather Only Harvest: " .. (S.weatherOnlyHarvest and "ON" or "OFF"))
 	end)
 	-- Growth Tracker removed.
 	--[[
@@ -2555,8 +3382,8 @@ function S.buildFarmingShell(parentPage)
 						highlight.Parent = parent
 					end
 					highlight.Enabled = true
-					highlight.FillColor = Color3.fromRGB(0, 120, 255)
-					highlight.OutlineColor = Color3.fromRGB(120, 210, 255)
+					highlight.FillColor = Color3.fromRGB(80, 115, 170)
+					highlight.OutlineColor = Color3.fromRGB(95, 140, 175)
 					highlight.FillTransparency = 0.55
 					highlight.OutlineTransparency = 0
 					local tag = parent:FindFirstChild("GrowthTrackerTag")
@@ -2580,7 +3407,7 @@ function S.buildFarmingShell(parentPage)
 						text.Parent = tag
 					end
 					text.Text = displayText
-					text.TextColor3 = isReady and Color3.fromRGB(0, 255, 127) or Color3.fromRGB(255, 255, 255)
+					text.TextColor3 = isReady and Color3.fromRGB(50, 170, 120) or Color3.fromRGB(200, 205, 210)
 					return tag
 				end
 				local function processCropForFruitTracking(crop, mode, specificName, taggedCrops)
@@ -2694,6 +3521,9 @@ function S.buildFarmingShell(parentPage)
 				end
 			end
 	]]
+	S.buildCropFilterPanel(S.Body, 230, 200)
+	S.addModeHint(S.Body, 432, "HARVEST: Pick a mode → set speed → start harvesting. 'IN CROP FILTER' harvests only selected crops.")
+	S.addModeHint(S.Body, 450, "CROP FILTER: Tap crops below to toggle ON/OFF. Only selected crops are harvested.")
 end -- buildFarmingShell
 S.LogFrame, S.LogScroll, S.LogHeader, S.LogToggleBtn, S.LogCloseBtn, S.LogHeaderToggle, S.ClearLogsBtn, S.FPSButton, S.LogCategoryFrame = nil
 S.WeatherCategoryBtn, S.LiveCategoryBtn, S.PlayerMessageCategoryBtn = nil
@@ -2758,7 +3588,7 @@ function S.buildFarmingExtras()
 	local HlBtnOff = Instance.new("TextButton")
 	HlBtnOff.Size = UDim2.new(0.14, 0, 0, 22)
 	HlBtnOff.Position = UDim2.new(0.85, 0, 0, 0)
-	HlBtnOff.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	HlBtnOff.BackgroundColor3 = Color3.fromRGB(165, 60, 60)
 	HlBtnOff.TextColor3 = Color3.fromRGB(255, 255, 255)
 	HlBtnOff.Text = "OFF"
 	HlBtnOff.TextSize = 7
@@ -2767,12 +3597,44 @@ function S.buildFarmingExtras()
 	Instance.new("UICorner", HlBtnOff).CornerRadius = UDim.new(0, 4)
 	HlBtnAll.Visible = false
 	HlBtnSpec.Visible = false
+	local HlBtnInFilter = Instance.new("TextButton")
+	HlBtnInFilter.Size = UDim2.new(0.19, 0, 0, 22)
+	HlBtnInFilter.Position = UDim2.new(0, 0, 0, 0)
+	HlBtnInFilter.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+	HlBtnInFilter.TextColor3 = Color3.fromRGB(255, 255, 255)
+	HlBtnInFilter.Text = "IN CROP FILTER"
+	HlBtnInFilter.TextSize = 7
+	HlBtnInFilter.Font = Enum.Font.SourceSansBold
+	HlBtnInFilter.Parent = HlBtnFrame
+	Instance.new("UICorner", HlBtnInFilter).CornerRadius = UDim.new(0, 4)
+	local HlInFilterFruitBtn = Instance.new("TextButton")
+	HlInFilterFruitBtn.Size = UDim2.new(0.49, 0, 0, 22)
+	HlInFilterFruitBtn.Position = UDim2.new(0, 0, 0, 28)
+	HlInFilterFruitBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+	HlInFilterFruitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	HlInFilterFruitBtn.Text = "HL FRUITS"
+	HlInFilterFruitBtn.TextSize = 7
+	HlInFilterFruitBtn.Font = Enum.Font.SourceSansBold
+	HlInFilterFruitBtn.Parent = HlBtnFrame
+	Instance.new("UICorner", HlInFilterFruitBtn).CornerRadius = UDim.new(0, 4)
+	local HlInFilterMutBtn = Instance.new("TextButton")
+	HlInFilterMutBtn.Size = UDim2.new(0.49, 0, 0, 22)
+	HlInFilterMutBtn.Position = UDim2.new(0.51, 0, 0, 28)
+	HlInFilterMutBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+	HlInFilterMutBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	HlInFilterMutBtn.Text = "HL MUTATIONS"
+	HlInFilterMutBtn.TextSize = 7
+	HlInFilterMutBtn.Font = Enum.Font.SourceSansBold
+	HlInFilterMutBtn.Parent = HlBtnFrame
+	Instance.new("UICorner", HlInFilterMutBtn).CornerRadius = UDim.new(0, 4)
+	HlInFilterFruitBtn.Visible = false
+	HlInFilterMutBtn.Visible = false
 	local ClearHighlightsBtn = Instance.new("TextButton")
 	ClearHighlightsBtn.Size = UDim2.new(1, 0, 0, 22)
-	ClearHighlightsBtn.Position = UDim2.new(0, 0, 0, 28)
+	ClearHighlightsBtn.Position = UDim2.new(0, 0, 0, 56)
 	ClearHighlightsBtn.BackgroundColor3 = Color3.fromRGB(70, 75, 90)
 	ClearHighlightsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	ClearHighlightsBtn.Text = "CLEAR ALL HIGHLIGHTS"
+	ClearHighlightsBtn.Text = "CLEAR HIGHLIGHTS"
 	ClearHighlightsBtn.TextSize = 8
 	ClearHighlightsBtn.Font = Enum.Font.SourceSansBold
 	ClearHighlightsBtn.Parent = HlBtnFrame
@@ -2786,9 +3648,9 @@ function S.buildFarmingExtras()
 	local HlBtnGrowthToggle = Instance.new("TextButton")
 	HlBtnGrowthToggle.Size = UDim2.new(1, 0, 0, 22)
 	HlBtnGrowthToggle.Position = UDim2.new(0, 0, 0, 56)
-	HlBtnGrowthToggle.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+	HlBtnGrowthToggle.BackgroundColor3 = Color3.fromRGB(165, 60, 60)
 	HlBtnGrowthToggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-	HlBtnGrowthToggle.Text = "GROWTH TIME: OFF"
+	HlBtnGrowthToggle.Text = "SHOW GROWTH TIME: OFF"
 	HlBtnGrowthToggle.TextSize = 7
 	HlBtnGrowthToggle.Font = Enum.Font.SourceSansBold
 	HlBtnGrowthToggle.Parent = HlBtnFrame
@@ -2798,7 +3660,7 @@ function S.buildFarmingExtras()
 	HlBtnGrowthAll.Position = UDim2.new(0, 0, 0, 56)
 	HlBtnGrowthAll.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	HlBtnGrowthAll.TextColor3 = Color3.fromRGB(255, 255, 255)
-	HlBtnGrowthAll.Text = "HIGHLIGHT ALL PLANT GROWTHTIME + GROWTHTIMELEFT"
+	HlBtnGrowthAll.Text = "HL ALL PLANT GROWTH"
 	HlBtnGrowthAll.TextSize = 7
 	HlBtnGrowthAll.Font = Enum.Font.SourceSansBold
 	HlBtnGrowthAll.Parent = HlBtnFrame
@@ -2808,7 +3670,7 @@ function S.buildFarmingExtras()
 	HlBtnGrowthFruit.Position = UDim2.new(0, 0, 0, 84)
 	HlBtnGrowthFruit.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	HlBtnGrowthFruit.TextColor3 = Color3.fromRGB(255, 255, 255)
-	HlBtnGrowthFruit.Text = "HIGHLIGHT ALL FRUIT GROWTHTIME + GROWTHTIMELEFT"
+	HlBtnGrowthFruit.Text = "HL ALL FRUIT GROWTH"
 	HlBtnGrowthFruit.TextSize = 7
 	HlBtnGrowthFruit.Font = Enum.Font.SourceSansBold
 	HlBtnGrowthFruit.Parent = HlBtnFrame
@@ -2818,6 +3680,7 @@ function S.buildFarmingExtras()
 	HlGrowthNameInput.Position = UDim2.new(0, 0, 0, 112)
 	HlGrowthNameInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
 	HlGrowthNameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+	HlGrowthNameInput.Text = S.hlGrowthSpecificName
 	HlGrowthNameInput.PlaceholderText = "Specific plant or fruit name for growth time..."
 	HlGrowthNameInput.TextSize = 10
 	HlGrowthNameInput.Font = Enum.Font.SourceSans
@@ -2829,7 +3692,7 @@ function S.buildFarmingExtras()
 	HlBtnGrowthSpecific.Position = UDim2.new(0, 0, 0, 140)
 	HlBtnGrowthSpecific.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	HlBtnGrowthSpecific.TextColor3 = Color3.fromRGB(255, 255, 255)
-	HlBtnGrowthSpecific.Text = "HIGHLIGHT SPECIFIC GROWTHTIME + GROWTHTIMELEFT"
+	HlBtnGrowthSpecific.Text = "HL SPECIFIC GROWTH"
 	HlBtnGrowthSpecific.TextSize = 7
 	HlBtnGrowthSpecific.Font = Enum.Font.SourceSansBold
 	HlBtnGrowthSpecific.Parent = HlBtnFrame
@@ -2839,7 +3702,7 @@ function S.buildFarmingExtras()
 	HlBtnFruitPctAll.Position = UDim2.new(0, 0, 0, 168)
 	HlBtnFruitPctAll.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	HlBtnFruitPctAll.TextColor3 = Color3.fromRGB(255, 255, 255)
-	HlBtnFruitPctAll.Text = "HIGHLIGHT ALL FRUITS PERCENTAGE"
+	HlBtnFruitPctAll.Text = "HL ALL FRUIT %"
 	HlBtnFruitPctAll.TextSize = 7
 	HlBtnFruitPctAll.Font = Enum.Font.SourceSansBold
 	HlBtnFruitPctAll.Parent = HlBtnFrame
@@ -2849,6 +3712,7 @@ function S.buildFarmingExtras()
 	HlPctNameInput.Position = UDim2.new(0, 0, 0, 196)
 	HlPctNameInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
 	HlPctNameInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+	HlPctNameInput.Text = S.hlPctSpecificName
 	HlPctNameInput.PlaceholderText = "Specific fruit name for highlight percent..."
 	HlPctNameInput.TextSize = 10
 	HlPctNameInput.Font = Enum.Font.SourceSans
@@ -2860,7 +3724,7 @@ function S.buildFarmingExtras()
 	HlBtnFruitPctSpec.Position = UDim2.new(0, 0, 0, 224)
 	HlBtnFruitPctSpec.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	HlBtnFruitPctSpec.TextColor3 = Color3.fromRGB(255, 255, 255)
-	HlBtnFruitPctSpec.Text = "HIGHLIGHT SPECIFIC FRUIT NAME"
+	HlBtnFruitPctSpec.Text = "HL SPECIFIC FRUIT"
 	HlBtnFruitPctSpec.TextSize = 7
 	HlBtnFruitPctSpec.Font = Enum.Font.SourceSansBold
 	HlBtnFruitPctSpec.Parent = HlBtnFrame
@@ -2873,24 +3737,85 @@ function S.buildFarmingExtras()
 	HlBtnFruitPctAll.Visible = false
 	HlPctNameInput.Visible = false
 	HlBtnFruitPctSpec.Visible = false
-	HlBtnFrame.Size = UDim2.new(1, 0, 0, 70)
+	HlBtnFrame.Size = UDim2.new(1, 0, 0, 80)
+	-- ===============================================
+	-- ACTION HIGHLIGHT TOGGLES (Tools / Harvest / Plant Preview)
+	-- ===============================================
+	local ActionHlHeader = Instance.new("TextLabel")
+	ActionHlHeader.Size = UDim2.new(1, 0, 0, 14)
+	ActionHlHeader.Position = UDim2.new(0, 0, 0, 92)
+	ActionHlHeader.Text = "🎯 Action Highlighting (Tools / Harvest / Plant)"
+	ActionHlHeader.TextColor3 = Color3.fromRGB(80, 115, 170)
+	ActionHlHeader.TextSize = 12
+	ActionHlHeader.Font = Enum.Font.SourceSansBold
+	ActionHlHeader.TextXAlignment = Enum.TextXAlignment.Left
+	ActionHlHeader.BackgroundTransparency = 1
+	ActionHlHeader.Parent = S.Body
+	local function refreshActionHlButtons()
+		ToolHlBtn.BackgroundColor3 = S.toolHighlightEnabled and Color3.fromRGB(70, 165, 115) or Color3.fromRGB(28, 32, 42)
+		ToolHlBtn.Text = S.toolHighlightEnabled and "TOOL HIGHLIGHT: ON" or "TOOL HIGHLIGHT: OFF"
+		HarvestHlBtn.BackgroundColor3 = S.harvestHighlightEnabled and Color3.fromRGB(70, 165, 115) or Color3.fromRGB(28, 32, 42)
+		HarvestHlBtn.Text = S.harvestHighlightEnabled and "HARVEST HIGHLIGHT: ON" or "HARVEST HIGHLIGHT: OFF"
+		PlantHlBtn.BackgroundColor3 = S.plantPreviewEnabled and Color3.fromRGB(70, 165, 115) or Color3.fromRGB(28, 32, 42)
+		PlantHlBtn.Text = S.plantPreviewEnabled and "PLANT PREVIEW: ON" or "PLANT PREVIEW: OFF"
+	end
+	local ToolHlBtn = Instance.new("TextButton")
+	ToolHlBtn.Size = UDim2.new(0.32, 0, 0, 22)
+	ToolHlBtn.Position = UDim2.new(0, 0, 0, 110)
+	ToolHlBtn.BackgroundColor3 = S.toolHighlightEnabled and Color3.fromRGB(70, 165, 115) or Color3.fromRGB(28, 32, 42)
+	ToolHlBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	ToolHlBtn.Text = S.toolHighlightEnabled and "TOOL HIGHLIGHT: ON" or "TOOL HIGHLIGHT: OFF"
+	ToolHlBtn.TextSize = 8
+	ToolHlBtn.Font = Enum.Font.SourceSansBold
+	ToolHlBtn.Parent = S.Body
+	Instance.new("UICorner", ToolHlBtn).CornerRadius = UDim.new(0, 5)
+	ToolHlBtn.MouseButton1Click:Connect(function()
+		S.toolHighlightEnabled = not S.toolHighlightEnabled
+		refreshActionHlButtons()
+		S.addUiLog("Tool highlight: " .. (S.toolHighlightEnabled and "ON" or "OFF"))
+	end)
+	local HarvestHlBtn = Instance.new("TextButton")
+	HarvestHlBtn.Size = UDim2.new(0.32, 0, 0, 22)
+	HarvestHlBtn.Position = UDim2.new(0.34, 0, 0, 110)
+	HarvestHlBtn.BackgroundColor3 = S.harvestHighlightEnabled and Color3.fromRGB(70, 165, 115) or Color3.fromRGB(28, 32, 42)
+	HarvestHlBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	HarvestHlBtn.Text = S.harvestHighlightEnabled and "HARVEST HIGHLIGHT: ON" or "HARVEST HIGHLIGHT: OFF"
+	HarvestHlBtn.TextSize = 8
+	HarvestHlBtn.Font = Enum.Font.SourceSansBold
+	HarvestHlBtn.Parent = S.Body
+	Instance.new("UICorner", HarvestHlBtn).CornerRadius = UDim.new(0, 5)
+	HarvestHlBtn.MouseButton1Click:Connect(function()
+		S.harvestHighlightEnabled = not S.harvestHighlightEnabled
+		refreshActionHlButtons()
+		S.addUiLog("Harvest highlight: " .. (S.harvestHighlightEnabled and "ON" or "OFF"))
+	end)
+	local PlantHlBtn = Instance.new("TextButton")
+	PlantHlBtn.Size = UDim2.new(0.32, 0, 0, 22)
+	PlantHlBtn.Position = UDim2.new(0.68, 0, 0, 110)
+	PlantHlBtn.BackgroundColor3 = S.plantPreviewEnabled and Color3.fromRGB(70, 165, 115) or Color3.fromRGB(28, 32, 42)
+	PlantHlBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	PlantHlBtn.Text = S.plantPreviewEnabled and "PLANT PREVIEW: ON" or "PLANT PREVIEW: OFF"
+	PlantHlBtn.TextSize = 8
+	PlantHlBtn.Font = Enum.Font.SourceSansBold
+	PlantHlBtn.Parent = S.Body
+	Instance.new("UICorner", PlantHlBtn).CornerRadius = UDim.new(0, 5)
+	PlantHlBtn.MouseButton1Click:Connect(function()
+		S.plantPreviewEnabled = not S.plantPreviewEnabled
+		refreshActionHlButtons()
+		if not S.plantPreviewEnabled then S.clearPlantPreviews() end
+		S.addUiLog("Plant preview: " .. (S.plantPreviewEnabled and "ON" or "OFF"))
+	end)
 	HlPctNameInput.FocusLost:Connect(function()
 		S.hlPctSpecificName = HlPctNameInput.Text:lower():gsub("^%s+", ""):gsub("%s+$", "")
 		if S.highlightMode == "FRUIT PCT SPEC" then S.applyFruitHighlights() end
 	end)
-	task.spawn(function()
-		while task.wait(1) do
-			if S.highlightMode == "FRUIT PCT ALL" or S.highlightMode == "FRUIT PCT SPEC" then
-				S.applyFruitHighlights()
-			end
-		end
-	end)
+
 	local ShowMutFruitsBtn = Instance.new("TextButton")
 	ShowMutFruitsBtn.Size = UDim2.new(1, 0, 0, 22)
 	ShowMutFruitsBtn.Position = UDim2.new(0, 0, 0, 224)
 	ShowMutFruitsBtn.BackgroundColor3 = Color3.fromRGB(142, 68, 173)
 	ShowMutFruitsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	ShowMutFruitsBtn.Text = "🔍 SHOW NAME MUTATION FRUITS"
+	ShowMutFruitsBtn.Text = "SHOW MUT FRUITS"
 	ShowMutFruitsBtn.TextSize = 9
 	ShowMutFruitsBtn.Font = Enum.Font.SourceSansBold
 	ShowMutFruitsBtn.Parent = HlBtnFrame
@@ -2935,23 +3860,26 @@ function S.buildFarmingExtras()
 	local function resetHlButtons()
 		HlBtnAll.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HlBtnSpec.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
+		HlBtnInFilter.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HlBtnMutAll.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HlBtnMutFruit.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HlBtnOff.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HlBtnFruitPctAll.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HlBtnFruitPctSpec.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
-		HlBtnGrowthToggle.BackgroundColor3 = S.growthTimeEnabled and Color3.fromRGB(0, 160, 120) or Color3.fromRGB(200, 50, 50)
-		HlBtnGrowthToggle.Text = S.growthTimeEnabled and "GROWTH TIME: ON" or "GROWTH TIME: OFF"
+		HlBtnGrowthToggle.BackgroundColor3 = S.growthTimeEnabled and Color3.fromRGB(0, 140, 110) or Color3.fromRGB(165, 60, 60)
+		HlBtnGrowthToggle.Text = S.growthTimeEnabled and "SHOW GROWTH TIME: ON" or "SHOW GROWTH TIME: OFF"
 		HlBtnGrowthAll.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HlBtnGrowthFruit.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		HlBtnGrowthSpecific.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 		SpecificFruitInput.Visible = false MutValInput.Visible = false MutFruitInput.Visible = false HlPctNameInput.Visible = false HlGrowthNameInput.Visible = false
+		HlInFilterFruitBtn.Visible = false
+		HlInFilterMutBtn.Visible = false
 		S.clearAllHighlights()
 	end
 	HlBtnGrowthToggle.MouseButton1Click:Connect(function()
 		S.growthTimeEnabled = not S.growthTimeEnabled
-		HlBtnGrowthToggle.BackgroundColor3 = S.growthTimeEnabled and Color3.fromRGB(0, 160, 120) or Color3.fromRGB(200, 50, 50)
-		HlBtnGrowthToggle.Text = S.growthTimeEnabled and "GROWTH TIME: ON" or "GROWTH TIME: OFF"
+		HlBtnGrowthToggle.BackgroundColor3 = S.growthTimeEnabled and Color3.fromRGB(0, 140, 110) or Color3.fromRGB(165, 60, 60)
+		HlBtnGrowthToggle.Text = S.growthTimeEnabled and "SHOW GROWTH TIME: ON" or "SHOW GROWTH TIME: OFF"
 		if not S.growthTimeEnabled then
 			S.clearAllHighlights()
 		elseif S.highlightMode == "GROWTH ALL PLANTS" or S.highlightMode == "GROWTH ALL FRUITS" or S.highlightMode == "GROWTH SPECIFIC" then
@@ -2963,9 +3891,9 @@ function S.buildFarmingExtras()
 			resetHlButtons()
 			S.highlightMode = "OFF"
 			S.growthTimeEnabled = false
-			HlBtnGrowthToggle.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-			HlBtnGrowthToggle.Text = "GROWTH TIME: OFF"
-			HlBtnOff.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+			HlBtnGrowthToggle.BackgroundColor3 = Color3.fromRGB(165, 60, 60)
+			HlBtnGrowthToggle.Text = "SHOW GROWTH TIME: OFF"
+			HlBtnOff.BackgroundColor3 = Color3.fromRGB(165, 60, 60)
 			return
 		end
 		resetHlButtons()
@@ -2975,7 +3903,30 @@ function S.buildFarmingExtras()
 		S.applyFruitHighlights()
 	end
 	HlBtnAll.MouseButton1Click:Connect(function()
-		toggleHighlightMode("ALL FRUITS", HlBtnAll, Color3.fromRGB(0, 122, 255))
+		toggleHighlightMode("ALL FRUITS", HlBtnAll, Color3.fromRGB(0, 140, 200))
+	end)
+	HlBtnInFilter.MouseButton1Click:Connect(function()
+		toggleHighlightMode("SELECTED IN CROP FILTER", HlBtnInFilter, Color3.fromRGB(0, 140, 200), function()
+			S.highlightFilterSub = S.highlightFilterSub or "ALL"
+			HlInFilterFruitBtn.Visible = true
+			HlInFilterMutBtn.Visible = true
+			HlInFilterFruitBtn.BackgroundColor3 = (S.highlightFilterSub == "FRUITS") and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+			HlInFilterMutBtn.BackgroundColor3 = (S.highlightFilterSub == "MUTATIONS") and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+		end)
+	end)
+	HlInFilterFruitBtn.MouseButton1Click:Connect(function()
+		if S.highlightFilterSub == "FRUITS" then S.highlightFilterSub = "ALL" else S.highlightFilterSub = "FRUITS" end
+		HlInFilterFruitBtn.BackgroundColor3 = (S.highlightFilterSub == "FRUITS") and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+		HlInFilterMutBtn.BackgroundColor3 = (S.highlightFilterSub == "MUTATIONS") and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+		S.clearAllHighlights()
+		S.applyFruitHighlights()
+	end)
+	HlInFilterMutBtn.MouseButton1Click:Connect(function()
+		if S.highlightFilterSub == "MUTATIONS" then S.highlightFilterSub = "ALL" else S.highlightFilterSub = "MUTATIONS" end
+		HlInFilterFruitBtn.BackgroundColor3 = (S.highlightFilterSub == "FRUITS") and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+		HlInFilterMutBtn.BackgroundColor3 = (S.highlightFilterSub == "MUTATIONS") and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+		S.clearAllHighlights()
+		S.applyFruitHighlights()
 	end)
 	HlBtnSpec.MouseButton1Click:Connect(function()
 		toggleHighlightMode("SPECIFIC NAME", HlBtnSpec, Color3.fromRGB(0, 180, 150), function()
@@ -2983,7 +3934,7 @@ function S.buildFarmingExtras()
 		end)
 	end)
 	HlBtnMutAll.MouseButton1Click:Connect(function()
-		toggleHighlightMode("ALL MUT", HlBtnMutAll, Color3.fromRGB(230, 126, 34), function()
+		toggleHighlightMode("ALL MUT", HlBtnMutAll, Color3.fromRGB(195, 110, 55), function()
 			MutValInput.Visible = true
 		end)
 	end)
@@ -2994,24 +3945,24 @@ function S.buildFarmingExtras()
 		end)
 	end)
 	HlBtnGrowthAll.MouseButton1Click:Connect(function()
-		toggleHighlightMode("GROWTH ALL PLANTS", HlBtnGrowthAll, Color3.fromRGB(0, 122, 255), function()
+		toggleHighlightMode("GROWTH ALL PLANTS", HlBtnGrowthAll, Color3.fromRGB(0, 140, 200), function()
 			S.growthTimeEnabled = true
-			HlBtnGrowthToggle.BackgroundColor3 = Color3.fromRGB(0, 160, 120)
-			HlBtnGrowthToggle.Text = "GROWTH TIME: ON"
+			HlBtnGrowthToggle.BackgroundColor3 = Color3.fromRGB(0, 140, 110)
+			HlBtnGrowthToggle.Text = "SHOW GROWTH TIME: ON"
 		end)
 	end)
 	HlBtnGrowthFruit.MouseButton1Click:Connect(function()
-		toggleHighlightMode("GROWTH ALL FRUITS", HlBtnGrowthFruit, Color3.fromRGB(255, 170, 0), function()
+		toggleHighlightMode("GROWTH ALL FRUITS", HlBtnGrowthFruit, Color3.fromRGB(185, 110, 70), function()
 			S.growthTimeEnabled = true
-			HlBtnGrowthToggle.BackgroundColor3 = Color3.fromRGB(0, 160, 120)
-			HlBtnGrowthToggle.Text = "GROWTH TIME: ON"
+			HlBtnGrowthToggle.BackgroundColor3 = Color3.fromRGB(0, 140, 110)
+			HlBtnGrowthToggle.Text = "SHOW GROWTH TIME: ON"
 		end)
 	end)
 	HlBtnGrowthSpecific.MouseButton1Click:Connect(function()
 		toggleHighlightMode("GROWTH SPECIFIC", HlBtnGrowthSpecific, Color3.fromRGB(155, 89, 182), function()
 			S.growthTimeEnabled = true
-			HlBtnGrowthToggle.BackgroundColor3 = Color3.fromRGB(0, 160, 120)
-			HlBtnGrowthToggle.Text = "GROWTH TIME: ON"
+			HlBtnGrowthToggle.BackgroundColor3 = Color3.fromRGB(0, 140, 110)
+			HlBtnGrowthToggle.Text = "SHOW GROWTH TIME: ON"
 			HlGrowthNameInput.Visible = true
 		end)
 	end)
@@ -3030,15 +3981,18 @@ function S.buildFarmingExtras()
 	HlBtnOff.MouseButton1Click:Connect(function()
 		resetHlButtons()
 		S.growthTimeEnabled = false
-		HlBtnGrowthToggle.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-		HlBtnGrowthToggle.Text = "GROWTH TIME: OFF"
+		HlBtnGrowthToggle.BackgroundColor3 = Color3.fromRGB(165, 60, 60)
+		HlBtnGrowthToggle.Text = "SHOW GROWTH TIME: OFF"
 		S.highlightMode = "OFF"
 		S.clearAllHighlights()
-		HlBtnOff.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+		HlBtnOff.BackgroundColor3 = Color3.fromRGB(165, 60, 60)
 	end)
 	SpecificFruitInput.FocusLost:Connect(function() S.hlSpecificFruitName = SpecificFruitInput.Text S.clearAllHighlights() S.applyFruitHighlights() end)
 	MutValInput.FocusLost:Connect(function() S.hlMutationValueText = MutValInput.Text S.clearAllHighlights() S.applyFruitHighlights() end)
 	MutFruitInput.FocusLost:Connect(function() S.hlMutFruitNameText = MutFruitInput.Text S.clearAllHighlights() S.applyFruitHighlights() end)
+	S.buildCropFilterPanel(S.Body, 270, 220)
+	S.addModeHint(S.Body, 492, "HIGHLIGHT: Pick a mode to highlight matching plants/fruits in the garden.")
+	S.addModeHint(S.Body, 510, "CROP FILTER: Tap crops below to toggle ON/OFF. 'IN CROP FILTER' highlights only selected crops.")
 	S.Body = S.TabPages.Plant
 	local ExtrasLabel = Instance.new("TextLabel")
 	ExtrasLabel.Size = UDim2.new(1, 0, 0, 14)
@@ -3055,7 +4009,7 @@ function S.buildFarmingExtras()
 	AutoSeedBtn.Position = UDim2.new(0, 0, 0, 18)
 	AutoSeedBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	AutoSeedBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	AutoSeedBtn.Text = "START AUTO SEED PACK"
+	AutoSeedBtn.Text = "AUTO OPEN SEED PACK"
 	AutoSeedBtn.TextSize = 10
 	AutoSeedBtn.Font = Enum.Font.SourceSansBold
 	AutoSeedBtn.Parent = S.Body
@@ -3063,7 +4017,7 @@ function S.buildFarmingExtras()
 	local PlantModePositionBtn = Instance.new("TextButton")
 	PlantModePositionBtn.Size = UDim2.new(0.24, 0, 0, 22)
 	PlantModePositionBtn.Position = UDim2.new(0, 0, 0, 44)
-	PlantModePositionBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+	PlantModePositionBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
 	PlantModePositionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	PlantModePositionBtn.Text = "POSITION"
 	PlantModePositionBtn.TextSize = 9
@@ -3095,26 +4049,90 @@ function S.buildFarmingExtras()
 	PlantModeSideBySideBtn.Position = UDim2.new(0.75, 0, 0, 44)
 	PlantModeSideBySideBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	PlantModeSideBySideBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	PlantModeSideBySideBtn.Text = "SIDE BY SIDE"
+	PlantModeSideBySideBtn.Text = "SIDE"
 	PlantModeSideBySideBtn.TextSize = 8
 	PlantModeSideBySideBtn.Font = Enum.Font.SourceSansBold
 	PlantModeSideBySideBtn.Parent = S.Body
 	Instance.new("UICorner", PlantModeSideBySideBtn).CornerRadius = UDim.new(0, 5)
+	local modeToPattern = {
+		POSITION = "STRAIGHT",
+		RANDOM = "RANDOM",
+		SMART = "CIRCLE",
+		["SIDE BY SIDE"] = "SIDE BY SIDE",
+	}
 	local function setPlantModeHighlight(mode)
 		S.plantMode = mode
-		PlantModePositionBtn.BackgroundColor3 = mode == "POSITION" and Color3.fromRGB(0, 122, 255) or Color3.fromRGB(28, 32, 42)
-		PlantModeRandomBtn.BackgroundColor3 = mode == "RANDOM" and Color3.fromRGB(230, 126, 34) or Color3.fromRGB(28, 32, 42)
-		PlantModeSmartBtn.BackgroundColor3 = mode == "SMART" and Color3.fromRGB(46, 204, 113) or Color3.fromRGB(28, 32, 42)
+		-- Clear any plant preview highlights when switching to a new plant mode
+		S.clearPlantPreviews()
+		PlantModePositionBtn.BackgroundColor3 = mode == "POSITION" and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+		PlantModeRandomBtn.BackgroundColor3 = mode == "RANDOM" and Color3.fromRGB(195, 110, 55) or Color3.fromRGB(28, 32, 42)
+		PlantModeSmartBtn.BackgroundColor3 = mode == "SMART" and Color3.fromRGB(70, 160, 100) or Color3.fromRGB(28, 32, 42)
 		PlantModeSideBySideBtn.BackgroundColor3 = mode == "SIDE BY SIDE" and Color3.fromRGB(155, 89, 182) or Color3.fromRGB(28, 32, 42)
+		if modeToPattern[mode] and S.setPlantPattern then S.setPlantPattern(modeToPattern[mode]) end
 	end
 	PlantModePositionBtn.MouseButton1Click:Connect(function() setPlantModeHighlight("POSITION") S.addUiLog("Auto plant mode: POSITION") end)
-	PlantModeRandomBtn.MouseButton1Click:Connect(function() setPlantModeHighlight("RANDOM") S.addUiLog("Auto plant mode: RANDOM (random empty soil + random)") end)
-	PlantModeSmartBtn.MouseButton1Click:Connect(function() setPlantModeHighlight("SMART") S.addUiLog("Auto plant mode: SMART (nearest empty soil)") end)
-	PlantModeSideBySideBtn.MouseButton1Click:Connect(function() setPlantModeHighlight("SIDE BY SIDE") S.addUiLog("Auto plant mode: SIDE BY SIDE (plants one by one in a circle)") end)
+	PlantModeRandomBtn.MouseButton1Click:Connect(function() setPlantModeHighlight("RANDOM") S.addUiLog("Auto plant mode: RANDOM (random empty soil + random seed)") end)
+	PlantModeSmartBtn.MouseButton1Click:Connect(function() setPlantModeHighlight("SMART") S.addUiLog("Auto plant mode: SMART (nearest empty soil + best seed)") end)
+	PlantModeSideBySideBtn.MouseButton1Click:Connect(function() setPlantModeHighlight("SIDE BY SIDE") S.addUiLog("Auto plant mode: SIDE BY SIDE (side-by-side pattern)") end)
+	-- PLANT PATTERN SELECTOR (10 patterns: STRAIGHT / CIRCLE / SPIRAL / DIAGONAL / RANDOM / SIDE BY SIDE / SNAKE / CHECKER / RINGS / COLUMNS)
+	local PatternLabel = Instance.new("TextLabel")
+	PatternLabel.Size = UDim2.new(1, 0, 0, 14)
+	PatternLabel.Position = UDim2.new(0, 0, 0, 92)
+	PatternLabel.Text = "🌱 Plant Pattern"
+	PatternLabel.TextColor3 = Color3.fromRGB(70, 165, 115)
+	PatternLabel.TextSize = 11
+	PatternLabel.Font = Enum.Font.SourceSansBold
+	PatternLabel.TextXAlignment = Enum.TextXAlignment.Left
+	PatternLabel.BackgroundTransparency = 1
+	PatternLabel.Parent = S.Body
+	local PatternFrame = Instance.new("Frame")
+	PatternFrame.Size = UDim2.new(1, 0, 0, 46)
+	PatternFrame.Position = UDim2.new(0, 0, 0, 108)
+	PatternFrame.BackgroundTransparency = 1
+	PatternFrame.Parent = S.Body
+	local plantPatterns = {
+		{Key = "STRAIGHT", Label = "STRAIGHT"},
+		{Key = "CIRCLE", Label = "CIRCLE"},
+		{Key = "SPIRAL", Label = "SPIRAL"},
+		{Key = "DIAGONAL", Label = "DIAGONAL"},
+		{Key = "RANDOM", Label = "RANDOM"},
+		{Key = "SIDE BY SIDE", Label = "SIDE BY SIDE"},
+		{Key = "SNAKE", Label = "SNAKE"},
+		{Key = "CHECKER", Label = "CHECKER"},
+		{Key = "RINGS", Label = "RINGS"},
+		{Key = "COLUMNS", Label = "COLUMNS"},
+	}
+	local patternBtns = {}
+	local function setPlantPattern(mode)
+		S.plantPattern = mode
+		for _, p in ipairs(plantPatterns) do
+			local b = patternBtns[p.Key]
+			if b then b.BackgroundColor3 = (p.Key == mode) and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42) end
+		end
+		S.clearPlantPreviews()
+		S.addUiLog("Plant pattern: " .. mode)
+	end
+	S.setPlantPattern = setPlantPattern
+	for i, p in ipairs(plantPatterns) do
+		local row = math.floor((i - 1) / 5)
+		local col = (i - 1) % 5
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(0.19, 0, 0.45, 0)
+		btn.Position = UDim2.new(col * 0.202, 0, row * 0.5, 0)
+		btn.BackgroundColor3 = (S.plantPattern == p.Key) and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btn.Text = p.Label
+		btn.TextSize = 7
+		btn.Font = Enum.Font.SourceSansBold
+		btn.Parent = PatternFrame
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+		patternBtns[p.Key] = btn
+		btn.MouseButton1Click:Connect(function() setPlantPattern(p.Key) end)
+	end
 	local PlantTpNoBtn = Instance.new("TextButton")
 	PlantTpNoBtn.Size = UDim2.new(0.24, 0, 0, 22)
 	PlantTpNoBtn.Position = UDim2.new(0.52, 0, 0, 68)
-	PlantTpNoBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
+	PlantTpNoBtn.BackgroundColor3 = Color3.fromRGB(0, 140, 200)
 	PlantTpNoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	PlantTpNoBtn.Text = "TP: NO TP"
 	PlantTpNoBtn.TextSize = 8
@@ -3133,8 +4151,8 @@ function S.buildFarmingExtras()
 	Instance.new("UICorner", PlantTpYesBtn).CornerRadius = UDim.new(0, 5)
 	local function setPlantTpHighlight(mode)
 		S.plantTpMode = mode
-		PlantTpNoBtn.BackgroundColor3 = mode == "NO_TP" and Color3.fromRGB(0, 122, 255) or Color3.fromRGB(28, 32, 42)
-		PlantTpYesBtn.BackgroundColor3 = mode == "TP_TO_PLANT" and Color3.fromRGB(230, 126, 34) or Color3.fromRGB(28, 32, 42)
+		PlantTpNoBtn.BackgroundColor3 = mode == "NO_TP" and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+		PlantTpYesBtn.BackgroundColor3 = mode == "TP_TO_PLANT" and Color3.fromRGB(195, 110, 55) or Color3.fromRGB(28, 32, 42)
 	end
 	PlantTpNoBtn.MouseButton1Click:Connect(function() setPlantTpHighlight("NO_TP") S.addUiLog("Plant TP mode: NO TP") end)
 	PlantTpYesBtn.MouseButton1Click:Connect(function() setPlantTpHighlight("TP_TO_PLANT") S.addUiLog("Plant TP mode: TP TO PLANT") end)
@@ -3143,29 +4161,29 @@ function S.buildFarmingExtras()
 	AutoPlantBtn.Position = UDim2.new(0.52, 0, 0, 18)
 	AutoPlantBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	AutoPlantBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	AutoPlantBtn.Text = "START AUTO PLANT"
+	AutoPlantBtn.Text = "AUTO PLANT"
 	AutoPlantBtn.TextSize = 10
 	AutoPlantBtn.Font = Enum.Font.SourceSansBold
 	AutoPlantBtn.Parent = S.Body
 	Instance.new("UICorner", AutoPlantBtn).CornerRadius = UDim.new(0, 5)
 	AutoSeedBtn.MouseButton1Click:Connect(function()
 		S.autoOpenSeedPack = not S.autoOpenSeedPack
-		if S.autoOpenSeedPack then AutoSeedBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60) AutoSeedBtn.Text = "STOP AUTO SEED PACK" S.addUiLog("📦 Auto Open Seed Pack Started.")
-		else AutoSeedBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42) AutoSeedBtn.Text = "START AUTO SEED PACK" S.addUiLog("📦 Auto Open Seed Pack Stopped.") end
+		if S.autoOpenSeedPack then AutoSeedBtn.BackgroundColor3 = Color3.fromRGB(190, 85, 75) AutoSeedBtn.Text = "STOP SEED PACK" S.addUiLog("📦 Auto Open Seed Pack Started.")
+		else AutoSeedBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42) AutoSeedBtn.Text = "AUTO SEED PACK" S.addUiLog("📦 Auto Open Seed Pack Stopped.") end
 	end)
 	AutoPlantBtn.MouseButton1Click:Connect(function()
 		S.autoPlantActive = not S.autoPlantActive
 		if S.autoPlantActive then
 			S.maxPlantsReached = false
-			AutoPlantBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60) AutoPlantBtn.Text = "STOP AUTO PLANT" S.addUiLog("🌱 Auto Plant Started.")
-		else AutoPlantBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42) AutoPlantBtn.Text = "START AUTO PLANT" S.addUiLog("🌱 Auto Plant Stopped.") end
+			AutoPlantBtn.BackgroundColor3 = Color3.fromRGB(190, 85, 75) AutoPlantBtn.Text = "STOP AUTO PLANT" S.addUiLog("🌱 Auto Plant Started.")
+		else AutoPlantBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42) AutoPlantBtn.Text = "AUTO PLANT" S.addUiLog("🌱 Auto Plant Stopped.") end
 	end)
 	local AutoStopMaxBtn = Instance.new("TextButton")
 	AutoStopMaxBtn.Size = UDim2.new(0.48, 0, 0, 22)
-	AutoStopMaxBtn.Position = UDim2.new(0, 0, 0, 92)
+	AutoStopMaxBtn.Position = UDim2.new(0, 0, 0, 158)
 	AutoStopMaxBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	AutoStopMaxBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	AutoStopMaxBtn.Text = "STOP ON MAX PLANTS: OFF"
+	AutoStopMaxBtn.Text = "STOP AT MAX PLANTS: OFF"
 	AutoStopMaxBtn.TextSize = 8
 	AutoStopMaxBtn.Font = Enum.Font.SourceSansBold
 	AutoStopMaxBtn.Parent = S.Body
@@ -3173,55 +4191,246 @@ function S.buildFarmingExtras()
 	AutoStopMaxBtn.MouseButton1Click:Connect(function()
 		S.autoStopOnMaxPlants = not S.autoStopOnMaxPlants
 		if S.autoStopOnMaxPlants then
-			AutoStopMaxBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
-			AutoStopMaxBtn.Text = "STOP ON MAX PLANTS: ON"
+			AutoStopMaxBtn.BackgroundColor3 = Color3.fromRGB(190, 85, 75)
+			AutoStopMaxBtn.Text = "STOP AT MAX PLANTS: ON"
 			S.addUiLog("🛑 Stop auto plant on 'Max plants reached' message: ON")
 		else
 			AutoStopMaxBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
-			AutoStopMaxBtn.Text = "STOP ON MAX PLANTS: OFF"
+			AutoStopMaxBtn.Text = "STOP AT MAX PLANTS: OFF"
 			S.maxPlantsReached = false
 			S.addUiLog("Stop auto plant on 'Max plants reached' message: OFF (planting resumed)")
 		end
 	end)
+	-- ===============================================
+	-- WATERING CONTROLS (moved to Plant tab)
+	-- ===============================================
+	local WaterHeader = Instance.new("TextLabel")
+	WaterHeader.Size = UDim2.new(1, 0, 0, 14)
+	WaterHeader.Position = UDim2.new(0, 0, 0, 184)
+	WaterHeader.Text = "💧 Watering Controls"
+	WaterHeader.TextColor3 = Color3.fromRGB(80, 115, 170)
+	WaterHeader.TextSize = 12
+	WaterHeader.Font = Enum.Font.SourceSansBold
+	WaterHeader.TextXAlignment = Enum.TextXAlignment.Left
+	WaterHeader.BackgroundTransparency = 1
+	WaterHeader.Parent = S.Body
+	-- Button 1: Watering Delay Input
+	local WaterSpeedInput = Instance.new("TextBox")
+	WaterSpeedInput.Size = UDim2.new(0.48, 0, 0, 22)
+	WaterSpeedInput.Position = UDim2.new(0, 0, 0, 202)
+	WaterSpeedInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
+	WaterSpeedInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WaterSpeedInput.Text = tostring(S.wateringSpeedInput)
+	WaterSpeedInput.PlaceholderText = "Watering Delay (0=Max)"
+	WaterSpeedInput.TextSize = 10
+	WaterSpeedInput.Font = Enum.Font.SourceSans
+	WaterSpeedInput.Parent = S.Body
+	Instance.new("UICorner", WaterSpeedInput).CornerRadius = UDim.new(0, 5)
+	WaterSpeedInput.FocusLost:Connect(function() S.wateringSpeedInput = tonumber(WaterSpeedInput.Text) or 0 end)
+	-- Start/Stop watering toggle
+	local WaterToggleBtn = Instance.new("TextButton")
+	WaterToggleBtn.Size = UDim2.new(0.48, 0, 0, 22)
+	WaterToggleBtn.Position = UDim2.new(0.52, 0, 0, 202)
+	WaterToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 160, 100)
+	WaterToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WaterToggleBtn.Text = "AUTO WATER"
+	WaterToggleBtn.TextSize = 10
+	WaterToggleBtn.Font = Enum.Font.SourceSansBold
+	WaterToggleBtn.Parent = S.Body
+	Instance.new("UICorner", WaterToggleBtn).CornerRadius = UDim.new(0, 5)
+	WaterToggleBtn.MouseButton1Click:Connect(function()
+		S.autoWateringActive = not S.autoWateringActive
+		if S.autoWateringActive then
+			WaterToggleBtn.BackgroundColor3 = Color3.fromRGB(190, 85, 75)
+			WaterToggleBtn.Text = "STOP AUTO WATER"
+			S.addUiLog("💧 Auto Watering Started.")
+		else
+			WaterToggleBtn.BackgroundColor3 = Color3.fromRGB(70, 160, 100)
+			WaterToggleBtn.Text = "AUTO WATER"
+			S.addUiLog("💧 Auto Watering Stopped.")
+		end
+	end)
+	-- Watering Mode Buttons (separate buttons, not dropdown)
+	local WaterModeFrame = Instance.new("Frame")
+	WaterModeFrame.Size = UDim2.new(1, 0, 0, 22)
+	WaterModeFrame.Position = UDim2.new(0, 0, 0, 228)
+	WaterModeFrame.BackgroundTransparency = 1
+	WaterModeFrame.Parent = S.Body
+	local waterModes = {
+		{Key = "POSITION", Label = "POSITION"},
+		{Key = "ALL", Label = "ALL"},
+		{Key = "NOT_GROWN", Label = "NOT GROW"},
+		{Key = "ALL FRUITS", Label = "ALL FRUITS"},
+		{Key = "SPECIFIC", Label = "SPECIFIC"},
+		{Key = "IN CROP FILTER", Label = "IN CROP FILTER"},
+	}
+	local waterModeBtns = {}
+	local function setWateringMode(mode)
+		S.wateringMode = mode
+		if mode == "ALL" then S.waterAllMode = "ALL" end
+		for _, wm in ipairs(waterModes) do
+			local b = waterModeBtns[wm.Key]
+			if b then b.BackgroundColor3 = (wm.Key == mode) and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42) end
+		end
+		S.addUiLog("Watering mode: " .. mode)
+	end
+	for i, wm in ipairs(waterModes) do
+		local btn = Instance.new("TextButton")
+		btn.Size = UDim2.new(0.14, 0, 1, 0)
+		btn.Position = UDim2.new((i - 1) * 0.142, 0, 0, 0)
+		btn.BackgroundColor3 = (S.wateringMode == wm.Key) and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+		btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+		btn.Text = wm.Label
+		btn.TextScaled = true
+		btn.TextWrapped = false
+		btn.Font = Enum.Font.SourceSansBold
+		btn.Parent = WaterModeFrame
+		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 4)
+		waterModeBtns[wm.Key] = btn
+		btn.MouseButton1Click:Connect(function() setWateringMode(wm.Key) end)
+	end
+	-- Watering Growth Mode sub-options (separate NOT grown vs FULLY grown)
+	local WaterGrowthFrame = Instance.new("Frame")
+	WaterGrowthFrame.Size = UDim2.new(1, 0, 0, 22)
+	WaterGrowthFrame.Position = UDim2.new(0, 0, 0, 254)
+	WaterGrowthFrame.BackgroundTransparency = 1
+	WaterGrowthFrame.Parent = S.Body
+	WaterGrowthFrame.Visible = false
+	local WaterGrowthNotBtn = Instance.new("TextButton")
+	WaterGrowthNotBtn.Size = UDim2.new(0.48, 0, 1, 0)
+	WaterGrowthNotBtn.Position = UDim2.new(0, 0, 0, 0)
+	WaterGrowthNotBtn.BackgroundColor3 = (S.wateringGrowthSubMode == "GROWING") and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+	WaterGrowthNotBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WaterGrowthNotBtn.Text = "WATERING NOT FULLY GROWN"
+	WaterGrowthNotBtn.TextSize = 6
+	WaterGrowthNotBtn.TextWrapped = true
+	WaterGrowthNotBtn.Font = Enum.Font.SourceSansBold
+	WaterGrowthNotBtn.Parent = WaterGrowthFrame
+	Instance.new("UICorner", WaterGrowthNotBtn).CornerRadius = UDim.new(0, 5)
+	local WaterGrowthGrownBtn = Instance.new("TextButton")
+	WaterGrowthGrownBtn.Size = UDim2.new(0.48, 0, 1, 0)
+	WaterGrowthGrownBtn.Position = UDim2.new(0.52, 0, 0, 0)
+	WaterGrowthGrownBtn.BackgroundColor3 = (S.wateringGrowthSubMode == "FULLY_GROWN") and Color3.fromRGB(195, 110, 55) or Color3.fromRGB(28, 32, 42)
+	WaterGrowthGrownBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WaterGrowthGrownBtn.Text = "WATERING FULLY GROWN"
+	WaterGrowthGrownBtn.TextSize = 6
+	WaterGrowthGrownBtn.TextWrapped = true
+	WaterGrowthGrownBtn.Font = Enum.Font.SourceSansBold
+	WaterGrowthGrownBtn.Parent = WaterGrowthFrame
+	Instance.new("UICorner", WaterGrowthGrownBtn).CornerRadius = UDim.new(0, 5)
+	local function setWateringGrowthSubMode(mode)
+		S.wateringGrowthSubMode = mode
+		WaterGrowthNotBtn.BackgroundColor3 = (mode == "GROWING") and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+		WaterGrowthGrownBtn.BackgroundColor3 = (mode == "FULLY_GROWN") and Color3.fromRGB(195, 110, 55) or Color3.fromRGB(28, 32, 42)
+		S.addUiLog("Watering Growth Mode: " .. (mode == "FULLY_GROWN" and "WATERING FULLY GROWN" or "WATERING NOT FULLY GROWN"))
+	end
+	WaterGrowthNotBtn.MouseButton1Click:Connect(function() setWateringGrowthSubMode("GROWING") end)
+	WaterGrowthGrownBtn.MouseButton1Click:Connect(function() setWateringGrowthSubMode("FULLY_GROWN") end)
+	-- Watering TP mode buttons (NO TP / TP TO PLANT)
+	local WaterTpFrame = Instance.new("Frame")
+	WaterTpFrame.Size = UDim2.new(1, 0, 0, 22)
+	WaterTpFrame.Position = UDim2.new(0, 0, 0, 254)
+	WaterTpFrame.BackgroundTransparency = 1
+	WaterTpFrame.Parent = S.Body
+	local WaterTpNoBtn = Instance.new("TextButton")
+	WaterTpNoBtn.Size = UDim2.new(0.48, 0, 1, 0)
+	WaterTpNoBtn.Position = UDim2.new(0, 0, 0, 0)
+	WaterTpNoBtn.BackgroundColor3 = (S.wateringTpMode == "NO_TP") and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+	WaterTpNoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WaterTpNoBtn.Text = "NO TP"
+	WaterTpNoBtn.TextSize = 9
+	WaterTpNoBtn.Font = Enum.Font.SourceSansBold
+	WaterTpNoBtn.Parent = WaterTpFrame
+	Instance.new("UICorner", WaterTpNoBtn).CornerRadius = UDim.new(0, 5)
+	local WaterTpYesBtn = Instance.new("TextButton")
+	WaterTpYesBtn.Size = UDim2.new(0.48, 0, 1, 0)
+	WaterTpYesBtn.Position = UDim2.new(0.52, 0, 0, 0)
+	WaterTpYesBtn.BackgroundColor3 = (S.wateringTpMode == "TP_TO_PLANT") and Color3.fromRGB(195, 110, 55) or Color3.fromRGB(28, 32, 42)
+	WaterTpYesBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WaterTpYesBtn.Text = "TP PLANT"
+	WaterTpYesBtn.TextSize = 9
+	WaterTpYesBtn.Font = Enum.Font.SourceSansBold
+	WaterTpYesBtn.Parent = WaterTpFrame
+	Instance.new("UICorner", WaterTpYesBtn).CornerRadius = UDim.new(0, 5)
+	local function setWateringTpMode(mode)
+		S.wateringTpMode = mode
+		WaterTpNoBtn.BackgroundColor3 = mode == "NO_TP" and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+		WaterTpYesBtn.BackgroundColor3 = mode == "TP_TO_PLANT" and Color3.fromRGB(195, 110, 55) or Color3.fromRGB(28, 32, 42)
+		S.addUiLog("Watering TP mode: " .. (mode == "TP_TO_PLANT" and "TP TO PLANT" or "NO TP"))
+	end
+	WaterTpNoBtn.MouseButton1Click:Connect(function() setWateringTpMode("NO_TP") end)
+	WaterTpYesBtn.MouseButton1Click:Connect(function() setWateringTpMode("TP_TO_PLANT") end)
+	-- Watering specific name input
+	local WaterSpecificInput = Instance.new("TextBox")
+	WaterSpecificInput.Size = UDim2.new(0.48, 0, 0, 22)
+	WaterSpecificInput.Position = UDim2.new(0.52, 0, 0, 278)
+	WaterSpecificInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
+	WaterSpecificInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WaterSpecificInput.Text = S.wateringSpecificName
+	WaterSpecificInput.PlaceholderText = "Specific name..."
+	WaterSpecificInput.TextSize = 10
+	WaterSpecificInput.Font = Enum.Font.SourceSans
+	WaterSpecificInput.Parent = S.Body
+	Instance.new("UICorner", WaterSpecificInput).CornerRadius = UDim.new(0, 5)
+	WaterSpecificInput.FocusLost:Connect(function() S.wateringSpecificName = WaterSpecificInput.Text end)
+	-- Button 7: Water Plant
+	local WaterPlantBtn = Instance.new("TextButton")
+	WaterPlantBtn.Size = UDim2.new(0.48, 0, 0, 22)
+	WaterPlantBtn.Position = UDim2.new(0, 0, 0, 330)
+	WaterPlantBtn.BackgroundColor3 = (S.wateringTargetType == "Plant") and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+	WaterPlantBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WaterPlantBtn.Text = "PLANT"
+	WaterPlantBtn.TextSize = 9
+	WaterPlantBtn.Font = Enum.Font.SourceSansBold
+	WaterPlantBtn.Parent = S.Body
+	Instance.new("UICorner", WaterPlantBtn).CornerRadius = UDim.new(0, 5)
+	-- Button 8: Water Fruit
+	local WaterFruitBtn = Instance.new("TextButton")
+	WaterFruitBtn.Size = UDim2.new(0.48, 0, 0, 22)
+	WaterFruitBtn.Position = UDim2.new(0.52, 0, 0, 330)
+	WaterFruitBtn.BackgroundColor3 = (S.wateringTargetType == "Fruit") and Color3.fromRGB(255, 120, 0) or Color3.fromRGB(28, 32, 42)
+	WaterFruitBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	WaterFruitBtn.Text = "FRUIT"
+	WaterFruitBtn.TextSize = 9
+	WaterFruitBtn.Font = Enum.Font.SourceSansBold
+	WaterFruitBtn.Parent = S.Body
+	Instance.new("UICorner", WaterFruitBtn).CornerRadius = UDim.new(0, 5)
+	local function setWateringTargetType(targetType)
+		S.wateringTargetType = targetType
+		WaterPlantBtn.BackgroundColor3 = (targetType == "Plant") and Color3.fromRGB(0, 140, 200) or Color3.fromRGB(28, 32, 42)
+		WaterFruitBtn.BackgroundColor3 = (targetType == "Fruit") and Color3.fromRGB(195, 110, 55) or Color3.fromRGB(28, 32, 42)
+		S.addUiLog("Watering target: " .. targetType)
+	end
+	WaterPlantBtn.MouseButton1Click:Connect(function()
+		setWateringTargetType("Plant")
+	end)
+	WaterFruitBtn.MouseButton1Click:Connect(function()
+		setWateringTargetType("Fruit")
+	end)
+	S.addModeHint(S.Body, 360, "WATER PLANT = plants | WATER FRUIT = fruit")
+	S.addModeHint(S.Body, 378, "Water: POSITION | ALL | NOT GROW | ALL FRUITS | SPECIFIC | IN CROP FILTER")
+	S.addModeHint(S.Body, 396, "NOT GROW = water un-grown plants | SPECIFIC = by name | IN CROP FILTER = selected crops")
+	S.addModeHint(S.Body, 414, "Plant: POSITION | RANDOM | SMART | SIDE BY SIDE")
+	S.buildCropFilterPanel(S.Body, 430, 240)
+	S.addModeHint(S.Body, 672, "WATERING: Pick a mode → target → start watering. 'IN CROP FILTER' waters only selected crops.")
+	S.addModeHint(S.Body, 690, "CROP FILTER: Tap crops below to toggle ON/OFF. Only selected crops are watered.")
 	S.Body = S.TabPages.Utility
 	local UtilityHeader = Instance.new("TextLabel")
 	UtilityHeader.Size = UDim2.new(1, 0, 0, 14)
 	UtilityHeader.Position = UDim2.new(0, 0, 0, 0)
 	UtilityHeader.Text = "Utility & Performance"
-	UtilityHeader.TextColor3 = Color3.fromRGB(72, 210, 140)
+	UtilityHeader.TextColor3 = Color3.fromRGB(70, 165, 115)
 	UtilityHeader.TextSize = 12
 	UtilityHeader.Font = Enum.Font.GothamBold
 	UtilityHeader.TextXAlignment = Enum.TextXAlignment.Left
 	UtilityHeader.BackgroundTransparency = 1
 	UtilityHeader.Parent = S.Body
-	local WaterSpeedInput = Instance.new("TextBox")
-	WaterSpeedInput.Size = UDim2.new(0.32, 0, 0, 24)
-	WaterSpeedInput.Position = UDim2.new(0, 0, 0, 22)
-	WaterSpeedInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
-	WaterSpeedInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-	WaterSpeedInput.Text = "0"
-	WaterSpeedInput.PlaceholderText = "Water delay"
-	WaterSpeedInput.TextSize = 11
-	WaterSpeedInput.Font = Enum.Font.SourceSans
-	WaterSpeedInput.Parent = S.Body
-	Instance.new("UICorner", WaterSpeedInput).CornerRadius = UDim.new(0, 5)
-	WaterSpeedInput.FocusLost:Connect(function() S.wateringSpeedInput = math.max(tonumber(WaterSpeedInput.Text) or 0, 0) end)
-	local WaterPositionBtn = Instance.new("TextButton")
-	WaterPositionBtn.Size = UDim2.new(0.32, 0, 0, 24)
-	WaterPositionBtn.Position = UDim2.new(0.34, 0, 0, 22)
-	WaterPositionBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
-	WaterPositionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	WaterPositionBtn.Text = "WATER POSITION"
-	WaterPositionBtn.TextSize = 10
-	WaterPositionBtn.Font = Enum.Font.SourceSansBold
-	WaterPositionBtn.Parent = S.Body
-	Instance.new("UICorner", WaterPositionBtn).CornerRadius = UDim.new(0, 5)
 	local SpeedMultiplierInput = Instance.new("TextBox")
 	SpeedMultiplierInput.Size = UDim2.new(0.32, 0, 0, 24)
 	SpeedMultiplierInput.Position = UDim2.new(0, 0, 0, 112)
 	SpeedMultiplierInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
 	SpeedMultiplierInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-	SpeedMultiplierInput.Text = "1000"
+	SpeedMultiplierInput.Text = "200"
 	SpeedMultiplierInput.PlaceholderText = "Auto speed 1-1000x"
 	SpeedMultiplierInput.TextSize = 11
 	SpeedMultiplierInput.Font = Enum.Font.SourceSans
@@ -3235,25 +4444,25 @@ function S.buildFarmingExtras()
 	local AutoFarm100Btn = Instance.new("TextButton")
 	AutoFarm100Btn.Size = UDim2.new(0.32, 0, 0, 24)
 	AutoFarm100Btn.Position = UDim2.new(0.34, 0, 0, 112)
-	AutoFarm100Btn.BackgroundColor3 = Color3.fromRGB(230, 126, 34)
+	AutoFarm100Btn.BackgroundColor3 = Color3.fromRGB(195, 110, 55)
 	AutoFarm100Btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	AutoFarm100Btn.Text = "SUGGEST 200x AUTOFARM"
+	AutoFarm100Btn.Text = "20x AUTOFARM"
 	AutoFarm100Btn.TextSize = 9
 	AutoFarm100Btn.Font = Enum.Font.SourceSansBold
 	AutoFarm100Btn.Parent = S.Body
 	Instance.new("UICorner", AutoFarm100Btn).CornerRadius = UDim.new(0, 5)
 	AutoFarm100Btn.MouseButton1Click:Connect(function()
-		S.automationSpeedMultiplier = 1000
-		S.automationActionMultiplier = 30
-		SpeedMultiplierInput.Text = "1000"
-		S.addUiLog("200x autofarm suggestion enabled: speed 200x / actions 10x")
+		S.automationSpeedMultiplier = 20
+		S.automationActionMultiplier = 5
+		SpeedMultiplierInput.Text = "200"
+		S.addUiLog("Balanced autofarm enabled: speed 20x / actions 5x")
 	end)
 	local PotatoModeBtn = Instance.new("TextButton")
 	PotatoModeBtn.Size = UDim2.new(0.48, 0, 0, 22)
 	PotatoModeBtn.Position = UDim2.new(0, 0, 0, 172)
 	PotatoModeBtn.BackgroundColor3 = Color3.fromRGB(24, 28, 38)
 	PotatoModeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	PotatoModeBtn.Text = "POTATO: OFF"
+	PotatoModeBtn.Text = "POTATO MODE: OFF"
 	PotatoModeBtn.TextSize = 9
 	PotatoModeBtn.Font = Enum.Font.GothamMedium
 	PotatoModeBtn.Parent = S.Body
@@ -3290,9 +4499,9 @@ function S.buildFarmingExtras()
 	S.PerformanceLabel.Parent = S.Body
 	Instance.new("UICorner", S.PerformanceLabel).CornerRadius = UDim.new(0, 5)
 	local function refreshPotatoButton()
-		PotatoModeBtn.Text = S.potatoMode and "POTATO: ON" or "POTATO: OFF"
-		PotatoModeBtn.BackgroundColor3 = S.potatoMode and Color3.fromRGB(72, 210, 140) or Color3.fromRGB(24, 28, 38)
-		PotatoModeBtn.TextColor3 = S.potatoMode and Color3.fromRGB(10, 12, 18) or Color3.fromRGB(255, 255, 255)
+		PotatoModeBtn.Text = S.potatoMode and "POTATO MODE: ON" or "POTATO MODE: OFF"
+		PotatoModeBtn.BackgroundColor3 = S.potatoMode and Color3.fromRGB(50, 170, 120) or Color3.fromRGB(24, 28, 38)
+		PotatoModeBtn.TextColor3 = S.potatoMode and Color3.fromRGB(200, 205, 210) or Color3.fromRGB(200, 205, 210)
 	end
 	PotatoModeBtn.MouseButton1Click:Connect(function()
 		S.potatoMode = not S.potatoMode
@@ -3301,14 +4510,25 @@ function S.buildFarmingExtras()
 		S.addUiLog("Potato mode " .. (S.potatoMode and "ON (shadows/VFX reduced)" or "OFF (restored)"))
 	end)
 	refreshPotatoButton()
-	S.performanceConnection = S.RunService.RenderStepped:Connect(function(deltaTime)
-		if S.PerformanceLabel and S.PerformanceLabel.Parent then
-			local frameMs = math.clamp(deltaTime * 1000, 0, 9999)
-			local fps = deltaTime > 0 and math.floor((1 / deltaTime) + 0.5) or 0
-			S.PerformanceLabel.Text = string.format("FPS %d  |  %.1f ms", fps, frameMs)
-		end
+	local LowFpsBtn = Instance.new("TextButton")
+	LowFpsBtn.Size = UDim2.new(0.48, 0, 0, 22)
+	LowFpsBtn.Position = UDim2.new(0, 0, 0, 222)
+	LowFpsBtn.BackgroundColor3 = S.lowFpsMode and Color3.fromRGB(70, 165, 115) or Color3.fromRGB(24, 28, 38)
+	LowFpsBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+	LowFpsBtn.Text = "LOW FPS MODE: ON"
+	LowFpsBtn.TextSize = 9
+	LowFpsBtn.Font = Enum.Font.GothamMedium
+	LowFpsBtn.Parent = S.Body
+	Instance.new("UICorner", LowFpsBtn).CornerRadius = UDim.new(0, 5)
+	LowFpsBtn.MouseButton1Click:Connect(function()
+		S.lowFpsMode = not S.lowFpsMode
+		LowFpsBtn.Text = S.lowFpsMode and "LOW FPS MODE: ON" or "LOW FPS MODE: OFF"
+		LowFpsBtn.BackgroundColor3 = S.lowFpsMode and Color3.fromRGB(70, 165, 115) or Color3.fromRGB(24, 28, 38)
+		S.addUiLog("Low FPS Mode " .. (S.lowFpsMode and "ON (skips heavy visuals for max speed)" or "OFF (full visuals)"))
 	end)
+	if S.PerformanceLabel then S.PerformanceLabel.Visible = false end
 	local GrowthMultiplierInput = Instance.new("TextBox")
+	GrowthMultiplierInput.Name = "GrowthMultiplierInput"
 	GrowthMultiplierInput.Size = UDim2.new(0.32, 0, 0, 24)
 	GrowthMultiplierInput.Position = UDim2.new(0, 0, 0, 142)
 	GrowthMultiplierInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
@@ -3324,94 +4544,8 @@ function S.buildFarmingExtras()
 		GrowthMultiplierInput.Text = tostring(S.wateringGrowthBonus)
 		S.PerformanceState.WateringGrowthBonus = S.wateringGrowthBonus
 	end)
-	local WaterAllBtn = Instance.new("TextButton")
-	WaterAllBtn.Size = UDim2.new(0.32, 0, 0, 24)
-	WaterAllBtn.Position = UDim2.new(0.68, 0, 0, 22)
-	WaterAllBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
-	WaterAllBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	WaterAllBtn.Text = "WATERING: ALL"
-	WaterAllBtn.TextSize = 10
-	WaterAllBtn.Font = Enum.Font.SourceSansBold
-	WaterAllBtn.Parent = S.Body
-	Instance.new("UICorner", WaterAllBtn).CornerRadius = UDim.new(0, 5)
-	WaterAllBtn.MouseButton1Click:Connect(function()
-		if S.waterAllMode == "ALL" then
-			S.waterAllMode = "NOT GROWN"
-			WaterAllBtn.Text = "WATERING: NOT GROWN"
-			WaterAllBtn.BackgroundColor3 = Color3.fromRGB(255, 165, 0)
-		else
-			S.waterAllMode = "ALL"
-			WaterAllBtn.Text = "WATERING: ALL"
-			WaterAllBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
-		end
-		S.addUiLog("Water All Mode: " .. S.waterAllMode)
-	end)
-	local WaterModeBtn = Instance.new("TextButton")
-	WaterModeBtn.Size = UDim2.new(0.32, 0, 0, 24)
-	WaterModeBtn.Position = UDim2.new(0, 0, 0, 52)
-	WaterModeBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
-	WaterModeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	WaterModeBtn.Text = "WATER POSITION"
-	WaterModeBtn.TextSize = 10
-	WaterModeBtn.Font = Enum.Font.SourceSansBold
-	WaterModeBtn.Parent = S.Body
-	Instance.new("UICorner", WaterModeBtn).CornerRadius = UDim.new(0, 5)
-	local WaterSpecificInput = Instance.new("TextBox")
-	WaterSpecificInput.Size = UDim2.new(0.32, 0, 0, 24)
-	WaterSpecificInput.Position = UDim2.new(0.34, 0, 0, 52)
-	WaterSpecificInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
-	WaterSpecificInput.TextColor3 = Color3.fromRGB(255, 255, 255)
-	WaterSpecificInput.PlaceholderText = "Specific plant name"
-	WaterSpecificInput.TextSize = 10
-	WaterSpecificInput.Font = Enum.Font.SourceSans
-	WaterSpecificInput.Visible = false
-	WaterSpecificInput.Parent = S.Body
-	Instance.new("UICorner", WaterSpecificInput).CornerRadius = UDim.new(0, 5)
-	WaterSpecificInput.FocusLost:Connect(function() S.wateringSpecificName = WaterSpecificInput.Text:lower():gsub("^%s+", ""):gsub("%s+$", "") end)
-	local StartWateringBtn = Instance.new("TextButton")
-	StartWateringBtn.Size = UDim2.new(0.32, 0, 0, 24)
-	StartWateringBtn.Position = UDim2.new(0.68, 0, 0, 52)
-	StartWateringBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
-	StartWateringBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	StartWateringBtn.Text = "START AUTO WATERING"
-	StartWateringBtn.TextSize = 10
-	StartWateringBtn.Font = Enum.Font.SourceSansBold
-	StartWateringBtn.Parent = S.Body
-	Instance.new("UICorner", StartWateringBtn).CornerRadius = UDim.new(0, 5)
-	WaterPositionBtn.MouseButton1Click:Connect(function()
-		S.wateringMode = "POSITION"
-		WaterPositionBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
-		WaterModeBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
-		WaterPositionBtn.Text = "WATER POSITION ✓"
-		WaterModeBtn.Text = "TP + WATER NOT GROWN"
-		WaterSpecificInput.Visible = false
-		S.addUiLog("Watering mode: player feet position, no teleport")
-	end)
-	WaterModeBtn.MouseButton1Click:Connect(function()
-		if S.wateringMode == "TP_NOT_GROWN" then
-			S.wateringMode = "SPECIFIC"
-			WaterModeBtn.Text = "WATER MODE: SPECIFIC ✓"
-			WaterSpecificInput.Visible = true
-			WaterModeBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
-			S.addUiLog("Watering mode: SPECIFIC; enter a plant name, fully grown plants will be reported and skipped")
-		else
-			S.wateringMode = "TP_NOT_GROWN"
-			WaterModeBtn.Text = "TP + WATER NOT GROWN ✓"
-			WaterSpecificInput.Visible = false
-			WaterModeBtn.BackgroundColor3 = Color3.fromRGB(0, 122, 255)
-			S.addUiLog("Watering mode: teleport to each not-grown plant, then water; fully grown plants will be reported and skipped")
-		end
-		WaterPositionBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
-		WaterPositionBtn.Text = "WATER POSITION"
-	end)
-	StartWateringBtn.MouseButton1Click:Connect(function()
-		if S.wateringMode == "SPECIFIC" and S.wateringSpecificName == "" then S.addUiLog("Enter a specific plant name first") return end
-		S.autoWateringActive = not S.autoWateringActive
-		StartWateringBtn.Text = S.autoWateringActive and "STOP AUTO WATERING" or "START AUTO WATERING"
-		StartWateringBtn.BackgroundColor3 = S.autoWateringActive and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(28, 32, 42)
-		S.addUiLog("Auto watering: " .. (S.autoWateringActive and "ON - " .. S.wateringMode or "OFF"))
-	end)
 	local DeleteNameInput = Instance.new("TextBox")
+	DeleteNameInput.Name = "DeleteNameInput"
 	DeleteNameInput.Size = UDim2.new(0.62, 0, 0, 24)
 	DeleteNameInput.Position = UDim2.new(0, 0, 0, 82)
 	DeleteNameInput.BackgroundColor3 = Color3.fromRGB(30, 32, 38)
@@ -3436,7 +4570,7 @@ function S.buildFarmingExtras()
 		if S.autoDeleteName == "" then S.addUiLog("Auto delete requires an ItemName") return end
 		S.autoDeleteSpecific = not S.autoDeleteSpecific
 		DeleteToggleBtn.Text = S.autoDeleteSpecific and "AUTO DELETE: ON" or "AUTO DELETE: OFF"
-		DeleteToggleBtn.BackgroundColor3 = S.autoDeleteSpecific and Color3.fromRGB(200, 60, 60) or Color3.fromRGB(28, 32, 42)
+		DeleteToggleBtn.BackgroundColor3 = S.autoDeleteSpecific and Color3.fromRGB(170, 75, 75) or Color3.fromRGB(28, 32, 42)
 		S.addUiLog("Auto delete " .. (S.autoDeleteSpecific and "enabled for " .. S.autoDeleteName or "disabled"))
 	end)
 	local WeatherLogBtn = Instance.new("TextButton")
@@ -3454,7 +4588,7 @@ function S.buildFarmingExtras()
 	PlayerMessageLogBtn.Position = UDim2.new(0.52, 0, 0, 142)
 	PlayerMessageLogBtn.BackgroundColor3 = Color3.fromRGB(28, 32, 42)
 	PlayerMessageLogBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-	PlayerMessageLogBtn.Text = "PLAYER MESSAGE LOG"
+	PlayerMessageLogBtn.Text = "MSG LOG"
 	PlayerMessageLogBtn.TextSize = 10
 	PlayerMessageLogBtn.Font = Enum.Font.SourceSansBold
 	PlayerMessageLogBtn.Parent = S.Body
@@ -3464,7 +4598,7 @@ function S.buildFarmingExtras()
 	LogsHeader.Size = UDim2.new(1, 0, 0, 18)
 	LogsHeader.Position = UDim2.new(0, 0, 0, 0)
 	LogsHeader.Text = "Live Output Logs"
-	LogsHeader.TextColor3 = Color3.fromRGB(0, 210, 255)
+	LogsHeader.TextColor3 = Color3.fromRGB(80, 115, 170)
 	LogsHeader.TextSize = 14
 	LogsHeader.Font = Enum.Font.GothamBold
 	LogsHeader.TextXAlignment = Enum.TextXAlignment.Left
@@ -3478,7 +4612,7 @@ function S.buildFarmingExtras()
 	S.LogCategoryFrame.Parent = S.Body
 	S.LogFrame = Instance.new("Frame")
 	S.LogFrame.Name = "LogFrame"
-	S.LogFrame.Size = UDim2.new(1, 0, 1, -56)
+	S.LogFrame.Size = UDim2.new(1, 0, 1, -100)
 	S.LogFrame.Position = UDim2.new(0, 0, 0, 54)
 	S.LogFrame.BackgroundColor3 = Color3.fromRGB(14, 16, 22)
 	S.LogFrame.BorderSizePixel = 0
@@ -3517,7 +4651,7 @@ function S.buildFarmingExtras()
 	S.LogScroll.Position = UDim2.new(0, 4, 0, 36)
 	S.LogScroll.BackgroundTransparency = 1
 	S.LogScroll.ScrollBarThickness = 3
-	S.LogScroll.ScrollBarImageColor3 = Color3.fromRGB(72, 210, 140)
+	S.LogScroll.ScrollBarImageColor3 = Color3.fromRGB(70, 165, 115)
 	S.LogScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 	S.LogScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	S.LogScroll.Parent = S.LogFrame
@@ -3527,6 +4661,8 @@ function S.buildFarmingExtras()
 	LogListLayout.Parent = S.LogScroll
 	local logFilterBtns = {}
 	local function refreshLogDisplay(categoryName)
+		-- Preserve the user's scroll position unless they were already at the bottom.
+		local wasAtBottom = (S.LogScroll.AbsoluteCanvasSize.Y - S.LogScroll.CanvasPosition.Y) <= (S.LogScroll.AbsoluteWindowSize.Y + 4)
 		for _, child in ipairs(S.LogScroll:GetChildren()) do
 			if child:IsA("TextLabel") then child:Destroy() end
 		end
@@ -3544,7 +4680,9 @@ function S.buildFarmingExtras()
 			textLabel.TextXAlignment = Enum.TextXAlignment.Left
 			textLabel.Parent = S.LogScroll
 		end
-		S.LogScroll.CanvasPosition = Vector2.new(0, S.LogScroll.AbsoluteCanvasSize.Y)
+		if wasAtBottom then
+			S.LogScroll.CanvasPosition = Vector2.new(0, S.LogScroll.AbsoluteCanvasSize.Y)
+		end
 	end
 	local function createLogCategoryButton(categoryKey, labelText, scaleX, scaleW)
 		local button = Instance.new("TextButton")
@@ -3564,8 +4702,8 @@ function S.buildFarmingExtras()
 			S.LogFrame.Visible = true
 			LogTitleLabel.Text = S.logCategoryTitles[categoryKey] or categoryKey
 			for filterName, btn in pairs(logFilterBtns) do
-				btn.BackgroundColor3 = filterName == categoryKey and Color3.fromRGB(72, 210, 140) or Color3.fromRGB(28, 32, 42)
-				btn.TextColor3 = filterName == categoryKey and Color3.fromRGB(12, 14, 20) or Color3.fromRGB(160, 168, 184)
+				btn.BackgroundColor3 = filterName == categoryKey and Color3.fromRGB(70, 165, 115) or Color3.fromRGB(28, 32, 42)
+				btn.TextColor3 = filterName == categoryKey and Color3.fromRGB(200, 205, 210) or Color3.fromRGB(160, 168, 184)
 			end
 			refreshLogDisplay(categoryKey)
 		end)
@@ -3574,12 +4712,13 @@ function S.buildFarmingExtras()
 	S.WeatherCategoryBtn = createLogCategoryButton("Weather", "Weather", 0, 0.32)
 	S.LiveCategoryBtn = createLogCategoryButton("Live", "Live Output", 0.34, 0.32)
 	S.PlayerMessageCategoryBtn = createLogCategoryButton("PlayerMessage", "Messages", 0.68, 0.32)
-	S.LiveCategoryBtn.BackgroundColor3 = Color3.fromRGB(72, 210, 140)
-	S.LiveCategoryBtn.TextColor3 = Color3.fromRGB(12, 14, 20)
+	S.LiveCategoryBtn.BackgroundColor3 = Color3.fromRGB(70, 165, 115)
+	S.LiveCategoryBtn.TextColor3 = Color3.fromRGB(200, 205, 210)
+
 	S.LogToggleBtn = Instance.new("TextButton")
 	S.LogToggleBtn.Size = UDim2.fromOffset(58, 22)
 	S.LogToggleBtn.Position = UDim2.new(1, -130, 0.5, -11)
-	S.LogToggleBtn.BackgroundColor3 = Color3.fromRGB(230, 72, 72)
+	S.LogToggleBtn.BackgroundColor3 = Color3.fromRGB(190, 85, 85)
 	S.LogToggleBtn.Text = "OFF"
 	S.LogToggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 	S.LogToggleBtn.TextSize = 12
@@ -3598,7 +4737,7 @@ function S.buildFarmingExtras()
 	local function setLogsVisible(visible)
 		S.LogsVisible = visible
 		S.activeLogsEnabled = visible
-		S.LogToggleBtn.BackgroundColor3 = visible and Color3.fromRGB(72, 210, 140) or Color3.fromRGB(230, 72, 72)
+		S.LogToggleBtn.BackgroundColor3 = visible and Color3.fromRGB(70, 165, 115) or Color3.fromRGB(190, 85, 85)
 		S.LogToggleBtn.Text = visible and "ON" or "OFF"
 	end
 	S.LogHeaderToggle.MouseButton1Click:Connect(function()
@@ -3647,6 +4786,7 @@ function S.buildFarmingExtras()
 		table.insert(S.logEntries[category], formatted)
 		if #S.logEntries[category] > S.MAX_LOG_ENTRIES then table.remove(S.logEntries[category], 1) end
 		if not S.activeLogsEnabled or category ~= S.logCategory then return end
+		if S.lowFpsMode then return end
 		if displayMessage == S.lastLogMessage and S.lastLogLabel and S.lastLogLabel.Parent then
 			S.lastLogCount = S.lastLogCount + 1
 			S.lastLogLabel.Text = string.format("[%s] %s%s (%dx)", timestamp, prefix, displayMessage, S.lastLogCount)
@@ -3658,7 +4798,7 @@ function S.buildFarmingExtras()
 			textLabel.AutomaticSize = Enum.AutomaticSize.Y
 			textLabel.BackgroundTransparency = 1
 			textLabel.Text = formatted
-			textLabel.TextColor3 = Color3.fromRGB(180, 220, 255)
+			textLabel.TextColor3 = Color3.fromRGB(140, 170, 200)
 			textLabel.TextSize = 14
 			textLabel.Font = Enum.Font.Code
 			textLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -3669,6 +4809,16 @@ function S.buildFarmingExtras()
 		task.wait(0.01)
 		S.LogScroll.CanvasPosition = Vector2.new(0, S.LogScroll.AbsoluteCanvasSize.Y)
 	end
+	-- AUTO-REFRESH: keep the Logs tab live even when lowFpsMode skips per-entry UI
+	-- updates. Rebuilds the visible category's display on a short interval so logs
+	-- appear instantly without needing to click a category button.
+	task.spawn(function()
+		while task.wait(0.4) do
+			if S.activeLogsEnabled and S.TabPages.Logs and S.TabPages.Logs.Visible and S.LogScroll and S.LogScroll.Parent then
+				refreshLogDisplay(S.logCategory)
+			end
+		end
+	end)
 	S.ClearLogsBtn.MouseButton1Click:Connect(function()
 		S.lastLogMessage = "" S.lastLogLabel = nil S.lastLogCount = 1
 		S.logEntries[S.logCategory] = {}
@@ -3736,6 +4886,44 @@ function S.buildFarmingExtras()
 			end
 		end
 	end)
+	-- ===============================================================
+	-- INSTRUCTION GUIDES FOR ALL TAB PAGES
+	-- ===============================================================
+	S.addPageGuideToTop(S.TabPages.Tools, {
+		"🛠️ TOOL LOOP:",
+		"• Pick a tool + target mode.",
+		"• Delay 0 = max speed; Limit 0 = infinite.",
+		"• Press START TOOL.",
+	})
+	S.addPageGuideToTop(S.TabPages.Harvest, {
+		"🍎 HARVESTING:",
+		"• Mode: ALL FRUITS / SPECIFIC NAME / SPECIFIC MUT.",
+		"• Speed 0 = max; SUPER! = 100x.",
+		"• Press START HARVEST.",
+	})
+	S.addPageGuideToTop(S.TabPages.Highlight, {
+		"🔦 HIGHLIGHT:",
+		"• Pick a mode to visualize fruits.",
+		"• CLEAR ALL HIGHLIGHTS removes visuals.",
+	})
+	S.addPageGuideToTop(S.TabPages.Plant, {
+		"🌱 PLANTING:",
+		"• Mode: POSITION / RANDOM / SMART / SIDE BY SIDE.",
+		"• Pick a pattern, then press PLANT.",
+		"📐 PATTERNS: STRAIGHT / SNAKE / SIDE BY SIDE / CIRCLE / SPIRAL / DIAGONAL / CHECKER / COLUMNS / RANDOM.",
+		"💧 WATERING:",
+		"• Target: WATER PLANT or WATER FRUIT.",
+		"• Mode: ALL / ALL FRUITS / SPECIFIC / BY GROWTH.",
+	})
+	S.addPageGuideToTop(S.TabPages.Utility, {
+		"⚙️ UTILITY & PERFORMANCE:",
+		"• Set automation speed multiplier (1-1000x).",
+		"• POTATO mode boosts FPS.",
+		"• Render radius limits processed plots.",
+	})
+	S.addPageGuideToTop(S.TabPages.Logs, {
+		"📋 LOGS: View Live, Weather, and Player Messages.",
+	})
 end -- buildFarmingExtras
 -- ==========================================
 -- RdDr UI: FARMING PANEL INTEGRATION
@@ -3753,6 +4941,9 @@ task.defer(function()
 	elseif S.Body then
 		table.insert(styleRoots, S.Body)
 	end
+	local function isBright(c)
+		return (c.R + c.G + c.B) / 3 > 0.6
+	end
 	for _, root in ipairs(styleRoots) do
 		for _, obj in ipairs(root:GetDescendants()) do
 			if obj:IsA("TextButton") then
@@ -3761,19 +4952,23 @@ task.defer(function()
 				if corner and corner.CornerRadius.Offset > 0 and corner.CornerRadius.Offset < 8 then
 					corner.CornerRadius = UDim.new(0, 8)
 				end
+				obj.TextColor3 = Color3.fromRGB(200, 205, 210)
 			elseif obj:IsA("TextBox") then
 				if obj.Font == Enum.Font.SourceSans then obj.Font = Enum.Font.Gotham end
-				obj.BackgroundColor3 = Color3.fromRGB(10, 12, 18)
+				obj.BackgroundColor3 = Color3.fromRGB(8, 10, 16)
+				obj.TextColor3 = Color3.new(1, 1, 1)
+				obj.PlaceholderColor3 = Color3.fromRGB(130, 130, 130)
 				if not obj:FindFirstChildOfClass("UIStroke") then
 					local stroke = Instance.new("UIStroke")
-					stroke.Color = Color3.fromRGB(40, 46, 58)
-					stroke.Thickness = 1
-					stroke.Transparency = 0.55
+					stroke.Color = Color3.fromRGB(60, 66, 82)
+					stroke.Thickness = 2
+					stroke.Transparency = 0.4
 					stroke.Parent = obj
 				end
 			elseif obj:IsA("TextLabel") then
 				if obj.Font == Enum.Font.SourceSansBold then obj.Font = Enum.Font.GothamMedium end
 				if obj.Font == Enum.Font.SourceSansItalic then obj.Font = Enum.Font.Gotham end
+				obj.TextColor3 = Color3.fromRGB(200, 205, 210)
 			end
 		end
 	end
@@ -3805,7 +5000,7 @@ S.guideText.Name = "GuideText"
 S.guideText.Size = UDim2.new(1, -20, 0, 60)
 S.guideText.Position = UDim2.new(0, 10, 0, 10)
 S.guideText.BackgroundTransparency = 1
-S.guideText.Text = "DOUBLE CLICK THE SCREEN TO TOGGLE/VISIBLE/SHOW/OPEN\n⚡ Farming Panel ⚡!"
+S.guideText.Text = "Double-click the screen to open the Farming Panel ⚡"
 S.guideText.TextColor3 = Color3.fromRGB(255, 255, 255)
 S.guideText.TextWrapped = true
 S.guideText.TextSize = 16
@@ -3815,7 +5010,7 @@ S.closeButton = Instance.new("TextButton")
 S.closeButton.Name = "CloseButton"
 S.closeButton.Size = UDim2.new(0, 120, 0, 32)
 S.closeButton.Position = UDim2.new(0.5, -60, 1, -42)
-S.closeButton.BackgroundColor3 = Color3.fromRGB(220, 50, 50)
+S.closeButton.BackgroundColor3 = Color3.fromRGB(175, 60, 60)
 S.closeButton.Text = "CLOSE"
 S.closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 S.closeButton.TextSize = 15
@@ -3849,4 +5044,32 @@ S.UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		end
 	end
 end)
-print("DOUBLE CLICK THE SCREEN TO TOGGLE/VISIBLE/SHOW/OPEN ⚡ Farming Panel ⚡!")
+print("Double-click the screen to open the Farming Panel ⚡")
+
+-- ==========================================
+-- GRAY/WHITE TEXT THEME + LARGER TOGGLE TEXT
+-- Applies a slightly-darkened white to every text element so all toggles,
+-- headers, and instructions read as "little black but white", and bumps up
+-- small text so it is easier to read.
+-- ==========================================
+local GRAY_WHITE = Color3.fromRGB(200, 205, 210)
+-- A color is "dark" when its perceived brightness is low.
+local function isDarkText(c)
+	local brightness = 0.299 * c.R + 0.587 * c.G + 0.114 * c.B
+	return brightness < 0.5
+end
+local function stylePanelText(obj)
+	if obj:IsA("TextLabel") or obj:IsA("TextButton") or obj:IsA("TextBox") then
+		-- Only convert fully black/dark text to grayish-white; keep light text as-is.
+		if isDarkText(obj.TextColor3) then
+			obj.TextColor3 = GRAY_WHITE
+		end
+		if obj.TextSize < 12 then
+			obj.TextSize = 12
+		end
+	end
+end
+for _, d in ipairs(S.ScreenGui:GetDescendants()) do
+	stylePanelText(d)
+end
+S.ScreenGui.DescendantAdded:Connect(stylePanelText)
